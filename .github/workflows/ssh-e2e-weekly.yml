@@ -48,7 +48,7 @@ jobs:
   linux-e2e:
     needs: linux-image
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     name: DistSSHRun (ubuntu-latest → ubuntu-26.04)
     permissions:
       contents: read
@@ -95,8 +95,8 @@ jobs:
     needs: linux-image
     runs-on: macos-15-intel
     # 2026-10-15 finished the suite in 88 min and failed the heartbeat wait.
-    # A 240s wait needs room past that.
-    timeout-minutes: 120
+    # A 240s wait needs room past that. Green runs reach ~105 min (2026-11-09).
+    timeout-minutes: 180
     name: macos-15-intel → ubuntu-26.04
     permissions:
       contents: read
@@ -676,8 +676,8 @@ jobs:
       - name: Open or close tracking issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FAILED: ${{ contains(join(needs.*.result, ','), 'failure') }}
-          LINUX_FAILED: ${{ needs.linux-image.result == 'failure' || needs.linux-e2e.result == 'failure' }}
+          FAILED: ${{ needs.linux-image.result != 'success' || needs.linux-e2e.result != 'success' || needs.macos-e2e.result != 'success' || needs.wsl-e2e.result != 'success' || needs.up-linux-e2e.result != 'success' || needs.up-macos-e2e.result != 'success' || needs.up-wsl-e2e.result != 'success' || needs.base-linux-e2e.result != 'success' || needs.base-macos-e2e.result != 'success' || needs.base-wsl-e2e.result != 'success' || needs.queue-ssh-e2e.result != 'success' }}
+          LINUX_FAILED: ${{ needs.linux-image.result != 'success' || needs.linux-e2e.result != 'success' }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           WEEKLY: ${{ github.event_name == 'schedule' }}
         run: |

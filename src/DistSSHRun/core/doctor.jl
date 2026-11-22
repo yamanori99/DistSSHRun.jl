@@ -50,7 +50,11 @@ end
 
 SSH reachability, remote `Project.toml`, and instantiate/deps probe (go launch).
 """
-function doctor_launch_assert_host!(host::AbstractString, remote_root::AbstractString)
+function doctor_launch_assert_host!(
+        host::AbstractString,
+        remote_root::AbstractString;
+        local_project::Union{Nothing, AbstractString} = nothing,
+    )
     rr = _remote_shell_path_word(remote_root)
     inner = "test -d $rr && test -f $rr/Project.toml"
     cmd = _ssh_cmd(DistSSHBase._ssh_remote_session_argv(String(host), inner))
@@ -91,8 +95,15 @@ function doctor_launch_assert_host!(host::AbstractString, remote_root::AbstractS
         throw(ArgumentError(DistSSHBase._append_remote_shell_hint(String(host), code, msg)))
     end
 
-    deps_err = probe_remote_project_deps(host, remote_root)
+    deps_err = probe_remote_project_deps(
+        host,
+        remote_root;
+        local_project = local_project,
+    )
     if deps_err !== nothing
+        if probe_deps_is_missing_path_message(deps_err)
+            throw(ArgumentError(deps_err))
+        end
         throw(
             ArgumentError(
                 "remote project deps not ready on $host ($remote_root): $deps_err\n" *
@@ -107,12 +118,17 @@ end
 """Run [`doctor_launch_assert_host!`](@ref) on every host; one combined `ArgumentError` on failure."""
 function doctor_launch_assert_hosts!(
         hosts::AbstractVector{<:AbstractString},
-        remote_root::AbstractString,
+        remote_root::AbstractString;
+        local_project::Union{Nothing, AbstractString} = nothing,
     )
     errs = String[]
     for h in hosts
         try
-            doctor_launch_assert_host!(h, remote_root)
+            doctor_launch_assert_host!(
+                h,
+                remote_root;
+                local_project = local_project,
+            )
         catch e
             push!(errs, sprint(showerror, e))
         end

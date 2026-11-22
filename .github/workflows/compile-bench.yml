@@ -1,33 +1,20 @@
-# A main push of the measured tree. Not a PR check.
-# Same measure as the CI weekly job. A main run appends a sample to bench-data
-# unless that slot already has this commit on this UTC day.
-# The README is rendered after the three slots, and when report.jl changes.
-# A 1.13 failure on main opens "Compile bench failed". A skipped run does not close it.
-# A docs-only push does not match the paths below, so it does not run this
-# workflow and does not close that issue.
-# The 1.14-pre and nightly jobs stay continue-on-error and are not that issue.
+# Daily measurement on main. Not a PR check.
+# Appends one sample per slot per UTC day to bench-data unless that slot already
+# has this commit on this UTC day. The README and summary.csv are rendered after
+# the three slots. A 1.13 failure on main opens "Compile bench failed". A
+# skipped run does not close it. The 1.14-pre and nightly jobs stay
+# continue-on-error and are not that issue. Renderer-only changes use Compile
+# bench render; that workflow rebuilds the page and does not measure.
 name: Compile bench
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      # Measurement inputs. report.jl, charts.jl, and compile-bench-render.sh stay on
-      # Compile bench render: that workflow rebuilds the page and does not measure.
-      # lib/ is included source (DistSSHBase, DistSSHUp, DistSSHShip, DistSSHHeartbeat), not a separate package root.
-      - "src/**"
-      - "lib/**"
-      - "bench/compile/measure.jl"
-      - "bench/compile/measure.sh"
-      - "bench/compile/commands.toml"
-      - "bench/compile/fixtures/**"
-      - "Project.toml"
-      - ".github/actions/compile-bench/**"
-      - ".github/workflows/compile-bench.yml"
+  workflow_dispatch:
+  # Daily 06:00 JST (UTC 21:00). Same slot as CI weekly used for compile bench.
+  schedule:
+    - cron: "0 21 * * *"
 
 concurrency:
-  group: compile-bench-${{ github.ref }}
+  group: compile-bench-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:

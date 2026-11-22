@@ -89,7 +89,7 @@ push_ref() {
 }
 
 git -C "$dest" config http.extraheader "AUTHORIZATION: basic ${basic}"
-git -C "$dest" add README.md bench.html
+git -C "$dest" add README.md bench.html history/summary.csv
 if git -C "$dest" diff --cached --quiet; then
     echo "bench-data unchanged"
 else
