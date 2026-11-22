@@ -10,7 +10,7 @@
 #   DISTSSH_SSH_E2E=1 julia --project=. test/e2e.jl   # from kit root
 # Inner `@testset`s print `[i/N]`. The denominator is the number of
 # `_e2e_announce` calls in this file.
-#   DISTSSH_CODE_COVERAGE=1 …/up.sh --e2e            # + .cov (child CLI too)
+#   DISTSSH_CODE_COVERAGE=1 …/up.sh --e2e            # scoped @src coverage only
 #   ./.github/jetls-check.sh             # e2e.jl is a JETLS entry (not via runtests.jl)
 #
 # Afterward open only:

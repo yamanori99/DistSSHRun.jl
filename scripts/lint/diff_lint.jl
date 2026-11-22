@@ -2918,7 +2918,11 @@ function main(args)
         return 0
     end
     files = parse_diff(git_diff(root))
-    src_for = path -> read(joinpath(root, path), String)
+    src_for = path -> begin
+        p = joinpath(root, path)
+        isfile(p) || return ""
+        read(p, String)
+    end
     n = lint_diff_mode(mode, root, files, src_for)
     n == 0 || exit(1)
     return 0
