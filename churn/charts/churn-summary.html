@@ -1,0 +1,19 @@
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Source churn — summary</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  </head>
+  <body style="margin:0;font-family:system-ui,sans-serif;">
+  <div id="churn-summary" style="width:100%;min-height:90vh;"></div>
+  <script>
+  const data = [{"type":"bar","name":"+30d","orientation":"h","y":["DistSSHBase / ssh/","DistSSHBase / hosts/","DistSSHBase / messages/","DistSSHBase / (root files)","DistSSHBase / procs/","DistSSHBase / DistSSHBase.jl","DistSSHBase / argv/","DistSSHHeartbeat / (root files)","DistSSHHeartbeat / DistSSHHeartbeat.jl","DistSSHRun / infra/","DistSSHRun / (root files)","DistSSHRun / core/drive/","DistSSHRun / core/setup/","DistSSHRun / argv/","DistSSHRun / drive/","DistSSHRun / cli/","DistSSHRun / options/","DistSSHRun / messages/","DistSSHRun / DistSSHRun.jl","DistSSHRun / core/","DistSSHShip / (root files)","DistSSHShip / DistSSHShip.jl","DistSSHUp / (root files)"],"marker":{"color":"#3b82f6"},"hovertemplate":"%{y}\u003cbr>+30d: %{x} lines\u003cextra>\u003c/extra>","x":[1518,1093,193,240,250,83,1,232,30,11473,3740,2921,2575,2047,1781,1106,1126,767,365,207,2568,88,59]},{"type":"bar","name":"−30d","orientation":"h","customdata":[343,216,67,11,0,34,1,15,2,2273,1751,1270,507,934,990,687,107,151,214,21,340,26,61],"y":["DistSSHBase / ssh/","DistSSHBase / hosts/","DistSSHBase / messages/","DistSSHBase / (root files)","DistSSHBase / procs/","DistSSHBase / DistSSHBase.jl","DistSSHBase / argv/","DistSSHHeartbeat / (root files)","DistSSHHeartbeat / DistSSHHeartbeat.jl","DistSSHRun / infra/","DistSSHRun / (root files)","DistSSHRun / core/drive/","DistSSHRun / core/setup/","DistSSHRun / argv/","DistSSHRun / drive/","DistSSHRun / cli/","DistSSHRun / options/","DistSSHRun / messages/","DistSSHRun / DistSSHRun.jl","DistSSHRun / core/","DistSSHShip / (root files)","DistSSHShip / DistSSHShip.jl","DistSSHUp / (root files)"],"marker":{"color":"#ef4444"},"hovertemplate":"%{y}\u003cbr>−30d: %{customdata} lines\u003cextra>\u003c/extra>","x":[-343,-216,-67,-11,0,-34,-1,-15,-2,-2273,-1751,-1270,-507,-934,-990,-687,-107,-151,-214,-21,-340,-26,-61]},{"type":"scatter","name":"net","y":["DistSSHBase / ssh/","DistSSHBase / hosts/","DistSSHBase / messages/","DistSSHBase / (root files)","DistSSHBase / procs/","DistSSHBase / DistSSHBase.jl","DistSSHBase / argv/","DistSSHHeartbeat / (root files)","DistSSHHeartbeat / DistSSHHeartbeat.jl","DistSSHRun / infra/","DistSSHRun / (root files)","DistSSHRun / core/drive/","DistSSHRun / core/setup/","DistSSHRun / argv/","DistSSHRun / drive/","DistSSHRun / cli/","DistSSHRun / options/","DistSSHRun / messages/","DistSSHRun / DistSSHRun.jl","DistSSHRun / core/","DistSSHShip / (root files)","DistSSHShip / DistSSHShip.jl","DistSSHUp / (root files)"],"marker":{"line":{"width":1,"color":"#ffffff"},"size":8,"symbol":"diamond","color":"#111827"},"mode":"markers","hovertemplate":"%{y}\u003cbr>net: %{x} lines\u003cextra>\u003c/extra>","x":[1175,877,126,229,250,49,0,217,28,9200,1989,1651,2068,1113,791,419,1019,616,151,186,2228,62,-2]}];
+  const layout = {"barmode":"overlay","height":414,"margin":{"l":220},"title":{"text":"30-day churn by area"},"xaxis":{"title":"lines"},"yaxis":{"autorange":"reversed"}};
+const config = {responsive: true, displayModeBar: true};
+Plotly.newPlot("churn-summary", data, layout, config);
+  </script>
+  </body>
+  </html>
+  
