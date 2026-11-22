@@ -65,7 +65,7 @@ function ensure_full_history(repo::AbstractString)
 end
 
 function head_commit(repo::AbstractString)::String
-    return git_read(repo, `git -C $repo rev-parse HEAD`)
+    return git_read(`git -C $repo rev-parse HEAD`)
 end
 
 function package_src_roots(repo::AbstractString)::Vector{Pair{String, String}}
