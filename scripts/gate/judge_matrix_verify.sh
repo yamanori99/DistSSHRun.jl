@@ -46,6 +46,7 @@ expect_contains "ship-ssh-e2e" "needs.detect.outputs.e2e == 'true' && needs.dete
 expect_contains "heartbeat-ssh-e2e" "needs.detect.outputs.e2e == 'true' && (needs.detect.outputs.heartbeat == 'true' || needs.detect.outputs.testenv == 'true')"
 expect_contains "ssh-e2e" "needs.detect.outputs.e2e == 'true' && needs.runic.result == 'success'"
 expect_contains "queue-ssh-e2e" "needs.detect.outputs.queue_e2e == 'true' && needs.runic.result == 'success'"
+expect_contains "downstream" "needs.detect.outputs.downstream == 'true' && needs.runic.result == 'success'"
 
 # ship-ssh-e2e must not use testenv OR shortcut
 ship_line="$(job_if_line ship-ssh-e2e)"

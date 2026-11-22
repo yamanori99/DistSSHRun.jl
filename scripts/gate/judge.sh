@@ -53,6 +53,8 @@ ship="${DETECT_SHIP:-true}"
 heartbeat="${DETECT_HEARTBEAT:-true}"
 testenv="${DETECT_TESTENV:-false}"
 queue_e2e="${DETECT_QUEUE_E2E:-false}"
+downstream="${DETECT_DOWNSTREAM:-false}"
+precheck="${DETECT_PRECHECK:-false}"
 coverage="${DETECT_COVERAGE:-false}"
 event="${DETECT_EVENT:-pull_request}"
 wsl_off="WSL jobs do not run on pull_request"
@@ -67,11 +69,14 @@ up_off="detect up=${up}"
 ship_off="detect ship=${ship}"
 heartbeat_off="detect heartbeat=${heartbeat}"
 queue_off="detect queue_e2e=${queue_e2e}"
+downstream_off="detect downstream=${downstream}"
 coverage_off="detect coverage=false"
 
 judge detect ""
 
 if [[ "${heavy}" == true || "${scripts}" == true ]]; then
+  judge runic ""
+elif [[ "${precheck}" == true ]]; then
   judge runic ""
 else
   judge runic "${docs_scripts_off}"
@@ -111,10 +116,20 @@ if [[ "${heavy}" == true ]]; then
     judge test-nightly ""
     judge pkgeval ""
   fi
+elif [[ "${precheck}" == true ]]; then
+  judge jetls ""
+  judge aqua ""
+  for id in test-unit test-integration test-macos-unit test-macos-integration \
+    registry-install test-1-14-pre-unit test-1-14-pre-integration test-1-14-pre-macos-unit \
+    test-1-14-pre-macos-integration test-coverage pkgeval; do
+    judge "${id}" "${heavy_off}"
+  done
+  judge test-wsl "${heavy_off}"
+  judge test-nightly "${heavy_off}"
 else
   for id in jetls aqua test-unit test-integration test-macos-unit test-macos-integration \
     registry-install test-1-14-pre-unit test-1-14-pre-integration test-1-14-pre-macos-unit \
-    test-1-14-pre-macos-integration downstream test-coverage pkgeval; do
+    test-1-14-pre-macos-integration test-coverage pkgeval; do
     judge "${id}" "${heavy_off}"
   done
   judge test-wsl "${heavy_off}"
@@ -169,8 +184,49 @@ judge_when_detect heartbeat-ssh-e2e "$(e2e_heartbeat_should_run && echo true || 
 judge_when_detect ssh-e2e "$(e2e_run_should_run && echo true || echo false)" "${e2e_off}"
 judge_when_detect queue-ssh-e2e "$(queue_e2e_should_run && echo true || echo false)" "${queue_off}"
 
+judge_downstream_result() {
+  local should_run="$1"
+  local off="$2"
+  local r
+  r="$(result_of downstream)"
+  if [[ "${should_run}" != true ]]; then
+    judge downstream "${off}"
+    return 0
+  fi
+  case "${r}" in
+    success) return 0 ;;
+    skipped)
+      if ! prereq_gate_jobs_ok; then
+        judge downstream "runic/jetls/aqua prerequisite"
+      else
+        fail "downstream skipped unexpectedly"
+      fi
+      ;;
+    cancelled) fail "downstream cancelled" ;;
+    failure)
+      if [[ "${event}" == pull_request ]]; then
+        fail "downstream failed"
+      elif [[ "${event}" == schedule || "${event}" == workflow_dispatch ]]; then
+        printf 'note  downstream failed (non-blocking report)\n'
+        return 0
+      fi
+      fail "downstream failed"
+      ;;
+    missing) fail "downstream result=missing" ;;
+    *) fail "downstream unknown result=${r}" ;;
+  esac
+}
+
+if [[ "${heavy}" == true ]]; then
+  judge_downstream_result "$(downstream_should_run && echo true || echo false)" "${downstream_off}"
+elif [[ "${precheck}" == true ]]; then
+  judge_downstream_result "$(downstream_should_run && echo true || echo false)" "${downstream_off}"
+else
+  judge downstream "${heavy_off}"
+fi
+
 # continue-on-error: failure does not fail gate when the job ran
-for id in aqua-1-14-pre aqua-nightly jetls-1-14-pre ssh-e2e-1-14-pre downstream; do
+for id in aqua-1-14-pre aqua-nightly jetls-1-14-pre ssh-e2e-1-14-pre; do
   r="$(result_of "${id}")"
   [[ "${r}" == skipped ]] && continue
   [[ "${r}" == success ]] && continue
