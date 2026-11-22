@@ -27,6 +27,9 @@ JUDGE="${ROOT}/scripts/gate/judge.sh"
 "${ROOT}/scripts/gate/judge_matrix_verify.sh" >/dev/null || fail_scenario "judge_matrix_verify"
 pass_scenario "judge_matrix_verify"
 
+"${ROOT}/scripts/gate/workflow_concurrency_verify.sh" --self-test >/dev/null || fail_scenario "workflow_concurrency_self_test"
+pass_scenario "workflow_concurrency_self_test"
+
 SKIP_JOBS=(
   test-unit test-integration test-coverage test-macos-unit test-macos-integration test-wsl
   test-1-14-pre-unit test-1-14-pre-integration test-1-14-pre-macos-unit test-1-14-pre-macos-integration

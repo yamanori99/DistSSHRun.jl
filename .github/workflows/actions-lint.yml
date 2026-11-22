@@ -63,6 +63,8 @@ jobs:
           zizmor --version
           pinact --version
 
+          ./scripts/gate/workflow_concurrency_verify.sh
+
           # 1.7.12 rejects concurrency.queue, which Documentation.yml uses on purpose.
           actionlint -ignore 'unexpected key "queue" for "concurrency"'
           zizmor --offline --no-progress .github
