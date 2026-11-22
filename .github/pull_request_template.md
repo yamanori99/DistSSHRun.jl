@@ -4,7 +4,7 @@
 
 ## Testing
 
-<!-- One block per environment: one line with the OS, arch, and Julia version, plus git version only when the command depends on git; the exact command in a code span; the last few output lines, verbatim, in a text fence. Do not list the local push gate. Example: macOS 15.5 arm64, Julia 1.13.4. / `julia --project=. -e 'using Pkg; Pkg.test()'` / ```text / <last lines> / ```. Delete this section if nothing ran. -->
+<!-- One block per environment: one line with the OS, arch, and Julia version, plus git version only when the command depends on git. The command and the output may vary. A fenced command from the repository root is easiest to copy; a text fence with the last lines of that run is easiest to read. A mismatch of that shape is a note, not a failure. Do not list the local push gate. Delete this section if nothing ran. -->
 
 ## Risk
 

@@ -95,23 +95,29 @@ JETLS is the type gate. Do not commit `.vscode/settings.json` to silence the Lan
   Summary is required. Testing, Risk, and Revert may be omitted.
   When Testing is present, it is one block per environment: one line with
   the OS, arch, and Julia version, and git version only when that command
-  depends on git; the exact command in a code span; the last few output
-  lines, verbatim, in a `text` fence. The OS name is not a fixed list. Do
-  not list the local push gate. Example:
+  depends on git. The command and the output may vary: a code span, a
+  fenced command (any info string, or none), more than one command, a
+  subset of the log. A fenced command from the repository root is
+  easiest to copy. A `text` fence with the last lines of that run is
+  easiest to read. A mismatch of that shape prints a `note:` and does
+  not fail the gate. The OS name is not a fixed list. Do not list the
+  local push gate. Example:
 
   macOS 15.5 arm64, Julia 1.13.4.
 
-  `julia --project=. -e 'using Pkg; Pkg.test()'`
+  ```bash
+  julia --project=. -e 'using Pkg; Pkg.test()'
+  ```
 
   ```text
        Testing DistSSHRun tests passed
   ```
 
-  A Testing block that lacks the environment line, a command in a code span,
-  or a `text` fence fails the body check. Other body problems fail too: a
-  title heading, a checklist, a missing Summary, a bullet list or fenced
-  block that repeats `git diff --name-only origin/main...HEAD`, or excuse
-  wording without an Actions run.
+  A Testing block that lacks the environment line fails the body check.
+  Other body problems fail too: a title heading, a checklist, a missing
+  Summary, a bullet list or fenced block that repeats
+  `git diff --name-only origin/main...HEAD`, or excuse wording without
+  an Actions run.
 - The GitHub title is the title. The body has no title heading and no
   checklist, and it does not list every changed path.
 - In Testing or Risk, a failure called known, pre-existing, unrelated,
