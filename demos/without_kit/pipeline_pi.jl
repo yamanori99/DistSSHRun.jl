@@ -9,7 +9,7 @@
 #
 # Same job via CLI:
 #
-#   julia --project=. -m DistSSHRun go --local-workers 2 distsshkit_demos/without_kit/pi_file.jl --n 5000
+#   julia --project=. -m DistSSHRun go --head-slots 2 distsshkit_demos/without_kit/pi_file.jl --n 5000
 
 import TOML
 
@@ -28,7 +28,7 @@ const _DEMO_PACKAGE = _demo_package()
 @eval using $_DEMO_PACKAGE
 
 isempty(ARGS) || (length(ARGS) == 2 && ARGS[1] == "--n") ||
-    error("pass --n N (a bare number looks like parent:N)")
+    error("pass --n N (a bare integer is not a machine token)")
 
 script = joinpath(@__DIR__, "pi_file.jl")
 project = @__DIR__

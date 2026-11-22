@@ -15,11 +15,11 @@ demos/
   with_kit/
     square_file.jl      # file: square_results.csv
     square_echo.jl      # stdout only
-    pipeline_square.jl  # API: pipeline!(driver; local_workers = 2)
+    pipeline_square.jl  # API: pipeline!(driver; head_workers = 2)
   without_kit/
     pi_file.jl          # file: pi_results.txt
     pi_echo.jl          # stdout only
-    pipeline_pi.jl      # API: go!(script; local_workers = 2) → pi_file.jl
+    pipeline_pi.jl      # API: go!(script; head_slots = 2) → pi_file.jl
 ```
 
 Naming: `{topic}_{file|echo}` — `*_file` writes a file, `*_echo` prints only.
@@ -29,9 +29,9 @@ Naming: `{topic}_{file|echo}` — `*_file` writes a file, `*_echo` prints only.
 ```bash
 julia --project=. -m DistSSHRun demo install with_kit
 julia --project=. -m DistSSHRun demo install without_kit
-julia --project=. -m DistSSHRun drive --local-workers 2 \
+julia --project=. -m DistSSHRun drive --head-workers 2 \
   distsshkit_demos/with_kit/square_file.jl --n 4
-julia --project=. -m DistSSHRun drive --local-workers 2 \
+julia --project=. -m DistSSHRun drive --head-workers 2 \
   distsshkit_demos/with_kit/square_echo.jl --n 4
 julia --project=. distsshkit_demos/with_kit/pipeline_square.jl --n 4
 julia distsshkit_demos/without_kit/pi_echo.jl --n 5000
@@ -49,7 +49,7 @@ Drivers use `init_output_dir!` + `main` + `pmap`. Work count is `--n N`
 (default 8), not a positional integer. Optional hooks: `help drive`.
 `pipeline_square.jl` is the thin API entry (drive! → optional collect) over
 `square_file.jl`. Same tokens as the CLI:
-`pipeline!(driver; local_workers = 2, args=[…])`. A commented remote example is at
+`pipeline!(driver; head_workers = 2, args=[…])`. A commented remote example is at
 the bottom of that file (`setup!` first, or CLI `setup`).
 
 ## without_kit/
@@ -67,7 +67,7 @@ julia --project=. distsshkit_demos/without_kit/pipeline_pi.jl
 ```
 
 `pipeline_pi.jl` mirrors `pipeline_square.jl` for as-is jobs:
-`go!(script; local_workers = 2, args=["--n", "5000"])`. Monte Carlo samples are
+`go!(script; head_slots = 2, args=["--n", "5000"])`. Monte Carlo samples are
 `--n N` (default 1000). A commented remote example is at the bottom of that
 file (`setup!` first).
 

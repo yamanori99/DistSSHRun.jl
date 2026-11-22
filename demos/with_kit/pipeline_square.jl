@@ -9,7 +9,7 @@
 #
 # Same driver via CLI:
 #
-#   julia --project=. -m DistSSHRun drive --local-workers 2 distsshkit_demos/with_kit/square_file.jl --n 4
+#   julia --project=. -m DistSSHRun drive --head-workers 2 distsshkit_demos/with_kit/square_file.jl --n 4
 
 import TOML
 
@@ -28,7 +28,7 @@ const _DEMO_PACKAGE = _demo_package()
 @eval using $_DEMO_PACKAGE
 
 isempty(ARGS) || (length(ARGS) == 2 && ARGS[1] == "--n") ||
-    error("pass --n N (a bare number looks like parent:N)")
+    error("pass --n N (a bare integer is not a machine token)")
 
 driver = joinpath(@__DIR__, "square_file.jl")
 
@@ -63,7 +63,7 @@ result = pipeline!(driver; head_workers = 2, args = ARGS, collect = false, enabl
 #       args=ARGS,
 #       collect=true,                   # false → skip; path → collect root
 #       # project=pwd(),
-#       # hosts_file="hosts.txt",       # extra parent:N / NAME:N lines
+#       # hosts_file="hosts.txt",       # extra N*host machine tokens
 #       # yes=true,                     # skip confirm prompts (API default)
 #       # quiet=false,
 #       # verbosity=nothing,            # :quiet | :progress | :verbose

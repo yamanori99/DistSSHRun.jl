@@ -13,7 +13,7 @@ function main()
     n = 1000
     if !isempty(ARGS)
         length(ARGS) == 2 && ARGS[1] == "--n" ||
-            error("pass --n N (a bare number looks like parent:N)")
+            error("pass --n N (a bare integer is not a machine token)")
         n = parse(Int, ARGS[2])
     end
 
