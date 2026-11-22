@@ -211,7 +211,7 @@ function bench_payload(groups::Dict{String, Vector{Dict{String, Any}}})::Vector{
     slots = Dict{String, Any}[]
     for name in sort(collect(keys(groups)))
         samples = Dict{String, Any}[]
-        for row in groups[name]
+        for row in latest_per_day(groups[name])
             sha = string(get(row, "commit", ""))
             commands = Dict{String, Any}[]
             for cmd in get(row, "commands", [])
@@ -233,6 +233,9 @@ function bench_payload(groups::Dict{String, Vector{Dict{String, Any}}})::Vector{
                 "julia_patch" => julia_patch(row),
                 "version" => string(get(row, "version", "")),
                 "host" => host_mark(row),
+                "precompile_full" => haskey(row, "precompile_full_sec") ? Float64(row["precompile_full_sec"]) : nothing,
+                "precompile_pkg" => haskey(row, "precompile_pkg_sec") ? Float64(row["precompile_pkg_sec"]) : nothing,
+                "using" => haskey(row, "using_sec") ? Float64(row["using_sec"]) : nothing,
                 "commands" => commands,
             )
             deps = dep_payload(row)
@@ -626,6 +629,37 @@ function layout(title, ytitle, samples, width) {
   };
 }
 
+function sampleField(sample, key) {
+  const value = sample[key];
+  return value === undefined || value === null ? null : Number(value);
+}
+
+function drawPrecompile(samples) {
+  const names = ["full", "pkg", "using"];
+  const fields = { full: "precompile_full", pkg: "precompile_pkg", using: "using" };
+  const slots = depSlots(samples);
+  const hover = "%{customdata[0]} %{customdata[1]}<br>%{fullData.name} %{y} s<br>" + hoverTail(slots) + "<extra></extra>";
+  const traces = names.map((name) => {
+    const field = fields[name];
+    const raw = samples.map((sample) => sampleField(sample, field));
+    const dropped = dropSpikes(raw);
+    return {
+      type: "scatter", mode: "lines+markers", name, connectgaps: false,
+      marker: { size: 2 },
+      x: samples.map((sample) => sample.time),
+      y: dropped.values,
+      customdata: samples.map((sample) => sampleMark(sample, slots)),
+      hovertemplate: hover
+    };
+  });
+  paintKey("precompile-key", names);
+  const node = document.getElementById("precompile-chart");
+  const chartLayout = layout("Precompile and load", "seconds", samples, node.clientWidth || 560);
+  window.__precompileDrawn = window.Plotly ? Plotly.react(node, traces, chartLayout).then(() => refineLabels(node, samples)) : Promise.resolve();
+  paintDeps("precompile-deps", samples);
+  paintEvents("precompile-events", samples);
+}
+
 function drawWall(samples) {
   const names = commandNames(samples);
   const notes = [];
@@ -784,16 +818,18 @@ function draw() {
   if (!commandNames(samples).includes(state.cmd)) state.cmd = defaultCommand(samples);
   drawControls();
   drawing += 1;
-  drawMethods(samples);
+  drawPrecompile(samples);
   drawWall(samples);
+  drawMethods(samples);
   paintEvents("method-events", samples);
   paintEvents("wall-events", samples);
   state.shown = samples.map((sample) => sample.time).join("|");
-  Promise.all([window.__methodDrawn, window.__wallDrawn]).then(() => { drawing -= 1; });
+  Promise.all([window.__precompileDrawn, window.__methodDrawn, window.__wallDrawn]).then(() => { drawing -= 1; });
   writeQuery();
   if (!window.Plotly) return;
   const wall = document.getElementById("wall-chart");
   const method = document.getElementById("method-chart");
+  const precompile = document.getElementById("precompile-chart");
   function follow(event) {
     if (drawing > 0) return;
     if (!event || event["xaxis.autorange"]) return;
@@ -805,8 +841,8 @@ function draw() {
     if (key === state.shown) return;
     draw();
   }
-  [wall, method].forEach((node) => {
-    if (!node.removeAllListeners) return;
+  [precompile, wall, method].forEach((node) => {
+    if (!node || !node.removeAllListeners) return;
     node.removeAllListeners("plotly_relayout");
     node.on("plotly_relayout", follow);
   });
@@ -874,8 +910,9 @@ function bench_html(groups)::String
     .events p[data-kind="host"] { color: #9558b2; }
     .events p[data-kind="version"] { color: #c2410c; }
     .events p[data-kind="patch"] { color: #0369a1; }
-    #method-deps, #wall-deps { margin: 0 0 8px; }
-    #method-deps:empty, #wall-deps:empty { display: none; }
+    #method-deps, #wall-deps, #precompile-deps { margin: 0 0 8px; }
+    #method-deps:empty, #wall-deps:empty, #precompile-deps:empty { display: none; }
+    details.method-rank > summary { cursor: pointer; font-size: 1.25rem; font-weight: 700; margin: 24px 0 8px; }
     </style>
     </head>
     <body>
@@ -886,7 +923,27 @@ function bench_html(groups)::String
     <span id="range-label">30d</span>
     <button type="button" id="range-inc">+</button>
     </div>
-    <h1>Method rank</h1>
+    <h1>Precompile and load</h1>
+    <div class="chart-row">
+    <div id="precompile-chart" class="plot"></div>
+    <div id="precompile-key" class="key"></div>
+    </div>
+    <div class="events" id="precompile-events"></div>
+    <p id="precompile-deps"></p>
+    <h2>Command wall</h2>
+    <div class="chart-row">
+    <div id="wall-chart" class="plot"></div>
+    <div id="wall-key" class="key"></div>
+    </div>
+    <div class="events" id="wall-events"></div>
+    <p id="wall-note"></p>
+    <p id="wall-deps"></p>
+    <table id="wall-table">
+    <thead><tr><th>command</th><th>now s</th><th>start s</th><th>change</th></tr></thead>
+    <tbody></tbody>
+    </table>
+    <details class="method-rank">
+    <summary>Method rank</summary>
     <div id="method-row">
     <span>methods</span>
     <button type="button" id="method-dec">-</button>
@@ -907,18 +964,7 @@ function bench_html(groups)::String
     <thead><tr><th>now</th><th>prev</th><th>change</th><th>owner</th><th>method</th><th>ms</th><th>ms change</th></tr></thead>
     <tbody></tbody>
     </table>
-    <h2>Command wall</h2>
-    <div class="chart-row">
-    <div id="wall-chart" class="plot"></div>
-    <div id="wall-key" class="key"></div>
-    </div>
-    <div class="events" id="wall-events"></div>
-    <p id="wall-note"></p>
-    <p id="wall-deps"></p>
-    <table id="wall-table">
-    <thead><tr><th>command</th><th>now s</th><th>start s</th><th>change</th></tr></thead>
-    <tbody></tbody>
-    </table>
+    </details>
     <div id="fallback">
     $tables
     </div>

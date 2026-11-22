@@ -37,6 +37,43 @@ function load_history(dir::AbstractString)::Dict{String, Vector{Dict{String, Any
     return groups
 end
 
+function utc_day(row)::String
+    stamp = string(get(row, "time", ""))
+    return length(stamp) >= 10 ? stamp[1:10] : stamp
+end
+
+function latest_per_day(rows)::Vector{Dict{String, Any}}
+    by_day = Dict{String, Dict{String, Any}}()
+    for row in rows
+        day = utc_day(row)
+        existing = get(by_day, day, nothing)
+        if existing === nothing || string(get(row, "time", "")) > string(get(existing, "time", ""))
+            by_day[day] = row
+        end
+    end
+    return [by_day[day] for day in sort(collect(keys(by_day)))]
+end
+
+function last_utc_days(rows, ndays::Int)::Vector{Dict{String, Any}}
+    daily = latest_per_day(rows)
+    return length(daily) <= ndays ? daily : daily[(end - ndays + 1):end]
+end
+
+function command_order()::Vector{String}
+    data = TOML.parsefile(joinpath(@__DIR__, "commands.toml"))
+    specs = data["command"]
+    specs isa AbstractDict && (specs = [specs])
+    return [string(spec["name"]) for spec in specs]
+end
+
+function csv_cell(value)::String
+    text = string(value)
+    q = '"'
+    needs = occursin(q, text) || occursin(r"[,\n\r]", text)
+    needs || return text
+    return string(q, replace(text, q => q * q), q)
+end
+
 function fnum(x)::String
     x === nothing && return ""
     return string(round(Float64(x); digits = 2))
@@ -52,6 +89,47 @@ function command_wall(row, name::String)::Union{Nothing, Float64}
         string(get(cmd, "name", "")) == name || continue
         return Float64(cmd["wall_sec"])
     end
+    return nothing
+end
+
+function write_summary_csv(groups::Dict{String, Vector{Dict{String, Any}}}, path::AbstractString)
+    names = command_order()
+    header = vcat(
+        ["date", "commit", "slot", "julia", "os", "arch", "full precompile s", "pkg precompile s", "using s"],
+        [name * " wall s" for name in names],
+    )
+    lines = String[join((csv_cell(item) for item in header), ',')]
+    rows = Dict{String, Any}[]
+    for slot in sort(collect(keys(groups)))
+        for row in groups[slot]
+            push!(rows, row)
+        end
+    end
+    sort!(rows; by = row -> string(get(row, "time", "")))
+    for row in rows
+        sha = string(get(row, "commit", ""))
+        cells = String[
+            utc_day(row),
+            sha,
+            string(get(row, "slot", "")),
+            string(get(row, "julia", "")),
+            string(get(row, "os_name", get(row, "os", ""))),
+            string(get(row, "arch", "")),
+            fnum(get(row, "precompile_full_sec", nothing)),
+            fnum(get(row, "precompile_pkg_sec", nothing)),
+            fnum(get(row, "using_sec", nothing)),
+        ]
+        for name in names
+            wall = command_wall(row, name)
+            push!(cells, wall === nothing ? "" : fnum(wall))
+        end
+        push!(lines, join((csv_cell(item) for item in cells), ','))
+    end
+    mkpath(dirname(abspath(path)))
+    open(path, "w") do io
+        write(io, join(lines, '\n') * '\n')
+    end
+    println(stderr, "wrote ", path)
     return nothing
 end
 
@@ -132,7 +210,7 @@ function bench_url()::String
 end
 
 function slot_section(slot::String, rows)::Tuple{String, Vector{String}}
-    shown = rows[max(1, end - 11):end]
+    shown = last_utc_days(rows, 30)
     latest = shown[end]
     prev = length(shown) >= 2 ? shown[end - 1] : nothing
     flagged = flags_for(prev, latest)
@@ -200,9 +278,11 @@ function render(groups)::Tuple{String, Vector{String}}
     The charts are on [bench.html]($(bench_url())).
 
     Precompile time, load time, CLI wall time, `src/**/*.jl` size, and the host
-    (OS name, arch, CPU). `code lines` skips blank lines. A row is flagged when,
-    against the previous sample on the same Julia slot, the host OS or arch
-    changes, the Julia version changes, package precompile grows by 1.5x and 0.5s, a command wall grows
+    (OS name, arch, CPU). `code lines` skips blank lines. Each table is the last
+    30 UTC days, one row per day (latest sample that day). Full history is in
+    [history/summary.csv](history/summary.csv). A row is flagged when, against the
+    previous day on the same Julia slot, the host OS or arch changes, the Julia
+    version changes, package precompile grows by 1.5x and 0.5s, a command wall grows
     by 1.5x and 1s, or a method of at least 200 ms is new in the top 20 or
     doubles. This does not fail CI. Each slot's table folds. The 1.13
     table starts open.
@@ -227,7 +307,9 @@ function main()
     open(readme, "w") do io
         write(io, text)
     end
-    write_bench(groups, joinpath(dirname(abspath(readme)), "bench.html"))
+    out_dir = dirname(abspath(readme))
+    write_summary_csv(groups, joinpath(history, "summary.csv"))
+    write_bench(groups, joinpath(out_dir, "bench.html"))
     if summary !== nothing
         open(summary, "a") do io
             println(io, "## Compile bench")
