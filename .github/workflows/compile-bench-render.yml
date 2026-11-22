@@ -10,6 +10,7 @@ on:
       - bench/compile/report.jl
       - bench/compile/charts.jl
       - bench/compile/churn_*.jl
+      - bench/compile/test/**
       - bench/compile/Project.toml
       - .github/compile-bench-render.sh
       - .github/workflows/compile-bench-render.yml
@@ -18,6 +19,7 @@ on:
       - bench/compile/report.jl
       - bench/compile/charts.jl
       - bench/compile/churn_*.jl
+      - bench/compile/test/**
       - bench/compile/Project.toml
       - .github/compile-bench-render.sh
       - .github/workflows/compile-bench-render.yml
@@ -49,6 +51,8 @@ jobs:
           BENCH_TOKEN: ${{ github.token }}
           BENCH_PUSH: "0"
         run: bash .github/compile-bench-render.sh
+      - name: Churn tests
+        run: julia --startup-file=no --project=. bench/compile/test/churn.jl
       - name: Render source churn
         run: |
           set -euo pipefail
@@ -83,6 +87,8 @@ jobs:
           BENCH_TOKEN: ${{ github.token }}
           BENCH_PUSH: "1"
         run: bash .github/compile-bench-render.sh
+      - name: Churn tests
+        run: julia --startup-file=no --project=. bench/compile/test/churn.jl
       - name: Render source churn
         env:
           BENCH_TOKEN: ${{ github.token }}

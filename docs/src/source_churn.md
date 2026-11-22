@@ -14,9 +14,10 @@ branch only (not in the repository README):
 - [Summary CSV](https://github.com/yamanori99/DistSSHRun.jl/blob/bench-data/churn/summary.csv)
 - PNG previews and interactive HTML under `churn/charts/` (linked from `report.md`)
 
-## Regenerating locally
+## Tests and local render
 
 ```bash
+julia --startup-file=no --project=. bench/compile/test/churn.jl
 julia --startup-file=no --project=bench/compile bench/compile/churn_render.jl \
     --out-dir /tmp/churn-out
 ```

@@ -1,9 +1,10 @@
 using Test
 using Dates
 
-include(joinpath(@__DIR__, "..", "..", "..", "bench", "compile", "churn_compute.jl"))
+const BENCH_COMPILE = joinpath(@__DIR__, "..")
+include(joinpath(BENCH_COMPILE, "churn_compute.jl"))
 using .ChurnCompute
-include(joinpath(@__DIR__, "..", "..", "..", "bench", "compile", "churn_report.jl"))
+include(joinpath(BENCH_COMPILE, "churn_report.jl"))
 
 function with_churn_repo(f)
     dir = mktempdir()
@@ -189,7 +190,7 @@ end
     end
 
     @testset "interactive html charts" begin
-        include(joinpath(@__DIR__, "..", "..", "..", "bench", "compile", "churn_charts_html.jl"))
+        include(joinpath(BENCH_COMPILE, "churn_charts_html.jl"))
         week = Date(2026, 6, 9)
         row = ChurnCompute.AreaRow(
             "DistSSHRun", "cli/", 2, 100, 1, 0, 5, 1, 50.0, Date(2026, 6, 1), String[],
