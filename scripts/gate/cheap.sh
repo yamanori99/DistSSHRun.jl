@@ -51,6 +51,9 @@ run_step "lint" env GATE_DIFF_BASE="${GATE_DIFF_BASE}" GATE_DIFF_HEAD="${GATE_DI
 
 run_step "shellcheck" "${ROOT}/scripts/gate/shellcheck.sh"
 
+run_step "removed names" "${ROOT}/scripts/lint/run.sh" removed-names
+run_step "docs static" "${ROOT}/scripts/docs.sh" static
+
 if [[ -z "${GITHUB_ACTIONS:-}" ]] || [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then
   run_step "pr body" env GATE_DIFF_BASE="${GATE_DIFF_BASE}" GATE_DIFF_HEAD="${GATE_DIFF_HEAD}" \
     GATE_PR_BODY_FILE="${GATE_PR_BODY_FILE:-}" GATE_PR_PATHS_FILE="${GATE_PR_PATHS_FILE:-}" \

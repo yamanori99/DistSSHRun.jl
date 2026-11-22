@@ -59,7 +59,7 @@ coverage="${DETECT_COVERAGE:-false}"
 event="${DETECT_EVENT:-pull_request}"
 fix_title="${DETECT_FIX_TITLE:-false}"
 wsl_off="WSL jobs do not run on pull_request"
-fix_title_off="title does not start with fix"
+fix_title_off="title is not fix: or fix("
 pkgeval_off="PkgEval does not run on pull_request"
 nightly_off="nightly job does not run on pull_request"
 

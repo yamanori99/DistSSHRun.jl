@@ -124,3 +124,9 @@ if "${JUDGE}" >/dev/null 2>&1; then
 fi
 export RESULT_fix_tests_on_base=skipped
 pass_scenario "missing RESULT_fix_tests_on_base fails gate"
+
+"${ROOT}/scripts/gate/fix_title_self_test.sh" >/dev/null || fail_scenario "fix_title_self_test"
+pass_scenario "fix_title_self_test"
+
+"${ROOT}/scripts/gate/pr-body_gh_self_test.sh" >/dev/null || fail_scenario "pr-body_gh_self_test"
+pass_scenario "pr-body_gh_self_test"

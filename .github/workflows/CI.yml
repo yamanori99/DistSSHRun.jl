@@ -11,6 +11,7 @@ on:
       - reopened
       - ready_for_review
       - labeled
+      - edited
   workflow_dispatch:
   # Daily 06:00 JST (21:00 UTC). Downstream-only report; detect sets heavy=false.
   schedule:
@@ -1315,7 +1316,7 @@ jobs:
   fix-tests-on-base:
     name: fix tests fail on merge-base src
     needs: detect
-    if: github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'fix')
+    if: github.event_name == 'pull_request' && (startsWith(github.event.pull_request.title, 'fix:') || startsWith(github.event.pull_request.title, 'fix('))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -1808,7 +1809,7 @@ jobs:
           DETECT_DOWNSTREAM: ${{ needs.detect.outputs.downstream }}
           DETECT_PRECHECK: ${{ needs.detect.outputs.precheck }}
           DETECT_EVENT: ${{ github.event_name }}
-          DETECT_FIX_TITLE: ${{ github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'fix') }}
+          DETECT_FIX_TITLE: ${{ github.event_name == 'pull_request' && (startsWith(github.event.pull_request.title, 'fix:') || startsWith(github.event.pull_request.title, 'fix(')) }}
           RESULT_detect: ${{ needs.detect.result }}
           RESULT_runic: ${{ needs.runic.result }}
           RESULT_diff_lint_self_test: ${{ needs.diff-lint-self-test.result }}

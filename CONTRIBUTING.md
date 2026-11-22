@@ -5,16 +5,15 @@ Internals of this repo.
 - Users: [DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/stable/), [README.md](README.md), [README.ja.md](README.ja.md), [NEWS.md](NEWS.md)
 - API docs: [dev](https://yamanori99.github.io/DistSSHRun.jl/dev/) ([docs/README.md](docs/README.md))
 
-This is a **separate** package from DistSSHKit: FIFO `serve` in front of one Kit `go` / `drive`, not a bigger Kit. Placement tokens, `execute!`, `kit.pid` / `kit.result`, `terminate_run!`, demo argv, and rsync/collect are Kit's. Queue records table state and the path Kit already wrote.
+This package is **DistSSHRun**: one distributed run over SSH (`setup`, `up`, `go`, `drive`, `hostinfo`, `pool`, `demo`, `progress`, and related entry points). It exports `execute!` and the run lifecycle API in this checkout. [DistSSHKit](https://yamanori99.github.io/DistSSHKit.jl/stable/) is a separate meta-package that may reexport it; this repository does not list DistSSHKit in `Project.toml`.
 
 ## Requirements
 
-macOS, Linux, or WSL2 Ubuntu. Not native Windows (the kit shells out to `ssh`). Git clone, sync, and pull also need `git`. Before pushing, run `scripts/check.sh` on that commit. That gate is the same on macOS and Linux. WSL2 Ubuntu uses the Linux conditions.
+macOS, Linux, or WSL2 Ubuntu. Not native Windows (commands shell out to `ssh`). Git clone, sync, and pull need `git`. Before pushing, run `scripts/check.sh` on that commit. That gate is the same on macOS and Linux. WSL2 Ubuntu uses the Linux conditions.
 
 | What | Need |
 | --- | --- |
-| Library, `Pkg.test()`, `julia -m DistSSHKit`, docs | Julia **1.13+** |
-| DistSSHKit | **0.9.x** from General (`execute!`, `job_id`, `run_dir` / `kit.pid` / `kit.result`). Not a git sibling. |
+| Library, `Pkg.test()`, docs | Julia **1.13+** (`Project.toml` `compat`) |
 
 Prefer [juliaup](https://github.com/JuliaLang/juliaup). Details: [Requirements](https://yamanori99.github.io/DistSSHKit.jl/stable/requirements/).
 
@@ -27,8 +26,6 @@ julia --project=. -e 'using Pkg; Pkg.instantiate()'
 ```
 
 The scripts under `src/cli/` do not instantiate this checkout.
-
-That pulls DistSSHKit from General. Do not add a `[sources]` path to a Kit checkout unless you are landing an unreleased kit hook.
 
 From another app (a **separate** env, not a job whose Manifest is copied to workers):
 
@@ -110,9 +107,8 @@ JETLS is the type gate. Do not commit `.vscode/settings.json` to silence the Lan
        Testing DistSSHRun tests passed
   ```
 
-  After the body check passes, a Testing block that lacks the environment
-  line, a command in a code span, or a `text` fence prints only `note:`
-  lines and does not fail the gate. Other body problems fail the check: a
+  A Testing block that lacks the environment line, a command in a code span,
+  or a `text` fence fails the body check. Other body problems fail too: a
   title heading, a checklist, a missing Summary, a bullet list or fenced
   block that repeats `git diff --name-only origin/main...HEAD`, or excuse
   wording without an Actions run.
@@ -122,11 +118,11 @@ JETLS is the type gate. Do not commit `.vscode/settings.json` to silence the Lan
   flaky, or left to CI needs, in the same paragraph, the URL of an Actions
   run that shows it, and the word `main`. The push gate fails without
   both.
-- A title that starts with `fix` (in any case) runs the required check
-  `fix tests fail on merge-base src`. That check needs a changed test file
-  under `test/` or `lib/*/test/` (not `e2e.jl`) that passes on this pull
-  request and fails on the base. A docs-only or CI-only change whose
-  title starts with `fix` fails that check.
+- A title that starts with `fix:` or `fix(` (Conventional Commits, any case)
+  runs the required check `fix tests fail on merge-base src`. That check
+  needs a changed test file under `test/` or `lib/*/test/` (not `e2e.jl`)
+  that passes on this pull request and fails on the base. A docs-only or
+  CI-only change whose title uses that prefix fails that check.
 - [REVIEW.md](REVIEW.md) holds the three questions a reviewer asks of
   every diff. They are for reviewers. Do not answer them in the body.
 - The type label stays out of the body. CI applies it.
