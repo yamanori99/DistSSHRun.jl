@@ -454,7 +454,9 @@ end
         _with_tempdir() do project
             script = joinpath(project, "job.jl")
             write(script, "")
-            withenv("DISTSSH_OUTPUT_DIR" => nothing) do
+            withenv(
+                "DISTSSH_OUTPUT_DIR" => nothing,
+            ) do
                 d = DistSSHRun._ensure_drive_output_env!(script; project = project)
                 @test isdir(d)
                 @test startswith(basename(d), "job_")
@@ -463,7 +465,9 @@ end
                 @test DistSSHRun._ensure_drive_output_env!(script; project = project) == d
             end
             explicit = joinpath(project, "out")
-            withenv("DISTSSH_OUTPUT_DIR" => explicit) do
+            withenv(
+                "DISTSSH_OUTPUT_DIR" => explicit,
+            ) do
                 got = DistSSHRun._ensure_drive_output_env!(script; project = project)
                 @test got == DistSSHRun.canonical_local_path(explicit)
             end
@@ -501,7 +505,9 @@ end
             other = mktempdir()
             try
                 cd(other) do
-                    withenv("DISTSSH_COLLECT_DIRS" => "rel-out") do
+                    withenv(
+                        "DISTSSH_COLLECT_DIRS" => "rel-out",
+                    ) do
                         DistSSHRun.write_kit_run_toml!(
                             d1;
                             kind = :drive,
@@ -541,7 +547,9 @@ end
             write(script, "")
             run_a = DistSSHRun.allocate_run_dir(:drive, script; project)
             run_b = DistSSHRun.allocate_run_dir(:drive, script; project)
-            withenv("DISTSSH_OUTPUT_DIR" => nothing) do
+            withenv(
+                "DISTSSH_OUTPUT_DIR" => nothing,
+            ) do
                 a, la = DistSSHRun._execute_detached_dirs(
                     :drive, project, script, nothing, nothing, true, run_a
                 )
@@ -565,7 +573,9 @@ end
             @test c == DistSSHRun.canonical_local_path(custom)
             @test lc == DistSSHRun.canonical_local_path(run_a)
             inherited = joinpath(project, "from_env")
-            withenv("DISTSSH_OUTPUT_DIR" => inherited) do
+            withenv(
+                "DISTSSH_OUTPUT_DIR" => inherited,
+            ) do
                 e, le = DistSSHRun._execute_detached_dirs(
                     :drive, project, script, nothing, nothing, true, run_a
                 )
@@ -1340,7 +1350,9 @@ end
     end
 
     @testset "job_id charset / kit_job_eval_arg" begin
-        withenv("DISTSSH_JOB_ID" => nothing) do
+        withenv(
+            "DISTSSH_JOB_ID" => nothing,
+        ) do
             @test DistSSHRun.resolved_kit_job_id() === nothing
         end
         @test DistSSHRun.kit_job_eval_arg("q-1") == "--eval=#distsshkit-job:q-1"
@@ -1527,25 +1539,35 @@ end
             DistSSHRun._RMPROCS_WAITFOR_S +
             margin
         @test DistSSHRun._SIGNAL_KILL_WAIT_S == 1.0
-        withenv("DISTSSH_WAIT_SIGINT_GRACE" => nothing) do
+        withenv(
+            "DISTSSH_WAIT_SIGINT_GRACE" => nothing,
+        ) do
             @test DistSSHRun._resolve_interrupt_grace(nothing) ==
                 DistSSHRun._INTERRUPT_GRACE_DEFAULT_S
             @test DistSSHRun._resolve_interrupt_grace(nothing) ==
                 DistSSHRun.DistSSHBase.wait_seconds(:sigint_grace, 30.0)
         end
-        withenv("DISTSSH_WAIT_SIGINT_GRACE" => "4.5") do
+        withenv(
+            "DISTSSH_WAIT_SIGINT_GRACE" => "4.5",
+        ) do
             @test DistSSHRun._resolve_interrupt_grace(nothing) == 4.5
             @test DistSSHRun._resolve_interrupt_grace(0) == 0.0
             @test DistSSHRun._resolve_interrupt_grace(1) == 1.0
         end
-        withenv("DISTSSH_WAIT_SIGINT_GRACE" => "-1") do
+        withenv(
+            "DISTSSH_WAIT_SIGINT_GRACE" => "-1",
+        ) do
             @test_throws ArgumentError DistSSHRun._resolve_interrupt_grace(nothing)
             @test DistSSHRun._resolve_interrupt_grace(2) == 2.0
         end
-        withenv("DISTSSH_WAIT_SIGINT_GRACE" => "NaN") do
+        withenv(
+            "DISTSSH_WAIT_SIGINT_GRACE" => "NaN",
+        ) do
             @test_throws ArgumentError DistSSHRun._resolve_interrupt_grace(nothing)
         end
-        withenv("DISTSSH_WAIT_SIGINT_GRACE" => "Inf") do
+        withenv(
+            "DISTSSH_WAIT_SIGINT_GRACE" => "Inf",
+        ) do
             @test_throws ArgumentError DistSSHRun._resolve_interrupt_grace(nothing)
         end
         @test_throws ArgumentError DistSSHRun._resolve_interrupt_grace(-0.1)

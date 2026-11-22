@@ -23,7 +23,9 @@ isfile(_ssh_config) ||
 const _hosts = ("child-1", "child-2")
 
 @testset "DistSSHBase SSH" verbose = true begin
-    withenv("DISTSSH_SSH_OPTS" => "-F $(_ssh_config) -o RequestTTY=no") do
+    withenv(
+        "DISTSSH_SSH_OPTS" => "-F $(_ssh_config) -o RequestTTY=no",
+    ) do
         @testset "julia path" begin
             ctrl = resolve_controller_julia("auto")
             @test isabspath(ctrl)

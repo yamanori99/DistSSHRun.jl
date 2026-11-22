@@ -113,12 +113,16 @@ using Test
     @testset "resolve_host_path_abs absolute remote map" begin
         _with_tempdir() do tmp
             p = DistSSHBase.canonical_local_path(tmp)
-            withenv("DISTSSH_REMOTE_PROJECT_ROOT" => "/remote/App") do
+            withenv(
+                "DISTSSH_REMOTE_PROJECT_ROOT" => "/remote/App",
+            ) do
                 @test DistSSHBase.resolve_host_project_abs("some-host", p) == "/remote/App"
                 @test DistSSHBase.resolve_host_path_abs("some-host", joinpath(p, "src"), p) ==
                     joinpath("/remote/App", "src") |> abspath
             end
-            withenv("DISTSSH_REMOTE_PROJECT_ROOT" => "/remote/App\nbad") do
+            withenv(
+                "DISTSSH_REMOTE_PROJECT_ROOT" => "/remote/App\nbad",
+            ) do
                 @test_throws ArgumentError DistSSHBase.resolve_host_project_abs("some-host", p)
             end
         end

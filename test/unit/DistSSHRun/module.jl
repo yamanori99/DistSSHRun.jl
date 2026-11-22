@@ -150,7 +150,9 @@ using Test
     end
 
     @testset "script arg prelude" begin
-        withenv("DISTSSH_INTERNAL_SCRIPT_ARG_PRELUDE" => "alpha\n\nbeta") do
+        withenv(
+            "DISTSSH_INTERNAL_SCRIPT_ARG_PRELUDE" => "alpha\n\nbeta",
+        ) do
             @test DistSSHRun._merge_script_arg_prelude(["job.jl"]) == ["job.jl", "alpha", "beta"]
         end
         @test get(ENV, "DISTSSH_INTERNAL_SCRIPT_ARG_PRELUDE", nothing) === nothing

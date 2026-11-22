@@ -385,7 +385,9 @@ end
         @test occursin("Largest directories", text)
         @test occursin("data (", text)
         err = try
-            withenv("DISTSSH_SHIP_WARN_TOTAL_BYTES" => "nope") do
+            withenv(
+                "DISTSSH_SHIP_WARN_TOTAL_BYTES" => "nope",
+            ) do
                 DistSSHRun._pack_project_tree(tmp)
             end
             nothing
@@ -397,7 +399,9 @@ end
         warned = mktemp() do _, io
             thrown = redirect_stdout(io) do
                 try
-                    withenv("DISTSSH_SHIP_WARN_TOTAL_BYTES" => "0") do
+                    withenv(
+                        "DISTSSH_SHIP_WARN_TOTAL_BYTES" => "0",
+                    ) do
                         DistSSHRun._pack_project_tree(tmp; ship_max_bytes = 1)
                     end
                     nothing
@@ -543,7 +547,9 @@ end
             @test isfile(joinpath(run_dir, "inputs", "records.toml"))
             @test !isfile(joinpath(tmp, "inputs.toml"))
             @test !isfile(joinpath(tmp, "inputs", "records.toml"))
-            withenv("DISTSSH_RUN_DIR" => nothing) do
+            withenv(
+                "DISTSSH_RUN_DIR" => nothing,
+            ) do
                 err = try
                     DistSSHRun.ship_tree!(
                         tmp, ["host.test"], "/remote/app"; confirm = false, report = false
@@ -1205,7 +1211,9 @@ end
             )
         )
         try
-            withenv("DISTSSH_REMOTE_PROJECT_ROOT" => work) do
+            withenv(
+                "DISTSSH_REMOTE_PROJECT_ROOT" => work,
+            ) do
                 got = DistSSHRun._remote_work_layout_path(
                     joinpath(proj, "output"), proj, ["child-1"]
                 )
@@ -1240,7 +1248,9 @@ end
         )
         try
             # Session/ENV points at a different deploy root than the stale selection.
-            withenv("DISTSSH_REMOTE_PROJECT_ROOT" => "/home/dev/app") do
+            withenv(
+                "DISTSSH_REMOTE_PROJECT_ROOT" => "/home/dev/app",
+            ) do
                 deploy = DistSSHRun._layout_intended_deploy_root(
                     proj, DistSSHRun.active_source_selection()
                 )

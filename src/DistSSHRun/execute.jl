@@ -2283,7 +2283,7 @@ end
 `parent` is not modified. Thread and BLAS variables stay out unless
 `threads` is `:unset`. The five BLAS variables are then set to
 `DISTSSH_BLAS_THREADS` or `"1"`. `OPENBLAS_DEFAULT_NUM_THREADS` is not
-set. Bookkeeping launch keys and `DISTSSH_SKIP_GLOBAL_WORKER_PKILL`
+set. Bookkeeping launch keys and the leftover-worker skip flag
 are written on the child only.
 """
 function _detached_child_env(

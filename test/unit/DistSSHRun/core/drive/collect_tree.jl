@@ -242,7 +242,9 @@ end
             write(script, "true\n")
             out = joinpath(proj, "out")
             mkpath(out)
-            withenv("DISTSSH_OUTPUT_DIR" => out) do
+            withenv(
+                "DISTSSH_OUTPUT_DIR" => out,
+            ) do
                 ok, hrs = DistSSHRun.collect_drive_results!(
                     ["host1"], dirname(script), ".drive_sentinel_x", false, proj, proj
                 )
@@ -260,7 +262,9 @@ end
             logp = joinpath(state_dir, "ssh.log")
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
-            withenv("DISTSSH_TEST_SSH_LOG" => logp) do
+            withenv(
+                "DISTSSH_TEST_SSH_LOG" => logp,
+            ) do
                 name = DistSSHRun.place_drive_sentinels!(["host1"], dirname(script), true, proj)
                 @test name == ""
             end
@@ -282,7 +286,9 @@ end
             out = joinpath(proj, "out")
             mkpath(out)
             mkpath(joinpath(state_dir, "shared", "tree"))
-            withenv("DISTSSH_OUTPUT_DIR" => out) do
+            withenv(
+                "DISTSSH_OUTPUT_DIR" => out,
+            ) do
                 base = DistSSHRun.place_drive_sentinels!(
                     ["host1", "host2"], dirname(script), false, proj
                 )
@@ -334,7 +340,9 @@ end
             end
             @test refused_parent
             @test occursin("Error:", out_parent)
-            withenv("DISTSSH_COLLECT_DIRS" => ".") do
+            withenv(
+                "DISTSSH_COLLECT_DIRS" => ".",
+            ) do
                 roots = DistSSHRun.distributed_collect_root_dirs(proj, proj)
                 @test length(roots) == 1
                 @test rstrip(roots[1], '/') ==
