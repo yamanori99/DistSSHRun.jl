@@ -85,7 +85,7 @@ jobs:
   # `DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)` is continue-on-error.
   # One detect job; markdown-only / allowlisted PRs skip heavy jobs (UI: skipping).
   # Required check names include the Julia version and the architecture.
-  # Codecov (flags run/base/up/ship/heartbeat/e2e): main push Pkg.test; E2E on main + weekly + version-cut.
+  # Codecov (flags run/base/up/ship/heartbeat/e2e): main push Pkg.test; E2E on main + weekly.
   # cache-scratchspaces: false — registry_updates.toml in scratchspaces can
   # poison Pkg.Registry.update on 1.13 if restored corrupt.
   # Aqua / JETLS / Runic share this workflow so the Test badge is the PR gate.
@@ -124,6 +124,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: ./.github/actions/ci-heavy
         id: heavy
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -268,6 +269,33 @@ jobs:
             precheck=true
           fi
           echo "precheck=${precheck}" >> "$GITHUB_OUTPUT"
+      - name: Conflict and staleness
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          sha="${HEAD_SHA}"
+          if [ -n "${PR:-}" ]; then
+            git fetch --no-tags origin "pull/${PR}/head"
+            sha="$(git rev-parse FETCH_HEAD)"
+          fi
+          if ! git merge-tree --write-tree origin/main "$sha" >/dev/null; then
+            echo "conflicts with origin/main" >&2
+            exit 1
+          fi
+          behind="$(git rev-list --count "${sha}..origin/main")"
+          mb="$(git merge-base "$sha" origin/main)"
+          age="$(($(git log -1 --format=%ct origin/main) - $(git log -1 --format=%ct "$mb")))"
+          if [ "$behind" -gt 40 ] || [ "$age" -gt $((48 * 3600)) ]; then
+            echo "::warning::stale versus origin/main (${behind} commits, ${age}s)"
+            if [[ ",${PR_LABELS}," == *",cut,"* ]]; then
+              echo "stale branch with cut label" >&2
+              exit 1
+            fi
+          fi
   test-unit:
     name: DistSSHRun (1.13, ubuntu-latest, x64, unit)
     needs: [detect, runic, jetls, aqua]
@@ -446,10 +474,30 @@ jobs:
         with:
           path: DistSSHRun.jl
           persist-credentials: false
+          fetch-depth: 0
+      - name: Downstream ref
+        id: dref
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+          PKG: ${{ matrix.pkg }}
+        run: |
+          set -euo pipefail
+          ref=main
+          if [ -n "${BODY:-}" ]; then
+            line="$(printf '%s\n' "$BODY" | grep -E "^Downstream-Ref: ${PKG}=" | head -1 || true)"
+            if [ -n "$line" ]; then
+              ref="${line#*=}"
+              if ! [[ "$ref" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+                echo "invalid Downstream-Ref: ${ref}" >&2
+                exit 1
+              fi
+            fi
+          fi
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yamanori99/${{ matrix.pkg }}.jl
-          ref: main
+          ref: ${{ steps.dref.outputs.ref }}
           path: downstream
           persist-credentials: false
       - name: Workspace .github for julia-slot
@@ -465,7 +513,14 @@ jobs:
         working-directory: DistSSHRun.jl
         env:
           DOWNSTREAM_SRC: ${{ github.workspace }}/downstream/src
-        run: julia --startup-file=no --project=. .github/downstream_public.jl "$DOWNSTREAM_SRC"
+        run: |
+          git fetch --no-tags origin main || true
+          julia --startup-file=no --project=. .github/downstream_public.jl "$DOWNSTREAM_SRC"
+      - name: Removed names in downstream tree
+        working-directory: DistSSHRun.jl
+        env:
+          DOWNSTREAM: ${{ github.workspace }}/downstream
+        run: julia --project=.github/runic --startup-file=no scripts/lint/diff_lint.jl removed-names "$DOWNSTREAM"
       - name: Pkg.test downstream against this checkout
         env:
           PKG: ${{ matrix.pkg }}
@@ -1232,13 +1287,14 @@ jobs:
   diff-lint-self-test:
     name: diff-lint self-test
     needs: detect
-    if: needs.detect.outputs.scripts == 'true'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
@@ -1249,8 +1305,55 @@ jobs:
       - name: diff_lint.jl self-test
         run: |
           set -euo pipefail
+          git fetch --no-tags origin main
           julia --project=.github/runic --startup-file=no -e 'using Pkg; Pkg.instantiate()'
           julia --project=.github/runic --startup-file=no scripts/lint/diff_lint.jl self-test
+          for mode in banned-words skip-reasons id-match process-pattern lock-create env-default swallowed-catch pr-refs; do
+            julia --project=.github/runic --startup-file=no scripts/lint/diff_lint.jl "$mode"
+          done
+
+  fix-tests-on-base:
+    name: fix tests fail on merge-base src
+    needs: detect
+    if: github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'fix')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: Run added tests against merge-base src
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$BASE"
+          mapfile -t files < <(git diff --name-only "$BASE"...HEAD -- 'test/**/*.jl' 'lib/*/test/**/*.jl' | grep -v '/e2e.jl$' || true)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "no added or changed test files (e2e.jl is not run here)" >&2
+            exit 1
+          fi
+          git checkout "$BASE" -- src lib/DistSSHBase/src lib/DistSSHUp/src lib/DistSSHShip/src lib/DistSSHHeartbeat/src
+          julia --project=. --startup-file=no -e 'using Pkg; Pkg.instantiate()'
+          failed=0
+          for f in "${files[@]}"; do
+            [ -f "$f" ] || continue
+            if ! julia --project=. --startup-file=no "$f"; then
+              failed=1
+            fi
+          done
+          if [ "$failed" -eq 0 ]; then
+            echo "new tests also passed on merge-base src" >&2
+            exit 1
+          fi
 
   aqua:
     name: Aqua (1.13, ubuntu-latest, x64)
@@ -1413,7 +1516,7 @@ jobs:
     permissions:
       contents: read
       actions: write # buildx type=gha cache for the worker image
-      id-token: write # Codecov OIDC on main push, version-cut PR, and weekly E2E coverage
+      id-token: write # Codecov OIDC on main push and weekly E2E coverage
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1735,3 +1838,84 @@ jobs:
           RESULT_ssh_e2e_1_14_pre: ${{ needs.ssh-e2e-1-14-pre.result }}
           RESULT_queue_ssh_e2e: ${{ needs.queue-ssh-e2e.result }}
         run: ./scripts/gate/judge.sh
+
+  # Main push only: Downstream Kit/Queue and queue-ssh-e2e stay out (known noise).
+  # continue-on-error jobs (1.14-pre, nightly, PkgEval) are omitted.
+  notify:
+    needs:
+      - detect
+      - runic
+      - jetls
+      - aqua
+      - test-unit
+      - test-integration
+      - test-coverage
+      - test-macos-unit
+      - test-macos-integration
+      - test-wsl
+      - ship-test-ubuntu
+      - ship-test-macos
+      - ship-test-wsl
+      - heartbeat-test-ubuntu
+      - heartbeat-test-macos
+      - heartbeat-test-wsl
+      - up-test-ubuntu
+      - up-test-macos
+      - up-test-wsl
+      - base-test-ubuntu
+      - base-test-macos
+      - base-test-wsl
+      - up-ssh-e2e
+      - base-ssh-e2e
+      - ship-ssh-e2e
+      - heartbeat-ssh-e2e
+      - ssh-e2e
+      - registry-install
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && !cancelled()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    name: notify
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Open or close tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: Test main failed
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BODY_PREFIX: |+
+            Not a PR check. Downstream Kit/Queue failures are tracked separately.
+
+          MONITOR_RESULTS: |
+            detect:${{ needs.detect.result }}
+            runic:${{ needs.runic.result }}
+            jetls:${{ needs.jetls.result }}
+            aqua:${{ needs.aqua.result }}
+            test-unit:${{ needs.test-unit.result }}
+            test-integration:${{ needs.test-integration.result }}
+            test-coverage:${{ needs.test-coverage.result }}
+            test-macos-unit:${{ needs.test-macos-unit.result }}
+            test-macos-integration:${{ needs.test-macos-integration.result }}
+            test-wsl:${{ needs.test-wsl.result }}
+            ship-test-ubuntu:${{ needs.ship-test-ubuntu.result }}
+            ship-test-macos:${{ needs.ship-test-macos.result }}
+            ship-test-wsl:${{ needs.ship-test-wsl.result }}
+            heartbeat-test-ubuntu:${{ needs.heartbeat-test-ubuntu.result }}
+            heartbeat-test-macos:${{ needs.heartbeat-test-macos.result }}
+            heartbeat-test-wsl:${{ needs.heartbeat-test-wsl.result }}
+            up-test-ubuntu:${{ needs.up-test-ubuntu.result }}
+            up-test-macos:${{ needs.up-test-macos.result }}
+            up-test-wsl:${{ needs.up-test-wsl.result }}
+            base-test-ubuntu:${{ needs.base-test-ubuntu.result }}
+            base-test-macos:${{ needs.base-test-macos.result }}
+            base-test-wsl:${{ needs.base-test-wsl.result }}
+            up-ssh-e2e:${{ needs.up-ssh-e2e.result }}
+            base-ssh-e2e:${{ needs.base-ssh-e2e.result }}
+            ship-ssh-e2e:${{ needs.ship-ssh-e2e.result }}
+            heartbeat-ssh-e2e:${{ needs.heartbeat-ssh-e2e.result }}
+            ssh-e2e:${{ needs.ssh-e2e.result }}
+            registry-install:${{ needs.registry-install.result }}
+        run: bash .github/ci-alert-notify.sh

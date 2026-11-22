@@ -19,6 +19,8 @@ name: Labels
 on: # zizmor: ignore[dangerous-triggers] API label writes only; no checkout of the PR head
   pull_request_target:
     types: [opened, reopened, synchronize, ready_for_review]
+  push:
+    branches: [main]
 
 # Separate from labeler-check so the read-only drift job cannot cancel
 # an in-flight label write. Group name matches the previous workflow lock.
@@ -30,8 +32,54 @@ permissions:
   contents: read
 
 jobs:
+  conflict:
+    name: conflict labels
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Label merge conflicts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          json=""
+          tries=0
+          while :; do
+            json="$(gh pr list --state open --json number,mergeable,mergeStateStatus)"
+            echo "$json" | grep -q '"UNKNOWN"' || break
+            tries=$((tries + 1))
+            if ((tries >= 5)); then
+              break
+            fi
+            sleep 2
+          done
+          echo "$json" | jq -c '.[]' | while read -r row; do
+            num="$(echo "$row" | jq -r .number)"
+            mergeable="$(echo "$row" | jq -r .mergeable)"
+            status="$(echo "$row" | jq -r .mergeStateStatus)"
+            if [ "$mergeable" = "UNKNOWN" ] || [ "$status" = "UNKNOWN" ]; then
+              echo "PR ${num}: UNKNOWN; leave conflict label"
+              continue
+            fi
+            has="$(gh pr view "$num" --json labels --jq '[.labels[].name] | join(",")')"
+            if [ "$mergeable" = "CONFLICTING" ] || [ "$status" = "DIRTY" ]; then
+              if [[ ",${has}," != *",conflict,"* ]]; then
+                gh pr edit "$num" --add-label conflict
+              fi
+            elif [ "$mergeable" = "MERGEABLE" ] && [ "$status" != "DIRTY" ]; then
+              if [[ ",${has}," == *",conflict,"* ]]; then
+                gh pr edit "$num" --remove-label conflict
+              fi
+            fi
+          done
+
   label:
     name: area labels
+    if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

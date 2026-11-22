@@ -11,12 +11,12 @@ coverage:
 comment: false
 
 # Per-package Pkg.test flags upload on main push only (Ubuntu Julia 1.13).
-# E2E (flag e2e) uploads on main push Linux E2E, E2E weekly, and version-cut PRs.
+# E2E (flag e2e) uploads on main push Linux E2E and E2E weekly.
 # Carryforward: docs-only PRs skip heavy CI and would otherwise drop line hits.
 # Scoped paths keep partial uploads from dropping other packages' files.
 flag_management:
   default_rules:
-    carryforward: true
+    carryforward: false
   individual_flags:
     - name: run
       carryforward: true

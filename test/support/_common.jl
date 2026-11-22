@@ -15,13 +15,38 @@ if !isdefined(@__MODULE__, :_test_root)
     _julia_exe()::String = joinpath(Sys.BINDIR, Base.julia_exename())
     _fixture(name::AbstractString) = joinpath(_test_root(), "fixtures", name)
 
-    # `Base.julia_cmd()` carries the parent coverage and bounds flags.
+    # `Base.julia_cmd()` carries the parent coverage and bounds flags. Drop
+    # unscoped `--code-coverage` so child kit CLIs do not instrument suite
+    # trees (`user` / `all` write `.cov` beside shipped project files).
+    # Scoped `@path` flags from E2E stay so remote paths still hit Codecov.
+    function _strip_unscoped_coverage_flags(parts::AbstractVector{<:AbstractString})::Vector{String}
+        out = String[]
+        i = 1
+        n = length(parts)
+        while i <= n
+            p = String(parts[i])
+            if p == "--code-coverage" || p == "--code-coverage=user" || p == "--code-coverage=all"
+                i += 1
+                continue
+            end
+            if startswith(p, "--code-coverage=")
+                mode = p[(length("--code-coverage=") + 1):end]
+                if mode == "user" || mode == "all" || mode == "none"
+                    i += 1
+                    continue
+                end
+            end
+            push!(out, p)
+            i += 1
+        end
+        return out
+    end
+
     # `julia` replaces the executable when a test names another binary.
     function _julia_cmd_for(julia::AbstractString = _julia_exe())::Cmd
         cmd = Base.julia_cmd()
         exe = abspath(String(julia))
-        abspath(cmd.exec[1]) == exe && return cmd
-        rest = String[String(x) for x in cmd.exec[2:end]]
+        rest = _strip_unscoped_coverage_flags(String[String(x) for x in cmd.exec[2:end]])
         return Cmd(vcat(String[exe], rest))
     end
 

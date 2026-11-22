@@ -15,6 +15,7 @@ using DistSSHRun
 # #57 exported `parse_ride_args`. #509 removes ride; followers drop src refs (#509).
 # Remaining entries wait for #201.
 # #201 is the public-surface freeze. `main` is public, so it is not listed.
+const DOWNSTREAM_PUBLIC_ALLOW_MAX = 28
 const DOWNSTREAM_PUBLIC_ALLOW = Dict{Tuple{Symbol, Symbol}, Int}(
     (:DistSSHBase, :_ssh_host_args) => 201,
     (:DistSSHBase, :_test_doubles_on) => 201,
@@ -132,12 +133,35 @@ function _import_name(ex)::Union{Nothing, Symbol}
     end
 end
 
+function _dynamic_export(ex)::Bool
+    ex isa Expr || return false
+    if ex.head === :call && !isempty(ex.args)
+        cal = ex.args[1]
+        if cal === :Expr && length(ex.args) >= 2
+            arg = ex.args[2]
+            (arg === :(:export) || arg == QuoteNode(:export) || arg === :export) && return true
+        end
+        if cal === :Core || (cal isa Expr && cal.head === :.)
+            occursin("export", string(ex)) && occursin("eval", string(ex)) && return true
+        end
+        if cal isa Expr && cal.head === :. && length(cal.args) >= 2
+            cal.args[2] == QuoteNode(:eval) && length(ex.args) >= 2 &&
+                occursin("export", string(ex.args[2])) && return true
+        end
+    end
+    return false
+end
+
 function _walk(ex, file::String, line::Base.RefValue{Int}, hits::Vector{Tuple{String, Int, Symbol, Symbol}})
     if ex isa LineNumberNode
         line[] = ex.line
         return nothing
     end
     ex isa Expr || return nothing
+    if _dynamic_export(ex)
+        push!(hits, (file, line[], :export, :dynamic))
+        return nothing
+    end
     if ex.head === :. && length(ex.args) >= 2
         chain = _chain_names(ex)
         if chain !== nothing
@@ -291,15 +315,55 @@ function downstream_public_failures(
         allow::Dict{Tuple{Symbol, Symbol}, Int} = DOWNSTREAM_PUBLIC_ALLOW,
     )::Vector{String}
     fails = String[]
+    nallow = length(allow)
+    if nallow != DOWNSTREAM_PUBLIC_ALLOW_MAX
+        push!(fails, "allowlist count $(nallow) != $(DOWNSTREAM_PUBLIC_ALLOW_MAX)")
+    end
+    if nallow > DOWNSTREAM_PUBLIC_ALLOW_MAX
+        push!(fails, "allowlist longer than $(DOWNSTREAM_PUBLIC_ALLOW_MAX)")
+    end
+    prev_max = try
+        text = read(`git show origin/main:.github/downstream_public.jl`, String)
+        m = match(r"DOWNSTREAM_PUBLIC_ALLOW_MAX = ([0-9]+)", text)
+        m === nothing ? nothing : Base.parse(Int, m.captures[1])
+    catch
+        nothing
+    end
+    if prev_max !== nothing && DOWNSTREAM_PUBLIC_ALLOW_MAX > prev_max
+        push!(fails, "allowlist max $(DOWNSTREAM_PUBLIC_ALLOW_MAX) > origin/main $(prev_max)")
+    end
+    prev_keys = try
+        text = read(`git show origin/main:.github/downstream_public.jl`, String)
+        Set{Tuple{Symbol, Symbol}}(
+            (Symbol(m.captures[1]), Symbol(m.captures[2])) for m in eachmatch(r"\(:([A-Za-z0-9_]+), :([A-Za-z0-9_]+)\)", text)
+        )
+    catch
+        Set{Tuple{Symbol, Symbol}}()
+    end
     seen = Set{Tuple{String, Int, Symbol, Symbol}}()
     for (file, line, owner, name) in _scan_tree(srcdir)
         key = (file, line, owner, name)
         key in seen && continue
         push!(seen, key)
+        if owner === :export && name === :dynamic
+            push!(fails, "$(file):$(line): dynamic export")
+            continue
+        end
         _binding_is_public(owner, name) && continue
         haskey(allow, (owner, name)) && continue
         label = _binding_label(owner, name)
         push!(fails, "$(file):$(line): $(label) is not public")
+    end
+    for ((owner, name), issue) in allow
+        (owner, name) in prev_keys && continue
+        st = try
+            strip(read(`gh issue view $(issue) --json state --jq .state`, String))
+        catch
+            ""
+        end
+        if st != "OPEN"
+            push!(fails, "allowlist: $(_binding_label(owner, name)) #$(issue) is not an open issue")
+        end
     end
     for ((owner, name), issue) in allow
         _binding_is_public(owner, name) || continue

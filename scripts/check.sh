@@ -169,6 +169,40 @@ if command -v jetls >/dev/null 2>&1; then
     pin_help "PATH jetls is ${path_jetls}, not the pin ${jetls_pin}"
   fi
 fi
+root_ver="$(sed -n -E 's/^version = "([^"]+)"/\1/p' "${ROOT}/Project.toml" | head -1)"
+while IFS= read -r proj; do
+  [[ -n "${proj}" ]] || continue
+  src_err="$(
+    awk -v rootver="${root_ver}" -v file="${proj}" '
+      BEGIN { ver = rootver }
+      /^version = / {
+        line = $0
+        sub(/^version = "/, "", line)
+        sub(/".*/, "", line)
+        ver = line
+      }
+      /^\[sources\]/ { src = 1; next }
+      /^\[/ { src = 0 }
+      src && /rev[[:space:]]*=/ {
+        rev = $0
+        sub(/^[^=]*=[[:space:]]*"?/, "", rev)
+        sub(/".*/, "", rev)
+        sub(/[[:space:]].*/, "", rev)
+        if (rev != "main") {
+          printf "%s: [sources] rev is %s, not main\n", file, rev
+          bad = 1
+        } else if (ver !~ /-DEV/) {
+          printf "%s: [sources] rev = \"main\" requires a -DEV version (got %s)\n", file, ver
+          bad = 1
+        }
+      }
+      END { if (bad) exit 1 }
+    ' "${ROOT}/${proj}"
+  )" || true
+  if [[ -n "${src_err}" ]]; then
+    die "${src_err}"
+  fi
+done < <(git ls-files '*Project.toml')
 gate_ok "pins" "(Runic ${runic_pin}, JETLS ${jetls_pin})" "$((SECONDS - _pins_start))"
 
 gate_env_example() {
@@ -223,8 +257,12 @@ pr_body_print_hints() {
   edited="$(pr_description_time)"
   while IFS= read -r hint; do
     [[ -z "${hint}" ]] && continue
-    gate_note "pr body: ${hint}"
-  done < <("${ROOT}/scripts/lint/run.sh" pr-body-hints "${body_file}" "${env_ex}" "${committed}" "${edited}")
+    if [[ "${hint}" == note:* ]]; then
+      printf '%s\n' "${hint}"
+    else
+      gate_note "pr body: ${hint}"
+    fi
+  done < <(CHECK_HEAD="${gate_sha}" "${ROOT}/scripts/lint/run.sh" pr-body-hints "${body_file}" "${env_ex}" "${committed}" "${edited}")
 }
 
 _pr_start=$SECONDS
@@ -299,6 +337,60 @@ else
 fi
 
 gate_capture "shellcheck" "${ROOT}/scripts/gate/shellcheck.sh"
+
+gate_capture "removed names" "${ROOT}/scripts/lint/run.sh" removed-names
+
+INVARIANT_NAMES=()
+if ((${#INVARIANT_NAMES[@]} > 0)); then
+  for _inv in "${INVARIANT_NAMES[@]}"; do
+    if ! git grep -q -F "@testset \"invariant: ${_inv}\"" -- test; then
+      die "missing @testset \"invariant: ${_inv}\""
+    fi
+  done
+fi
+
+if ! git merge-tree --write-tree origin/main HEAD >/dev/null 2>&1; then
+  die "branch conflicts with origin/main"
+fi
+_behind="$(git rev-list --count HEAD..origin/main)"
+_mb="$(git merge-base HEAD origin/main)"
+_age="$(($(git log -1 --format=%ct origin/main) - $(git log -1 --format=%ct "${_mb}")))"
+if ((_behind > 40)) || ((_age > 48 * 3600)); then
+  printf 'note: branch is stale versus origin/main (%s commits, %ss)\n' "${_behind}" "${_age}"
+  _pr_err="$(mktemp)"
+  if _labels="$(gh pr view --json labels --jq '[.labels[].name] | join(",")' 2>"${_pr_err}")"; then
+    rm -f "${_pr_err}"
+    if [[ ",${_labels}," == *",cut,"* ]]; then
+      die "stale branch with cut label"
+    fi
+  else
+    if grep -q 'no pull requests found' "${_pr_err}"; then
+      rm -f "${_pr_err}"
+    else
+      cat "${_pr_err}" >&2
+      rm -f "${_pr_err}"
+      die "stale branch: could not read pull request labels"
+    fi
+  fi
+fi
+
+if git diff --name-only origin/main...HEAD | grep -q '^\.github/workflows/'; then
+  if command -v actionlint >/dev/null 2>&1; then
+    gate_capture "actionlint" actionlint -ignore 'unexpected key "queue" for "concurrency"'
+  else
+    printf 'note: actionlint not found; workflows unchecked locally, CI will check\n'
+  fi
+  if command -v zizmor >/dev/null 2>&1; then
+    gate_capture "zizmor" zizmor --offline --no-progress .github
+  else
+    printf 'note: zizmor not found; workflows unchecked locally, CI will check\n'
+  fi
+  if command -v pinact >/dev/null 2>&1; then
+    gate_capture "pinact" pinact run --fix=false --no-api
+  else
+    printf 'note: pinact not found; workflows unchecked locally, CI will check\n'
+  fi
+fi
 
 gate_capture "docs static" "${ROOT}/scripts/docs.sh" static
 gate_capture "docs maybe" "${ROOT}/scripts/docs.sh" maybe
