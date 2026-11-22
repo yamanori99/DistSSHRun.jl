@@ -66,19 +66,22 @@ function job_distssh_load_probe(
         end
     end
     try
-        _with_controller_job_verify!(project, () -> begin
-            for name in _job_required_distssh_names(mode)
-                uid = _job_required_distssh_uuid(name)
-                uid === nothing && continue
-                try
-                    Base.require(Base.PkgId(uid, String(name)))
-                catch e
-                    detail = sprint(showerror, e)
-                    throw(ErrorException(job_distssh_load_error(name, project, detail, site)))
+        _with_controller_job_verify!(
+            project,
+            () -> begin
+                for name in _job_required_distssh_names(mode)
+                    uid = _job_required_distssh_uuid(name)
+                    uid === nothing && continue
+                    try
+                        Base.require(Base.PkgId(uid, String(name)))
+                    catch e
+                        detail = sprint(showerror, e)
+                        throw(ErrorException(job_distssh_load_error(name, project, detail, site)))
+                    end
                 end
-            end
-            return nothing
-        end)
+                return nothing
+            end,
+        )
     catch e
         e isa ErrorException || rethrow()
         return ("fail", e.msg)

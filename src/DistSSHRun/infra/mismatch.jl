@@ -209,7 +209,7 @@ function _worker_production_identity_expr()
                 end
             end
             function __job_distssh_probe!()
-                try
+                return try
                     Base.require(
                         Base.PkgId(
                             Base.UUID("b568025c-2759-4ef1-8b14-17d00e2cd000"),
