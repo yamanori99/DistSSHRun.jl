@@ -399,6 +399,7 @@ if ((_behind > 40)) || ((_age > 48 * 3600)); then
 fi
 
 if git diff --name-only origin/main...HEAD | grep -q '^\.github/workflows/'; then
+  gate_capture "workflow concurrency" "${ROOT}/scripts/gate/workflow_concurrency_verify.sh"
   if command -v actionlint >/dev/null 2>&1; then
     gate_capture "actionlint" actionlint -ignore 'unexpected key "queue" for "concurrency"'
   else

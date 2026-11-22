@@ -24,8 +24,9 @@ on: # zizmor: ignore[dangerous-triggers] API label writes only; no checkout of t
 
 # Separate from labeler-check so the read-only drift job cannot cancel
 # an in-flight label write. Group name matches the previous workflow lock.
+# main push has no pull request number; use github.sha so pushes do not share labeler-.
 concurrency:
-  group: labeler-${{ github.event.pull_request.number }}
+  group: labeler-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 permissions:
