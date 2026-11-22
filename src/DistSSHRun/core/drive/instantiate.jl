@@ -83,8 +83,14 @@ function instantiate_after_ship!(
             session.hosts, session.project;
             cli_override = session.remote, run_id = snap,
         )
-        any(h -> probe_remote_project_deps(h, rr) !== nothing, session.hosts) ||
-            return nothing
+        any(
+            h -> probe_remote_project_deps(
+                h,
+                rr;
+                local_project = session.project,
+            ) !== nothing,
+            session.hosts,
+        ) || return nothing
         return instantiate!(session; julia = julia, run_id = snap)
     end
 end
