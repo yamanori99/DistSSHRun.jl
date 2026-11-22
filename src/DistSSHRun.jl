@@ -333,6 +333,7 @@ end
 """Run a kit CLI script under `src/cli/` (`drive.jl`, `setup.jl`, …) with `ARGS` set."""
 function _run_kit_cli_script(script_name::AbstractString, args::Vector{String})::Cint
     prev_proj = get(ENV, "DISTRIBUTED_PROJECT_ROOT", nothing)
+    prev_done = get(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE", nothing)
     prev_proj === nothing && (ENV["DISTRIBUTED_PROJECT_ROOT"] = pwd())
     # `args` may alias `ARGS` (the app launcher can pass `ARGS` directly).
     args_snapshot = collect(String, args)
@@ -347,7 +348,10 @@ function _run_kit_cli_script(script_name::AbstractString, args::Vector{String}):
     script_base = basename(script_path)
     prev_include = get(ENV, "DIST_SSH_KIT_CLI_INCLUDE", nothing)
     ENV["DIST_SSH_KIT_CLI_INCLUDE"] = "1"
+    mark_nested_main = script_base in ("drive.jl", "go.jl") &&
+        any(endswith(String(a), ".jl") for a in args_snapshot)
     try
+        mark_nested_main && _mark_kit_cli_subcommand_done!()
         if script_base in _KIT_CLI_SCRIPTS
             if !(script_base in _KIT_CLI_LOADED)
                 Core.include(Main, script_path)
@@ -370,7 +374,11 @@ function _run_kit_cli_script(script_name::AbstractString, args::Vector{String}):
         else
             ENV["DIST_SSH_KIT_CLI_INCLUDE"] = prev_include
         end
-        _mark_kit_cli_subcommand_done!()
+        if prev_done === nothing
+            delete!(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
+        else
+            ENV["DISTSSH_CLI_SUBCOMMAND_DONE"] = prev_done
+        end
     end
 end
 
