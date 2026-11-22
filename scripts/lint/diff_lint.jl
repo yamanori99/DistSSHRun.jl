@@ -2622,24 +2622,35 @@ end
 function check_ceiling(name::AbstractString, measured::Int, constant::Int)
     n = 0
     if measured != constant
-        println(stderr, "lint: $(name) count $(measured) != ceiling $(constant)")
+        println(stderr, "lint: $(name): measured $(measured), constant $(constant)")
         n += 1
     end
     prev = main_ceiling(name)
     if prev === :unread
-        println(stderr, "lint: $(name) could not read origin/main ceiling")
+        println(stderr, "lint: $(name): could not read the ceiling on origin/main")
         n += 1
     elseif prev !== nothing && constant > prev
-        println(stderr, "lint: $(name) ceiling $(constant) > origin/main $(prev)")
+        println(stderr, "lint: $(name): constant $(constant) is above origin/main $(prev)")
         n += 1
     end
     return n
 end
 
 function report_hits(hits)
+    reasons = Dict(
+        "id-match" => "substring or slice compare on an id-like name",
+        "process-pattern" => "pkill or pgrep pattern",
+        "lock-create" => "isfile then write on a lock or pid path",
+        "env-default" => "fallback for a missing env value",
+        "swallowed-catch" => "catch body drops the error",
+        "skip-reasons" => "continue without a reason",
+        "pr-refs" => "pull request or lockstep reference",
+    )
     n = 0
     for (path, line, rule) in hits
-        println(stderr, "lint: $(path):$(line): $(rule)")
+        why = get(reasons, rule, "")
+        msg = isempty(why) ? rule : "$(rule): $(why)"
+        println(stderr, "lint: $(path):$(line): $(msg)")
         n += 1
     end
     return n
