@@ -14,9 +14,10 @@ experimental. The binary is the Apps copy, not `--project=.`. Apps
 fixes `JULIA_LOAD_PATH`, so `drive`, `hostinfo`, and `pool` still need
 `julia -m DistSSHRun`. Worker processes (local and SSH) set
 `JULIA_LOAD_PATH=@:@stdlib` and `--project=` of the job tree; they do not
-see `@v#.#`. Local workers also put the parent project, then DistSSHRun's
-package directory, on that path so` `drive` can load DistSSHRun when the job
-tree does not. Parent `LOAD_PATH` mutations do not otherwise affect workers.
+see `@v#.#`, the controller depot, or DistSSHRun's package directory.
+The job `Project.toml` / Manifest must list **DistSSHRun** (and **DistSSHQueue**
+for queue jobs) so workers and remote probes can load the kit from that
+environment only. Parent `LOAD_PATH` mutations do not affect workers.
 
 `drive` and` `drive` set the Distributed cluster cookie from
 `RandomDevice` before the first worker starts when you have not already
