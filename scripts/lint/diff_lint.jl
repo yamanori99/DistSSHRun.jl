@@ -179,7 +179,7 @@ function resolve_git_diff_range!(root::AbstractString, range::AbstractString)
         length(parts) == 2 || throw(
             ErrorException(
                 "GATE_DIFF_RANGE=$(repr(range)): expected exactly one \"...\" between base and head; " *
-                "unset GATE_DIFF_RANGE for default origin/main...HEAD, or fix the range",
+                    "unset GATE_DIFF_RANGE for default origin/main...HEAD, or fix the range",
             ),
         )
         base = strip(parts[1])
@@ -187,13 +187,13 @@ function resolve_git_diff_range!(root::AbstractString, range::AbstractString)
         !git_rev_parse(root, base) && throw(
             ErrorException(
                 "GATE_DIFF_RANGE=$(repr(range)): base ref $(repr(base)) does not resolve under $(root); " *
-                "unset GATE_DIFF_RANGE for default origin/main...HEAD, or fix the base ref",
+                    "unset GATE_DIFF_RANGE for default origin/main...HEAD, or fix the base ref",
             ),
         )
         !git_rev_parse(root, head) && throw(
             ErrorException(
                 "GATE_DIFF_RANGE=$(repr(range)): head ref $(repr(head)) does not resolve under $(root); " *
-                "unset GATE_DIFF_RANGE for default origin/main...HEAD, or fix the head ref",
+                    "unset GATE_DIFF_RANGE for default origin/main...HEAD, or fix the head ref",
             ),
         )
         return range
@@ -201,7 +201,7 @@ function resolve_git_diff_range!(root::AbstractString, range::AbstractString)
     git_rev_parse(root, range) || throw(
         ErrorException(
             "GATE_DIFF_RANGE=$(repr(range)): ref does not resolve under $(root); " *
-            "unset GATE_DIFF_RANGE for default origin/main...HEAD, or fix the ref",
+                "unset GATE_DIFF_RANGE for default origin/main...HEAD, or fix the ref",
         ),
     )
     return range
