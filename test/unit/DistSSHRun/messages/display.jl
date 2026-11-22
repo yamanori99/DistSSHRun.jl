@@ -678,55 +678,55 @@ using Test
                 release()
             end
             _with_tempdir() do tmp
-                lock_path = joinpath(tmp, ".distssh.lock")
-                write(lock_path, "999999999")
+                pid_only = joinpath(tmp, ".distssh.lock")
+                write(pid_only, "999999999")
                 @test_throws ArgumentError DistSSHRun.output_dir_lock!(tmp)
-                @test read(lock_path, String) == "999999999"
+                @test read(pid_only, String) == "999999999"
             end
             _with_tempdir() do tmp
-                lock_path = joinpath(tmp, ".distssh.lock")
+                pid_one = joinpath(tmp, ".distssh.lock")
                 host = DistSSHRun._output_lock_host()
                 start = DistSSHRun._output_lock_start_hex(1)
                 if start === nothing
                     @test_throws ArgumentError DistSSHRun.output_dir_lock!(tmp)
                 else
-                    write(lock_path, DistSSHRun._output_lock_text(host, 1, start, ""))
+                    write(pid_one, DistSSHRun._output_lock_text(host, 1, start, ""))
                     @test_throws ArgumentError DistSSHRun.output_dir_lock!(tmp)
-                    @test isfile(lock_path)
+                    @test isfile(pid_one)
                 end
             end
             _with_tempdir() do tmp
-                lock_path = joinpath(tmp, ".distssh.lock")
+                dead_rec = joinpath(tmp, ".distssh.lock")
                 host = DistSSHRun._output_lock_host()
                 write(
-                    lock_path,
+                    dead_rec,
                     DistSSHRun._output_lock_text(host, 999999999, "dead", ""),
                 )
                 release = DistSSHRun.output_dir_lock!(tmp)
-                rec = DistSSHRun._parse_output_lock(read(lock_path, String))
+                rec = DistSSHRun._parse_output_lock(read(dead_rec, String))
                 @test rec.pid == getpid()
                 release()
             end
             _with_tempdir() do tmp
-                lock_path = joinpath(tmp, ".distssh.lock")
+                foreign = joinpath(tmp, ".distssh.lock")
                 mine = DistSSHRun._output_lock_start_hex(getpid())
                 write(
-                    lock_path,
+                    foreign,
                     DistSSHRun._output_lock_text("other-host", getpid(), mine, ""),
                 )
                 @test_throws ArgumentError DistSSHRun.output_dir_lock!(tmp)
-                @test occursin("other-host", read(lock_path, String))
+                @test occursin("other-host", read(foreign, String))
             end
             _with_tempdir() do tmp
-                lock_path = joinpath(tmp, ".distssh.lock")
+                reuse = joinpath(tmp, ".distssh.lock")
                 write(
-                    lock_path,
+                    reuse,
                     DistSSHRun._output_lock_text(
                         DistSSHRun._output_lock_host(), getpid(), "not-this-start", "",
                     ),
                 )
                 release = DistSSHRun.output_dir_lock!(tmp)
-                rec = DistSSHRun._parse_output_lock(read(lock_path, String))
+                rec = DistSSHRun._parse_output_lock(read(reuse, String))
                 @test rec.start != "not-this-start"
                 release()
             end

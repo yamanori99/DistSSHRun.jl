@@ -128,7 +128,9 @@ function output_dir_lock!(
             rec === nothing && return nothing
             (rec.host == host && rec.pid == mypid && rec.start == start) || return nothing
             rm(lock_path; force = true)
-        catch
+        catch e
+            e isa InterruptException && rethrow()
+            @debug "output lock: release skipped" exception = (e, catch_backtrace())
         end
         return nothing
     end
@@ -165,8 +167,9 @@ function _leaf_job_id(name::AbstractString)::Union{Nothing, String}
     job = String(something(m.captures[1], ""))
     try
         return _parse_kit_job_id(job)
-    catch
-        return nothing
+    catch e
+        e isa ArgumentError && return nothing
+        rethrow()
     end
 end
 
