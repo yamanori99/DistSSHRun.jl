@@ -40,6 +40,10 @@ judge() {
   esac
 }
 
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=judge_matrix.sh
+source "${ROOT}/scripts/gate/judge_matrix.sh"
+
 heavy="${DETECT_HEAVY:-true}"
 scripts="${DETECT_SCRIPTS:-false}"
 e2e="${DETECT_E2E:-false}"
@@ -47,6 +51,7 @@ base="${DETECT_BASE:-true}"
 up="${DETECT_UP:-true}"
 ship="${DETECT_SHIP:-true}"
 heartbeat="${DETECT_HEARTBEAT:-true}"
+testenv="${DETECT_TESTENV:-false}"
 queue_e2e="${DETECT_QUEUE_E2E:-false}"
 coverage="${DETECT_COVERAGE:-false}"
 event="${DETECT_EVENT:-pull_request}"
@@ -117,44 +122,53 @@ else
   judge test-nightly "${heavy_off}"
 fi
 
-judge base-test-ubuntu "$(skip_unless "${base}" "${base_off}")"
-judge base-test-macos "$(skip_unless "${base}" "${base_off}")"
+package_detect_off() {
+  local flag_off="$1"
+  if [[ "${heavy}" != true ]]; then
+    echo "${heavy_off}"
+  else
+    echo "${flag_off}"
+  fi
+}
+
+judge_when_detect base-test-ubuntu "$(pkg_should_run "${base}" && echo true || echo false)" "$(package_detect_off "${base_off}")"
+judge_when_detect base-test-macos "$(pkg_should_run "${base}" && echo true || echo false)" "$(package_detect_off "${base_off}")"
 if [[ "${event}" == pull_request ]]; then
   judge base-test-wsl "${wsl_off}"
 else
-  judge base-test-wsl "$(skip_unless "${base}" "${base_off}")"
+  judge_when_detect base-test-wsl "$(pkg_should_run "${base}" && echo true || echo false)" "$(package_detect_off "${base_off}")"
 fi
 
-judge up-test-ubuntu "$(skip_unless "${up}" "${up_off}")"
-judge up-test-macos "$(skip_unless "${up}" "${up_off}")"
+judge_when_detect up-test-ubuntu "$(pkg_should_run "${up}" && echo true || echo false)" "$(package_detect_off "${up_off}")"
+judge_when_detect up-test-macos "$(pkg_should_run "${up}" && echo true || echo false)" "$(package_detect_off "${up_off}")"
 if [[ "${event}" == pull_request ]]; then
   judge up-test-wsl "${wsl_off}"
 else
-  judge up-test-wsl "$(skip_unless "${up}" "${up_off}")"
+  judge_when_detect up-test-wsl "$(pkg_should_run "${up}" && echo true || echo false)" "$(package_detect_off "${up_off}")"
 fi
 
-judge ship-test-ubuntu "$(skip_unless "${ship}" "${ship_off}")"
-judge ship-test-macos "$(skip_unless "${ship}" "${ship_off}")"
+judge_when_detect ship-test-ubuntu "$(pkg_should_run "${ship}" && echo true || echo false)" "$(package_detect_off "${ship_off}")"
+judge_when_detect ship-test-macos "$(pkg_should_run "${ship}" && echo true || echo false)" "$(package_detect_off "${ship_off}")"
 if [[ "${event}" == pull_request ]]; then
   judge ship-test-wsl "${wsl_off}"
 else
-  judge ship-test-wsl "$(skip_unless "${ship}" "${ship_off}")"
+  judge_when_detect ship-test-wsl "$(pkg_should_run "${ship}" && echo true || echo false)" "$(package_detect_off "${ship_off}")"
 fi
 
-judge heartbeat-test-ubuntu "$(skip_unless "${heartbeat}" "${heartbeat_off}")"
-judge heartbeat-test-macos "$(skip_unless "${heartbeat}" "${heartbeat_off}")"
+judge_when_detect heartbeat-test-ubuntu "$(pkg_should_run "${heartbeat}" && echo true || echo false)" "$(package_detect_off "${heartbeat_off}")"
+judge_when_detect heartbeat-test-macos "$(pkg_should_run "${heartbeat}" && echo true || echo false)" "$(package_detect_off "${heartbeat_off}")"
 if [[ "${event}" == pull_request ]]; then
   judge heartbeat-test-wsl "${wsl_off}"
 else
-  judge heartbeat-test-wsl "$(skip_unless "${heartbeat}" "${heartbeat_off}")"
+  judge_when_detect heartbeat-test-wsl "$(pkg_should_run "${heartbeat}" && echo true || echo false)" "$(package_detect_off "${heartbeat_off}")"
 fi
 
-judge up-ssh-e2e "$(skip_unless "${e2e}" "${e2e_off}")"
-judge base-ssh-e2e "$(skip_unless "${e2e}" "${e2e_off}")"
-judge ship-ssh-e2e "$(skip_unless "${e2e}" "${e2e_off}")"
-judge heartbeat-ssh-e2e "$(skip_unless "${e2e}" "${e2e_off}")"
-judge ssh-e2e "$(skip_unless "${e2e}" "${e2e_off}")"
-judge queue-ssh-e2e "$(skip_unless "${queue_e2e}" "${queue_off}")"
+judge_when_detect up-ssh-e2e "$(e2e_up_should_run && echo true || echo false)" "${e2e_off}"
+judge_when_detect base-ssh-e2e "$(e2e_base_should_run && echo true || echo false)" "${e2e_off}"
+judge_when_detect ship-ssh-e2e "$(e2e_ship_should_run && echo true || echo false)" "${e2e_off}"
+judge_when_detect heartbeat-ssh-e2e "$(e2e_heartbeat_should_run && echo true || echo false)" "${e2e_off}"
+judge_when_detect ssh-e2e "$(e2e_run_should_run && echo true || echo false)" "${e2e_off}"
+judge_when_detect queue-ssh-e2e "$(queue_e2e_should_run && echo true || echo false)" "${queue_off}"
 
 # continue-on-error: failure does not fail gate when the job ran
 for id in aqua-1-14-pre aqua-nightly jetls-1-14-pre ssh-e2e-1-14-pre; do

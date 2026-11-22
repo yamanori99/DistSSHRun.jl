@@ -158,13 +158,49 @@ function parse_diff(diff::AbstractString)
     return files
 end
 
-function git_diff(root::AbstractString)
-    range = strip(get(ENV, "GATE_DIFF_RANGE", ""))
+function git_rev_parse(root::AbstractString, ref::AbstractString)
+    try
+        read(`git -C $root rev-parse --verify -q $ref`, String)
+        return true
+    catch
+        return false
+    end
+end
+
+function resolve_git_diff_range(root::AbstractString, range::AbstractString)
+    range = strip(range)
     if isempty(range)
         range = "origin/main...HEAD"
     end
-    cmd = `git -C $root diff -U0 --no-color $range`
-    return read(cmd, String)
+    if occursin("...", range)
+        base, head = split(range, "...")
+        if git_rev_parse(root, base) && git_rev_parse(root, head)
+            return range
+        end
+        if git_rev_parse(root, "origin/main") && git_rev_parse(root, "HEAD")
+            return "origin/main...HEAD"
+        end
+        return "HEAD"
+    end
+    git_rev_parse(root, range) || return "HEAD"
+    return range
+end
+
+function git_diff(root::AbstractString)
+    raw = strip(get(ENV, "GATE_DIFF_RANGE", ""))
+    range = resolve_git_diff_range(root, raw)
+    try
+        return read(`git -C $root diff -U0 --no-color $range`, String)
+    catch
+        fallback =
+            if git_rev_parse(root, "origin/main") && git_rev_parse(root, "HEAD")
+                "origin/main...HEAD"
+            else
+                "HEAD"
+            end
+        range == fallback && rethrow()
+        return read(`git -C $root diff -U0 --no-color $fallback`, String)
+    end
 end
 
 function skipped_path(path::AbstractString)
@@ -950,6 +986,16 @@ function self_test_body()
     ) do
         issue_is_open(1) || die("self-test: issue lookup ran")
     end
+    return self_test_body_inner()
+end
+
+function self_test_body_inner()
+    withenv("GATE_DIFF_RANGE" => "", "GATE_DIFF_BASE" => "", "GATE_DIFF_HEAD" => "") do
+        self_test_body_main()
+    end
+end
+
+function self_test_body_main()
     src = """
     # fine for now
     s = \"# fine for now\"
@@ -1234,6 +1280,28 @@ function self_test_body()
             die("self-test: origin/main tip unexpectedly hit doc")
         doc_touch(tmp) || die("self-test: doc_touch merge-base")
     end
+    bogus_range =
+        "d56a722ee521eda73e7df5c7bc0b186e9407ab1a...3963089a57e73146e0411104b4be53f4e8847dd8"
+    withenv("GATE_DIFF_RANGE" => bogus_range) do
+        mktempdir() do tmp
+            git(args...) = run(
+                pipeline(
+                    `git -C $tmp -c user.name=t -c user.email=t@e -c commit.gpgsign=false $args`;
+                    stdout = devnull,
+                    stderr = devnull,
+                ),
+            )
+            git("init", "-b", "main")
+            write(joinpath(tmp, "f.jl"), "x = 1\n")
+            git("add", "f.jl")
+            git("commit", "-m", "one")
+            try
+                git_diff(tmp)
+            catch e
+                die("self-test: git_diff bogus GATE_DIFF_RANGE $e")
+            end
+        end
+    end
     ex_macro = export_names_in("export @reexport, foo, bar\n")
     ex_macro == Set(["foo", "bar"]) || die("self-test: export after macro $ex_macro")
     guard_src = "f(tag; broken=true)\n"
@@ -1251,6 +1319,9 @@ function self_test_body()
     join_inc = runtests_includes(join_src, "lib/Fake/test/")
     join_inc == Set(["lib/Fake/test/unit/nested.jl"]) ||
         die("self-test: joinpath include $join_inc")
+    dynamic_join = "include(joinpath(pkg_root, \"unit\", \"nested.jl\"))\n"
+    isempty(runtests_includes(dynamic_join, "lib/Fake/test/")) ||
+        die("self-test: joinpath non-literal must not resolve")
     mktempdir() do tmp
         pkg_t = joinpath(tmp, "lib", "Pkg", "test")
         mkpath(joinpath(pkg_t, "suites"))
@@ -1264,6 +1335,16 @@ function self_test_body()
         reach = runtests_reachable("lib/Pkg/test/", joinpath(pkg_t, "runtests.jl"), pkg_t)
         "lib/Pkg/test/suites/cases/b.jl" in reach ||
             die("self-test: transitive joinpath include $reach")
+        write(
+            joinpath(pkg_t, "suites", "a.jl"),
+            "include(joinpath(@__DIR__, \"unit\", \"nested.jl\"))\ninclude(\"../shared_case.jl\")\n",
+        )
+        mkpath(joinpath(pkg_t, "suites", "unit"))
+        write(joinpath(pkg_t, "suites", "unit", "nested.jl"), "using Test\n@test true\n")
+        write(joinpath(pkg_t, "shared_case.jl"), "using Test\n@test true\n")
+        reach2 = runtests_reachable("lib/Pkg/test/", joinpath(pkg_t, "runtests.jl"), pkg_t)
+        "lib/Pkg/test/shared_case.jl" in reach2 ||
+            die("self-test: parent-relative include $reach2")
     end
     common_src = "function _distsshrun_short_skip_paths()\n    return (\"integration/a.jl\",)\nend\n"
     paths, ok = short_skip_paths_from_common(common_src)
@@ -1761,6 +1842,14 @@ function string_literal_value(node)
     return txt[2:(end - 1)]
 end
 
+function join_test_rel(prefix::AbstractString, suffix::AbstractString)
+    if isempty(prefix)
+        return replace(normpath(suffix), '\\' => '/')
+    end
+    base = rstrip(replace(prefix, '\\' => '/'), '/')
+    return replace(normpath(base * "/" * suffix), '\\' => '/')
+end
+
 function runtest_rel_from_joinpath(node, prefix::AbstractString)
     kind(node) == K"call" || return nothing
     numchildren(node) < 2 && return nothing
@@ -1768,35 +1857,43 @@ function runtest_rel_from_joinpath(node, prefix::AbstractString)
     kind(head) == K"Identifier" && sourcetext(head) == "joinpath" || return nothing
     parts = String[]
     for i in 2:numchildren(node)
-        v = string_literal_value(node[i])
-        v === nothing && continue
+        arg = node[i]
+        if kind(arg) == K"Identifier" && sourcetext(arg) == "@__DIR__"
+            continue
+        end
+        v = string_literal_value(arg)
+        v === nothing && return nothing
         push!(parts, v)
     end
     isempty(parts) && return nothing
     rel = join(parts, '/')
     if !isempty(prefix)
-        return prefix * rel
+        return join_test_rel(prefix, rel)
     elseif startswith(rel, "unit/") || startswith(rel, "integration/")
-        return rel
+        return join_test_rel("", rel)
     end
     return nothing
 end
 
 function runtests_reachable(prefix::AbstractString, rt::AbstractString, tdir::AbstractString)
-    incl = Set(runtests_includes(read(rt, String), prefix))
+    raw = runtests_includes(read(rt, String), prefix)
+    incl = Set(join_test_rel("", rel) for rel in raw)
     queue = collect(incl)
+    prefix_norm = join_test_rel("", prefix)
     while !isempty(queue)
         rel = popfirst!(queue)
-        startswith(rel, prefix) || continue
-        suffix = rel[(length(prefix) + 1):end]
-        path = joinpath(tdir, suffix)
+        startswith(rel, prefix_norm) || continue
+        suffix = rel[(length(prefix_norm) + 1):end]
+        path = normpath(joinpath(tdir, suffix))
         isfile(path) || continue
         relbase = dirname(suffix)
-        sub_prefix = prefix * (isempty(relbase) || relbase == "." ? "" : replace(relbase, '\\' => '/') * "/")
+        sub_prefix =
+            prefix_norm * (isempty(relbase) || relbase == "." ? "" : replace(relbase, '\\' => '/') * "/")
         for child in runtests_includes(read(path, String), sub_prefix)
-            child in incl && continue
-            push!(incl, child)
-            push!(queue, child)
+            child_rel = join_test_rel("", child)
+            child_rel in incl && continue
+            push!(incl, child_rel)
+            push!(queue, child_rel)
         end
     end
     return incl
@@ -1811,7 +1908,9 @@ function runtests_includes(src::AbstractString, prefix::AbstractString)
                 head = node[1]
                 if kind(head) == K"Identifier" && sourcetext(head) == "_runtest_include"
                     rel = string_literal_value(node[2])
-                    rel !== nothing && push!(out, isempty(prefix) ? rel : prefix * rel)
+                    if rel !== nothing
+                        push!(out, isempty(prefix) ? join_test_rel("", rel) : join_test_rel(prefix, rel))
+                    end
                 elseif kind(head) == K"Identifier" && sourcetext(head) == "include"
                     numchildren(node) >= 2 || return nothing
                     arg = node[2]
@@ -1819,7 +1918,11 @@ function runtests_includes(src::AbstractString, prefix::AbstractString)
                         rel = runtest_rel_from_joinpath(arg, prefix)
                         rel !== nothing && push!(out, rel)
                     elseif (v = string_literal_value(arg)) !== nothing && endswith(v, ".jl")
-                        !isempty(prefix) && push!(out, prefix * v)
+                        if !isempty(prefix)
+                            push!(out, join_test_rel(prefix, v))
+                        else
+                            push!(out, join_test_rel("", v))
+                        end
                     end
                 end
             end

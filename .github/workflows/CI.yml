@@ -1640,6 +1640,7 @@ jobs:
           DETECT_SHIP: ${{ needs.detect.outputs.ship }}
           DETECT_HEARTBEAT: ${{ needs.detect.outputs.heartbeat }}
           DETECT_QUEUE_E2E: ${{ needs.detect.outputs.queue_e2e }}
+          DETECT_TESTENV: ${{ needs.detect.outputs.testenv }}
           DETECT_COVERAGE: ${{ needs.detect.outputs.coverage }}
           DETECT_EVENT: ${{ github.event_name }}
           RESULT_detect: ${{ needs.detect.result }}
