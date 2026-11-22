@@ -1,5 +1,5 @@
 # Rebuild the bench-data README when the renderer changes.
-# Measurement stays on CI weekly and on a main push of the measured tree.
+# Measurement stays on the daily Compile bench workflow.
 name: Compile bench render
 
 on:
