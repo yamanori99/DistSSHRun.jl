@@ -2,7 +2,7 @@ using Test
 using TOML
 using Base.Threads
 
-@testset "deploy record parse maps legacy snapshot_id" begin
+@testset "deploy record parse does not map snapshot_id" begin
     body = sprint(
         TOML.print,
         Dict(
@@ -15,7 +15,7 @@ using Base.Threads
     )
     parsed = DistSSHRun._parse_deploy_record_body(body)
     @test parsed !== nothing
-    @test something(parsed)["ship_id"] == "20260101T000000Z-aaaaaa"
+    @test !haskey(something(parsed), "ship_id")
     both = sprint(
         TOML.print,
         Dict(

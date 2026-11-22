@@ -82,7 +82,7 @@ end
     @test occursin("use :ship", sprint(showerror, err))
 end
 
-@testset "legacy deploy record snapshot_id selection" begin
+@testset "legacy deploy record snapshot_id selection is refused" begin
     double = abspath(
         joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl")
     )
@@ -119,11 +119,18 @@ end
             )
             try
                 withenv(env...) do
-                    sel = DistSSHRun.resolve_source_selection(
-                        ["child-1"], logical, proj;
-                        skip_local_record = true
-                    )
-                    @test sel.ship_id == _SNAP_ID_OLD
+                    err = try
+                        DistSSHRun.resolve_source_selection(
+                            ["child-1"], logical, proj;
+                            skip_local_record = true
+                        )
+                        nothing
+                    catch e
+                        e
+                    end
+                    @test err isa ArgumentError
+                    @test occursin("ship_id", sprint(showerror, err))
+                    @test occursin("snapshot_id", sprint(showerror, err))
                 end
             finally
                 DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()

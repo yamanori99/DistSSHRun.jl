@@ -172,15 +172,7 @@ function _parse_deploy_record_body(body::AbstractString)::Union{Nothing, Dict{St
         mode isa AbstractString && !isempty(strip(String(mode))) || return nothing
         deploy_id = get(raw, "deploy_id", nothing)
         deploy_id isa AbstractString && !isempty(strip(String(deploy_id))) || return nothing
-        out = Dict{String, Any}(raw)
-        rid = get(out, "ship_id", nothing)
-        if !(rid isa AbstractString && !isempty(strip(String(rid))))
-            legacy = get(out, "snapshot_id", nothing)
-            if legacy isa AbstractString && !isempty(strip(String(legacy)))
-                out["ship_id"] = String(strip(legacy))
-            end
-        end
-        return out
+        return Dict{String, Any}(raw)
     catch
         return nothing
     end
@@ -500,10 +492,10 @@ function _selection_from_deploy_record(
     )::SourceSelection
     mode_s = String(get(rec, "mode", ""))
     if mode_s == "ship-tree"
+        haskey(rec, "snapshot_id") && throw(
+            _selection_error("deploy record snapshot_id was removed; use ship_id or pass --ship-id ID"),
+        )
         rid_raw = get(rec, "ship_id", nothing)
-        if !(rid_raw isa AbstractString)
-            rid_raw = get(rec, "snapshot_id", nothing)
-        end
         rid_raw isa AbstractString || throw(
             _selection_error("deploy record is missing ship_id; pass --ship-id ID"),
         )

@@ -616,6 +616,26 @@ end
         end
     end
 
+    @testset "delete shell refuses an unowned runs leaf stamp" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            mkpath(joinpath(leaf, "src"))
+            write(
+                joinpath(leaf, "run.toml"),
+                "schema = 1\nwriter = \"Other 9.9.9\"\nkind = \"ship\"\n"
+            )
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(pipeline(`sh -c $(DistSSHRun._remote_delete_shell(root))`; stdout = devnull, stderr = err));
+                wait = true
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isdir(leaf)
+        end
+    end
+
     @testset "delete shell refuses a stamp path with a newline" begin
         mktempdir() do d
             root = joinpath(d, "app")
@@ -964,10 +984,11 @@ end
     @testset "delete shell ignores a project run.toml under the shipped src tree" begin
         delete_sh = DistSSHRun._remote_delete_shell("/tmp/app")
         @test occursin("-mindepth 2 -maxdepth 2", delete_sh)
-        @test occursin("""_dsk_first_unowned_stamp "\$_root" ship""", delete_sh)
+        @test occursin("""_dsk_first_unowned_stamp "\$_root" "\$_layout\"""", delete_sh)
+        @test occursin("for _layout in ships runs", delete_sh)
         prune_sh = DistSSHRun._prune_remote_shell("/tmp/app")
         @test occursin("""_bad=\$(_dsk_first_unowned_stamp "\$_child")""", prune_sh)
-        @test !occursin("""_dsk_first_unowned_stamp "\$_child" ship""", prune_sh)
+        @test !occursin("""_dsk_first_unowned_stamp "\$_child" ships""", prune_sh)
         mktempdir() do d
             root = joinpath(d, "app")
             leaf = joinpath(root, "ships", "20260101T000000Z-abcd")

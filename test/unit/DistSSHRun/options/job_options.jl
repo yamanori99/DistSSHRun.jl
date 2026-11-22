@@ -44,4 +44,8 @@ end
     @test !dopts.skip_hash_check
     @test !dopts.best_effort
     @test dopts.config.command === :drive
+    @test dopts.ship_id === nothing
+    with_id = merge(parsed, (ship_id = "20260101T000000Z-abcdef",))
+    @test DistSSHRun.drive_job_options_from_parsed(with_id).ship_id ==
+        "20260101T000000Z-abcdef"
 end

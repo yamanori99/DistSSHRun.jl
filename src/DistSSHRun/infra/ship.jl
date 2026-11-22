@@ -1944,7 +1944,7 @@ function _ship_tree_to_hosts!(
     if confirm && !kit_noninteractive()
         cancelled = with_kit_progress_suspended() do
             writeln_both(
-                "ship-tree $(display_path(path_anchor, pack.project_dir)) to $(length(hosts)) host(s) into runs/$rid/src/",
+                "ship-tree $(display_path(path_anchor, pack.project_dir)) to $(length(hosts)) host(s) into ships/$rid/src/",
             )
             writeln_both(
                 "  files=$(pack.files) bytes=$(pack.bytes) hash=$(pack.content_tree_hash)",

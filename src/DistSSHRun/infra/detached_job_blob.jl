@@ -89,9 +89,14 @@ const _JOB_BLOB_COLLECT_BEST_EFFORT_REMOVED = """
 job blob: collect_best_effort was removed; use best_effort instead (same meaning).
 Rewrite job.toml; silent conversion is not supported."""
 
+const _JOB_BLOB_RUN_ID_REMOVED = """
+job blob: run_id was removed; use ship_id instead.
+Rewrite job.toml; silent conversion is not supported."""
+
 function _reject_removed_job_blob_join_keys!(raw::AbstractDict)
     haskey(raw, "require_all_hosts") && throw(ArgumentError(_JOB_BLOB_REQUIRE_ALL_HOSTS_REMOVED))
     haskey(raw, "collect_best_effort") && throw(ArgumentError(_JOB_BLOB_COLLECT_BEST_EFFORT_REMOVED))
+    haskey(raw, "run_id") && throw(ArgumentError(_JOB_BLOB_RUN_ID_REMOVED))
     return nothing
 end
 

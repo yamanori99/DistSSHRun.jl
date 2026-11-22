@@ -77,10 +77,10 @@ function _remote_run_toml_owned_check_sh()::String
               _root=\$1
               _ship=0
               _scan="\$_root"
-              if [ "\${2-}" = ship ]; then
+              if [ -n "\${2-}" ]; then
                 _ship=1
-                _scan="\$_root/ships"
-                # find does not inspect a symlink ships/ target; rm -rf of the
+                _scan="\$_root/\$2"
+                # find does not inspect a symlink ships/ or runs/ target; rm -rf of the
                 # parent would still remove that target's children. A dangling
                 # link is not a directory, so this must run before the missing
                 # check.
@@ -88,7 +88,7 @@ function _remote_run_toml_owned_check_sh()::String
                   printf '%s\\n' "\$_root"
                   return 0
                 fi
-                # Missing ships/ is an older tree, not a failed scan.
+                # Missing ships/ or runs/ is an unused layout, not a failed scan.
                 if [ ! -d "\$_scan" ]; then
                   return 0
                 fi
@@ -239,11 +239,13 @@ function _remote_run_toml_owned_check_sh()::String
             }
             _dsk_assert_run_leaves_owned() {
               _root=\$1
-              _bad=\$(_dsk_first_unowned_stamp "\$_root" ship)
-              if [ -n "\$_bad" ]; then
-                printf 'refusing to delete unowned run leaf %s\\n' "\$(dirname "\$_bad")" >&2
-                return 1
-              fi
+              for _layout in ships runs; do
+                _bad=\$(_dsk_first_unowned_stamp "\$_root" "\$_layout")
+                if [ -n "\$_bad" ]; then
+                  printf 'refusing to delete unowned run leaf %s\\n' "\$(dirname "\$_bad")" >&2
+                  return 1
+                fi
+              done
               return 0
             }
     """
