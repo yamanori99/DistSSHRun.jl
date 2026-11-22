@@ -224,7 +224,7 @@ jobs:
       - name: Conflict and staleness
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          HAS_CUT: ${{ github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ','), 'cut') }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
           PR: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
@@ -243,7 +243,7 @@ jobs:
           age="$(($(git log -1 --format=%ct origin/main) - $(git log -1 --format=%ct "$mb")))"
           if [ "$behind" -gt 40 ] || [ "$age" -gt $((48 * 3600)) ]; then
             echo "::warning::stale versus origin/main (${behind} commits, ${age}s)"
-            if [ "${HAS_CUT}" = "true" ]; then
+            if [[ ",${PR_LABELS}," == *",cut,"* ]]; then
               echo "stale branch with cut label" >&2
               exit 1
             fi
