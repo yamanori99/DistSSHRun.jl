@@ -71,7 +71,7 @@ if occursin("__DSR_SNAP_COMPLETE__", script) || occursin("__DSR_SNAP_GIT__", scr
     exit(cmd.exitcode)
 end
 if occursin("go.exitcode", script) &&
-        (occursin("go-handshake", script) || occursin("DISTSSH_GO_HS", script))
+        (occursin("go-handshake", script) || occursin("DISTSSH_INTERNAL_GO_HS", script))
     function _posix_single_quote(s::AbstractString)::String
         return "'" * replace(String(s), "'" => "'\"'\"'") * "'"
     end

@@ -22,7 +22,7 @@ const _EMPTY_HEARTBEAT_ENV = DistSSHRun.ProcessEnv(Dict{String, String}())
         pol = DistSSHRun.resolve_drive_heartbeat_policy(
             env = DistSSHRun.ProcessEnv(
                 Dict(
-                    "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "11"
+                    "DISTSSH_HEARTBEAT_DEADLINE_SEC" => "11"
                 )
             ),
             self_exit = true

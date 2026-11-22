@@ -12,8 +12,8 @@ using Test
 
     function _with_fake_remotes(f::Function)
         _with_tempdir() do state_dir
-            old_proj = get(ENV, "DISTRIBUTED_PROJECT_ROOT", nothing)
-            old_remote = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+            old_proj = get(ENV, "DISTSSH_PROJECT_ROOT", nothing)
+            old_remote = get(ENV, "DISTSSH_REMOTE_PROJECT_ROOT", nothing)
             try
                 withenv(_fake_setup_remote_env(state_dir)...) do
                     _apply_quiet_setup_session!()
@@ -27,14 +27,14 @@ using Test
                 end
             finally
                 if old_proj === nothing
-                    delete!(ENV, "DISTRIBUTED_PROJECT_ROOT")
+                    delete!(ENV, "DISTSSH_PROJECT_ROOT")
                 else
-                    ENV["DISTRIBUTED_PROJECT_ROOT"] = old_proj
+                    ENV["DISTSSH_PROJECT_ROOT"] = old_proj
                 end
                 if old_remote === nothing
-                    delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+                    delete!(ENV, "DISTSSH_REMOTE_PROJECT_ROOT")
                 else
-                    ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = old_remote
+                    ENV["DISTSSH_REMOTE_PROJECT_ROOT"] = old_remote
                 end
             end
         end

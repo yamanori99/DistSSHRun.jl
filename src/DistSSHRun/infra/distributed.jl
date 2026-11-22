@@ -4,11 +4,11 @@ using Random: copy, copy!, default_rng, seed!
 """
     resolve_distributed_output_dir!(script_args, default_dir)
 
-Set `ENV["DISTRIBUTED_OUTPUT_DIR"]` for a driver run and return the canonical path.
+Set `ENV["DISTSSH_OUTPUT_DIR"]` for a driver run and return the canonical path.
 
 Priority (first match wins):
 
-1. `ENV["DISTRIBUTED_OUTPUT_DIR"]` if already set (drive `--output-dir`, operator `export`, …)
+1. `ENV["DISTSSH_OUTPUT_DIR"]` if already set (drive `--output-dir`, operator `export`, …)
 2. `--output-dir PATH` in `script_args`
 3. `default_dir` (e.g. `joinpath(@__DIR__, "output")`)
 
@@ -18,24 +18,24 @@ function resolve_distributed_output_dir!(
         script_args::Vector{String},
         default_dir::AbstractString,
     )::String
-    existing = strip(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
+    existing = strip(get(ENV, "DISTSSH_OUTPUT_DIR", ""))
     if !isempty(existing)
         dir = canonical_local_path(existing)
         mkpath(dir)
-        ENV["DISTRIBUTED_OUTPUT_DIR"] = dir
+        ENV["DISTSSH_OUTPUT_DIR"] = dir
         return dir
     end
     for j in 1:(length(script_args) - 1)
         if script_args[j] == "--output-dir"
             dir = canonical_local_path(script_args[j + 1])
             mkpath(dir)
-            ENV["DISTRIBUTED_OUTPUT_DIR"] = dir
+            ENV["DISTSSH_OUTPUT_DIR"] = dir
             return dir
         end
     end
     dir = canonical_local_path(default_dir)
     mkpath(dir)
-    ENV["DISTRIBUTED_OUTPUT_DIR"] = dir
+    ENV["DISTSSH_OUTPUT_DIR"] = dir
     return dir
 end
 
@@ -141,7 +141,7 @@ end
 """
     resolve_drive_output_dir(script_dir) -> String
 
-Best-effort result root for a `drive` run: `ENV["DISTRIBUTED_OUTPUT_DIR"]` if
+Best-effort result root for a `drive` run: `ENV["DISTSSH_OUTPUT_DIR"]` if
 set (explicit `--output-dir` / `output_dir=`, kit's unique batch dir, or a
 driver's own `init_output_dir!`), else the resolved `.distssh` / legacy drive root beside `{script_dir}`
 (the kind root, not a per-run leaf). Live runs set ENV before lock / collect
@@ -149,7 +149,7 @@ so this fallback is only for callers that never entered `drive`. Same
 priority `collect_drive_results!` uses to report `Results:`.
 """
 function resolve_drive_output_dir(script_dir::AbstractString)::String
-    results_dir = get(ENV, "DISTRIBUTED_OUTPUT_DIR", nothing)
+    results_dir = get(ENV, "DISTSSH_OUTPUT_DIR", nothing)
     if results_dir === nothing
         results_dir = DistSSHBase.resolve_local_state_dir(script_dir, :drive)
     end
@@ -161,7 +161,7 @@ end
 
 Log directory a `drive` run actually uses (single source of truth for
 `init_log_file`'s priority): explicit `log_dir` (`--log-dir` / `log_dir=`),
-else `ENV["DISTRIBUTED_OUTPUT_DIR"]`, else the resolved `.distssh` / legacy drive root
+else `ENV["DISTSSH_OUTPUT_DIR"]`, else the resolved `.distssh` / legacy drive root
 (live runs set ENV first).
 """
 function resolve_drive_log_dir(
@@ -172,7 +172,7 @@ function resolve_drive_log_dir(
     if resolved === nothing
         rd = kit_run_dir()
         rd !== nothing && return rd
-        resolved = get(ENV, "DISTRIBUTED_OUTPUT_DIR", nothing)
+        resolved = get(ENV, "DISTSSH_OUTPUT_DIR", nothing)
     end
     if resolved === nothing
         resolved = DistSSHBase.resolve_local_state_dir(script_dir, :drive)

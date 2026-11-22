@@ -24,7 +24,7 @@
 #
 # Location:
 #   --deploy-root PATH   deployment root override (not snapshot id). Omit to
-#                        use DISTRIBUTED_REMOTE_PROJECT_ROOT, else ~/Parent/Repo
+#                        use DISTSSH_REMOTE_PROJECT_ROOT, else ~/Parent/Repo
 #                        from the local package env_dir (workspace Manifest
 #                        member maps under that root). Does not rename ENV.
 #   --ship-id ID        instantiate / check / runtest only
@@ -50,7 +50,7 @@ function show_requirements(; io::IO = stdout)
         "  delete/git-clone/git-sync/git-pull clear the matching local last-ship record.",
         "Hosts: NAME[:N] (same as go / drive; :N ignored).",
         "       parent is up, not setup.",
-        "Remote path: omit --deploy-root to use DISTRIBUTED_REMOTE_PROJECT_ROOT,",
+        "Remote path: omit --deploy-root to use DISTSSH_REMOTE_PROJECT_ROOT,",
         "  else ~/Parent/RepoName from the local package env_dir (a workspace",
         "  Manifest member maps under that root). Pass --deploy-root PATH to override.",
         "Ship creates a missing remote_root when safe: ~/… under home (mode 700),",
@@ -132,7 +132,7 @@ function show_requirements(; io::IO = stdout)
         io,
         "  --repo URL           clone URL (default: origin)",
         "  --deploy-root PATH   remote deployment root (location, not snapshot id).",
-        "                       Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
+        "                       Omit for DISTSSH_REMOTE_PROJECT_ROOT, else the",
         "                       ~/Parent/RepoName layout from the local env_dir.",
         "  --ship-id ID        ships/<ID>/ under that root (instantiate/runtest)",
         "  --job-id ID        with cleanup: kill only workers for this job",

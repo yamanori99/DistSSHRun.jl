@@ -102,7 +102,7 @@ using TOML
             )
         end
         DistSSHRun.reset_worker_seeds!()
-        withenv("DISTRIBUTED_OUTPUT_DIR" => slot, "DISTSSH_WORKER_RANK" => "3") do
+        withenv("DISTSSH_OUTPUT_DIR" => slot, "DISTSSH_WORKER_RANK" => "3") do
             @test DistSSHRun.worker_pmap(identity, [7]) == [7]
             DistSSHRun._flush_go_slot_pmap_items!()
         end

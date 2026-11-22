@@ -36,7 +36,8 @@ const LEGACY_CLI_FLAGS = Dict{String, String}(
 function _bool_env(name::AbstractString; env::ProcessEnv)::Union{Nothing, Bool}
     haskey(env, String(name)) || return nothing
     raw = strip(get(env, String(name), ""))
-    return raw in ("1", "true", "yes", "on")
+    isempty(raw) && return nothing
+    return DistSSHBase.parse_env_bool(name, raw)
 end
 
 """

@@ -454,16 +454,16 @@ end
         _with_tempdir() do project
             script = joinpath(project, "job.jl")
             write(script, "")
-            withenv("DISTRIBUTED_OUTPUT_DIR" => nothing) do
+            withenv("DISTSSH_OUTPUT_DIR" => nothing) do
                 d = DistSSHRun._ensure_drive_output_env!(script; project = project)
                 @test isdir(d)
                 @test startswith(basename(d), "job_")
                 @test occursin(joinpath(".distssh", "drive"), d)
-                @test ENV["DISTRIBUTED_OUTPUT_DIR"] == d
+                @test ENV["DISTSSH_OUTPUT_DIR"] == d
                 @test DistSSHRun._ensure_drive_output_env!(script; project = project) == d
             end
             explicit = joinpath(project, "out")
-            withenv("DISTRIBUTED_OUTPUT_DIR" => explicit) do
+            withenv("DISTSSH_OUTPUT_DIR" => explicit) do
                 got = DistSSHRun._ensure_drive_output_env!(script; project = project)
                 @test got == DistSSHRun.canonical_local_path(explicit)
             end
@@ -501,7 +501,7 @@ end
             other = mktempdir()
             try
                 cd(other) do
-                    withenv("DISTRIBUTED_COLLECT_DIRS" => "rel-out") do
+                    withenv("DISTSSH_COLLECT_DIRS" => "rel-out") do
                         DistSSHRun.write_kit_run_toml!(
                             d1;
                             kind = :drive,
@@ -541,7 +541,7 @@ end
             write(script, "")
             run_a = DistSSHRun.allocate_run_dir(:drive, script; project)
             run_b = DistSSHRun.allocate_run_dir(:drive, script; project)
-            withenv("DISTRIBUTED_OUTPUT_DIR" => nothing) do
+            withenv("DISTSSH_OUTPUT_DIR" => nothing) do
                 a, la = DistSSHRun._execute_detached_dirs(
                     :drive, project, script, nothing, nothing, true, run_a
                 )
@@ -565,7 +565,7 @@ end
             @test c == DistSSHRun.canonical_local_path(custom)
             @test lc == DistSSHRun.canonical_local_path(run_a)
             inherited = joinpath(project, "from_env")
-            withenv("DISTRIBUTED_OUTPUT_DIR" => inherited) do
+            withenv("DISTSSH_OUTPUT_DIR" => inherited) do
                 e, le = DistSSHRun._execute_detached_dirs(
                     :drive, project, script, nothing, nothing, true, run_a
                 )
@@ -1178,7 +1178,7 @@ end
             script = joinpath(proj, "job.jl")
             write(
                 script, """
-                out = get(ENV, "DISTRIBUTED_OUTPUT_DIR", ".")
+                out = get(ENV, "DISTSSH_OUTPUT_DIR", ".")
                 mkpath(out)
                 write(joinpath(out, "args.txt"), join(ARGS, ","))
                 """
@@ -1205,7 +1205,7 @@ end
             script = joinpath(proj, "job.jl")
             write(
                 script, """
-                out = get(ENV, "DISTRIBUTED_OUTPUT_DIR", ".")
+                out = get(ENV, "DISTSSH_OUTPUT_DIR", ".")
                 mkpath(out)
                 write(joinpath(out, "args.txt"), join(ARGS, ","))
                 """
@@ -1275,7 +1275,7 @@ end
             ran = joinpath(proj, "RAN")
             write(
                 script, """
-                out = get(ENV, "DISTRIBUTED_OUTPUT_DIR", ".")
+                out = get(ENV, "DISTSSH_OUTPUT_DIR", ".")
                 mkpath(out)
                 write($(repr(ran)), "yes")
                 """
@@ -1318,7 +1318,7 @@ end
             script = joinpath(proj, "job.jl")
             write(
                 script, """
-                out = get(ENV, "DISTRIBUTED_OUTPUT_DIR", ".")
+                out = get(ENV, "DISTSSH_OUTPUT_DIR", ".")
                 mkpath(out)
                 """
             )
@@ -1367,7 +1367,7 @@ end
             script = joinpath(proj, "job.jl")
             write(
                 script, """
-                out = get(ENV, "DISTRIBUTED_OUTPUT_DIR", ".")
+                out = get(ENV, "DISTSSH_OUTPUT_DIR", ".")
                 mkpath(out)
                 sleep(60)
                 """
@@ -1404,7 +1404,7 @@ end
             script = joinpath(proj, "job.jl")
             write(
                 script, """
-                out = get(ENV, "DISTRIBUTED_OUTPUT_DIR", ".")
+                out = get(ENV, "DISTSSH_OUTPUT_DIR", ".")
                 mkpath(out)
                 sleep(60)
                 """
@@ -1778,7 +1778,7 @@ end
             "HOME" => "/home/me",
             "JULIA_DEPOT_PATH" => "/depot",
             "DISTSSH_SSH_TUNNEL" => "0",
-            "DISTRIBUTED_OUTPUT_DIR" => "/out",
+            "DISTSSH_OUTPUT_DIR" => "/out",
             "AWS_SECRET_ACCESS_KEY" => "sek",
             "JULIA_PROJECT" => "/queue",
             "JULIA_LOAD_PATH" => "@",
@@ -1807,7 +1807,7 @@ end
         @test built.env["HOME"] == "/home/me"
         @test built.env["JULIA_DEPOT_PATH"] == "/depot"
         @test built.env["DISTSSH_SSH_TUNNEL"] == "0"
-        @test built.env["DISTRIBUTED_OUTPUT_DIR"] == "/out"
+        @test built.env["DISTSSH_OUTPUT_DIR"] == "/out"
         @test built.env["LC_ALL"] == "C"
         @test built.env["https_proxy"] == "http://proxy:8080"
         @test built.env["OPENBLAS_NUM_THREADS"] == "3"
@@ -1827,8 +1827,8 @@ end
         @test !haskey(built.env, "DISTSSH_FOO_TOKEN")
         @test !haskey(built.env, "http_proxy")
         @test built.threads == "1"
-        @test built.env["DISTSSH_LAUNCH_THREADS"] == "1"
-        @test built.env["DISTSSH_LAUNCH_DIR"] == "/work"
+        @test built.env["DISTSSH_INTERNAL_LAUNCH_THREADS"] == "1"
+        @test built.env["DISTSSH_INTERNAL_LAUNCH_DIR"] == "/work"
         @test built.env["DISTSSH_SKIP_GLOBAL_WORKER_PKILL"] == "1"
         @test "AWS_SECRET_ACCESS_KEY" in built.dropped
         @test "JULIA_LOAD_PATH" in built.dropped
@@ -2000,9 +2000,9 @@ end
             ) == :ok
             @test !haskey(plain, "launch")
             withenv(
-                "DISTSSH_LAUNCH_THREADS" => "1",
-                "DISTSSH_LAUNCH_DIR" => proj,
-                "DISTSSH_LAUNCH_DROPPED" => "SECRET_TOKEN,ZZZ"
+                "DISTSSH_INTERNAL_LAUNCH_THREADS" => "1",
+                "DISTSSH_INTERNAL_LAUNCH_DIR" => proj,
+                "DISTSSH_INTERNAL_LAUNCH_DROPPED" => "SECRET_TOKEN,ZZZ"
             ) do
                 DistSSHRun.write_kit_run_toml!(proj; kind = :go, project_root = proj)
             end

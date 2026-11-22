@@ -67,7 +67,7 @@ const _CLI_BIND_FAKE_SSH =
             "DISTSSH_TEST_SSH" => _CLI_BIND_FAKE_SSH,
             "DISTSSH_TEST_SSH_LOG" => logp,
             "DISTSSH_TEST_POSIX_SHELL" => "1",
-            "DISTRIBUTED_PROJECT_ROOT" => DistSSHRun.canonical_local_path(proj),
+            "DISTSSH_PROJECT_ROOT" => DistSSHRun.canonical_local_path(proj),
         )
     end
 

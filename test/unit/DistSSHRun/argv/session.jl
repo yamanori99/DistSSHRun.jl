@@ -119,7 +119,7 @@ end
                 DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags())
                 @test !DistSSHRun.kit_noninteractive()
                 _with_tempdir() do proj
-                    withenv("DISTRIBUTED_PROJECT_ROOT" => nothing) do
+                    withenv("DISTSSH_PROJECT_ROOT" => nothing) do
                         write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
                         session = DistSSHRun.DistSSHSession(
                             project = proj,
@@ -181,10 +181,10 @@ end
             @test DistSSHRun.kit_host_jobs(DistSSHRun.snapshot_process_env()) == 4
         end
         withenv("DISTSSH_JOBS" => "0") do
-            @test DistSSHRun.kit_host_jobs(DistSSHRun.snapshot_process_env()) == 1
+            @test_throws ArgumentError DistSSHRun.kit_host_jobs(DistSSHRun.snapshot_process_env())
         end
         withenv("DISTSSH_JOBS" => "nope") do
-            @test DistSSHRun.kit_host_jobs(DistSSHRun.snapshot_process_env()) == 1
+            @test_throws ArgumentError DistSSHRun.kit_host_jobs(DistSSHRun.snapshot_process_env())
         end
         seen = Int[]
         DistSSHRun.map_host_jobs(["a", "b"]) do i, host

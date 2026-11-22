@@ -1192,7 +1192,7 @@ function _project_work_root(
     return _rehome_under_work_root(mapped, deploy, wr)
 end
 
-"""Point `DISTRIBUTED_REMOTE_PROJECT_ROOT` at [`_project_work_root`](@ref).
+"""Point `DISTSSH_REMOTE_PROJECT_ROOT` at [`_project_work_root`](@ref).
 
 No hosts leaves the env alone. `cli_override=nothing` reads the current env.
 A control character in that override or in the resolved root leaves the env alone.
@@ -1206,7 +1206,7 @@ function _assign_remote_work_root_env!(
     )::Nothing
     isempty(hosts) && return nothing
     cli = if cli_override === nothing
-        env_rr = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
+        env_rr = strip(get(ENV, "DISTSSH_REMOTE_PROJECT_ROOT", ""))
         isempty(env_rr) ? nothing : env_rr
     else
         s = strip(String(cli_override))
@@ -1217,7 +1217,7 @@ function _assign_remote_work_root_env!(
             hosts, local_project; cli_override = cli, ship_id = ship_id,
         )
         if !any(iscntrl, String(wr))
-            ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote_env_project_root(wr)
+            ENV["DISTSSH_REMOTE_PROJECT_ROOT"] = remote_env_project_root(wr)
         end
     end
     return nothing
@@ -1240,7 +1240,7 @@ end
 
 """`remote_layout_path` re-homed onto the remote work root for `hosts`.
 
-After [`_assign_remote_work_root_env!`](@ref), `DISTRIBUTED_REMOTE_PROJECT_ROOT`
+After [`_assign_remote_work_root_env!`](@ref), `DISTSSH_REMOTE_PROJECT_ROOT`
 holds the work root (`ships/<id>/src`), not the deploy root. Mapping must use
 the deploy root (via [`active_source_selection`](@ref) or a temporary ENV),
 then rehome onto the work root — otherwise `remote_layout_path` already returns
@@ -1305,7 +1305,7 @@ function _remote_work_layout_path(
             ),
         )
     end
-    mapped = withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => chosen.deploy_root) do
+    mapped = withenv("DISTSSH_REMOTE_PROJECT_ROOT" => chosen.deploy_root) do
         remote_layout_path(local_abs, local_repo)
     end
     return _rehome_under_work_root(mapped, chosen.deploy_root, chosen.work_root)
@@ -2094,6 +2094,6 @@ function warn_project_sshflags(project::AbstractString)
     end
     isempty(hits) && return nothing
     _SSHFLAGS_WARNED[] = true
-    @warn "project-local sshflags ($(join(hits, ", "))) are ignored; SSH uses DISTRIBUTED_SSH_OPTS / ssh_opts()"
+    @warn "project-local sshflags ($(join(hits, ", "))) are ignored; SSH uses DISTSSH_SSH_OPTS / ssh_opts()"
     return nothing
 end

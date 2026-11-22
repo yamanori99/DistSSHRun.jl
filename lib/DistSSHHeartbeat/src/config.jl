@@ -1,18 +1,28 @@
 # Master-side env for worker heartbeat monitors (opt-in self-exit only).
 
 function _heartbeat_interval(env)::Float64
-    interval = something(tryparse(Float64, get(env, "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC", "30")), 30.0)
-    interval > 0 || (interval = 30.0)
-    return Float64(interval)
+    raw = haskey(env, "DISTSSH_HEARTBEAT_INTERVAL_SEC") ?
+        String(get(env, "DISTSSH_HEARTBEAT_INTERVAL_SEC", "")) : ""
+    v = DistSSHBase.parse_env_float(
+        "DISTSSH_HEARTBEAT_INTERVAL_SEC",
+        raw;
+        default = 30.0,
+        positive = true,
+    )
+    return Float64(v)
 end
 
-"""Positive `DISTRIBUTED_HEARTBEAT_DEADLINE_SEC` only; no implicit fallback."""
+"""Positive `DISTSSH_HEARTBEAT_DEADLINE_SEC` only; no implicit fallback."""
 function _heartbeat_deadline_explicit(env)::Union{Nothing, Float64}
-    raw = strip(get(env, "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC", ""))
-    parsed = isempty(raw) ? nothing : tryparse(Float64, raw)
-    parsed === nothing && return nothing
-    deadline = Float64(parsed)
-    return deadline > 0 ? deadline : nothing
+    haskey(env, "DISTSSH_HEARTBEAT_DEADLINE_SEC") || return nothing
+    raw = String(get(env, "DISTSSH_HEARTBEAT_DEADLINE_SEC", ""))
+    isempty(strip(raw)) && return nothing
+    return DistSSHBase.parse_env_float(
+        "DISTSSH_HEARTBEAT_DEADLINE_SEC",
+        raw;
+        default = nothing,
+        positive = true,
+    )
 end
 
 """Interval and an explicit deadline (caller must validate opt-in and deadline)."""

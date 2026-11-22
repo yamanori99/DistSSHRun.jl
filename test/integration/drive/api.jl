@@ -29,10 +29,10 @@ end
         saved_project = Base.active_project()
         saved_load = copy(Base.load_path())
         env_keys = (
-            "DISTRIBUTED_PROJECT_ROOT",
-            "DISTRIBUTED_REMOTE_PROJECT_ROOT",
-            "DISTRIBUTED_OUTPUT_DIR",
-            "DISTRIBUTED_RUNNER",
+            "DISTSSH_PROJECT_ROOT",
+            "DISTSSH_REMOTE_PROJECT_ROOT",
+            "DISTSSH_OUTPUT_DIR",
+            "DISTSSH_INTERNAL_RUNNER",
         )
         saved_env = Dict(k => get(ENV, k, nothing) for k in env_keys)
         try
@@ -94,10 +94,10 @@ end
         prev_v = DistSSHRun.kit_verbosity()
         try
             withenv(
-                "DISTRIBUTED_PROJECT_ROOT" => "prior-root",
-                "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "",
-                "DISTRIBUTED_OUTPUT_DIR" => nothing,
-                "DISTRIBUTED_RUNNER" => nothing
+                "DISTSSH_PROJECT_ROOT" => "prior-root",
+                "DISTSSH_REMOTE_PROJECT_ROOT" => "",
+                "DISTSSH_OUTPUT_DIR" => nothing,
+                "DISTSSH_INTERNAL_RUNNER" => nothing
             ) do
                 Base.ACTIVE_PROJECT[] = nothing
                 bad = joinpath(proj, "bad.jl")
@@ -120,10 +120,10 @@ end
                 end
                 @test err isa LoadError
                 @test Base.ACTIVE_PROJECT[] === nothing
-                @test get(ENV, "DISTRIBUTED_PROJECT_ROOT", "") == "prior-root"
-                @test get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", "missing") == ""
-                @test !haskey(ENV, "DISTRIBUTED_OUTPUT_DIR")
-                @test !haskey(ENV, "DISTRIBUTED_RUNNER")
+                @test get(ENV, "DISTSSH_PROJECT_ROOT", "") == "prior-root"
+                @test get(ENV, "DISTSSH_REMOTE_PROJECT_ROOT", "missing") == ""
+                @test !haskey(ENV, "DISTSSH_OUTPUT_DIR")
+                @test !haskey(ENV, "DISTSSH_INTERNAL_RUNNER")
 
                 script = joinpath(proj, "stop.jl")
                 write(script, "function main()\n    throw(InterruptException())\nend\n")
@@ -153,10 +153,10 @@ end
                 end
                 @test got isa InterruptException
                 @test Base.ACTIVE_PROJECT[] === nothing
-                @test get(ENV, "DISTRIBUTED_PROJECT_ROOT", "") == "prior-root"
-                @test get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", "missing") == ""
-                @test !haskey(ENV, "DISTRIBUTED_OUTPUT_DIR")
-                @test !haskey(ENV, "DISTRIBUTED_RUNNER")
+                @test get(ENV, "DISTSSH_PROJECT_ROOT", "") == "prior-root"
+                @test get(ENV, "DISTSSH_REMOTE_PROJECT_ROOT", "missing") == ""
+                @test !haskey(ENV, "DISTSSH_OUTPUT_DIR")
+                @test !haskey(ENV, "DISTSSH_INTERNAL_RUNNER")
             end
         finally
             Base.ACTIVE_PROJECT[] = saved_raw
@@ -178,11 +178,11 @@ end
             function init_output_dir!(_)
                 dest = joinpath(@__DIR__, "output")
                 mkpath(dest)
-                ENV["DISTRIBUTED_OUTPUT_DIR"] = dest
+                ENV["DISTSSH_OUTPUT_DIR"] = dest
                 return nothing
             end
             function main()
-                write(joinpath(ENV["DISTRIBUTED_OUTPUT_DIR"], "filled.txt"), "x")
+                write(joinpath(ENV["DISTSSH_OUTPUT_DIR"], "filled.txt"), "x")
                 println("DISTSSH_INIT_RAN")
                 return nothing
             end
@@ -213,7 +213,7 @@ end
             @test first.ok
             @test first.output_dir == DistSSHRun.canonical_local_path(filled)
             @test isfile(joinpath(filled, "filled.txt"))
-            delete!(ENV, "DISTRIBUTED_OUTPUT_DIR")
+            delete!(ENV, "DISTSSH_OUTPUT_DIR")
             second = redirect_stdout(devnull) do
                 redirect_stderr(devnull) do
                     DistSSHRun.drive!(
@@ -231,7 +231,7 @@ end
             @test second.output_dir != DistSSHRun.canonical_local_path(filled)
         finally
             DistSSHRun.set_kit_verbosity!(prev_v)
-            delete!(ENV, "DISTRIBUTED_OUTPUT_DIR")
+            delete!(ENV, "DISTSSH_OUTPUT_DIR")
         end
     end
 end
@@ -276,13 +276,13 @@ end
                         )
                     end
                 end
-                delete!(ENV, "DISTRIBUTED_OUTPUT_DIR")
+                delete!(ENV, "DISTSSH_OUTPUT_DIR")
                 @test res.ok
                 @test [h for h in hooks if isfile(marker(h))] == defined
             end
         finally
             DistSSHRun.set_kit_verbosity!(prev_v)
-            delete!(ENV, "DISTRIBUTED_OUTPUT_DIR")
+            delete!(ENV, "DISTSSH_OUTPUT_DIR")
         end
     end
 end

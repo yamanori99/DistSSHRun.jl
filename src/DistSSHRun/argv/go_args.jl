@@ -36,7 +36,7 @@ function show_go_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  --deploy-root PATH  remote deployment root (location, not snapshot id).",
-        "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
+        "                      Omit for DISTSSH_REMOTE_PROJECT_ROOT, else the",
         "                      ~/Parent/RepoName layout from the local env_dir.",
         "  --ship-id ID       use ships/<ID>/src under the deploy root",
         "                      (after setup ship-tree + setup instantiate)",
@@ -58,7 +58,7 @@ function show_go_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  {script}/.distssh/go/<stem>_<UTC>/<slot>/",
-        "  DISTRIBUTED_OUTPUT_DIR → that slot dir (the only tree go pulls back)",
+        "  DISTSSH_OUTPUT_DIR → that slot dir (the only tree go pulls back)",
         "  Project-relative files outside the slot stay on the remote.",
         "  --output-dir is the batch root (not drive's result root)",
         "  a non-empty --output-dir is an error",
@@ -73,7 +73,7 @@ function show_go_usage(; io::IO = stdout)
         "  JULIA_DISTRIBUTED_EXE        default remote Julia",
         "  DISTSSH_QUIET / PROGRESS / VERBOSE / YES",
         "  Slot ENV: JULIA_PROJECT / JULIA_LOAD_PATH / JULIA_NUM_THREADS,",
-        "  optional BLAS/OMP, DISTSSH_* seed/rank/job, DISTRIBUTED_OUTPUT_DIR.",
+        "  optional BLAS/OMP, DISTSSH_* seed/rank/job, DISTSSH_OUTPUT_DIR.",
         "  Other controller ENV is not forwarded.",
     )
     print_help_blank(io)

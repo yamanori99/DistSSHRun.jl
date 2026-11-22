@@ -29,7 +29,7 @@ partial run.
 
 A collect root that is the project or a parent of it stops the run before
 `main` and before collect, with exit code 1. That includes
-`DISTRIBUTED_COLLECT_DIRS` and a default root from `DISTRIBUTED_OUTPUT_DIR`.
+`DISTSSH_COLLECT_DIRS` and a default root from `DISTSSH_OUTPUT_DIR`.
 
 `julia` sets the remote Julia binary (`nothing` / `"auto"` → detect; same as
 CLI `--julia`). `ship_id` (CLI `--ship-id`) selects `ships/<ID>/src` under the
@@ -48,7 +48,7 @@ A second in-process run in the same process fails unless `reuse_main=true` or
 process's `Main`; `output_dir`, `log_dir`, `hosts`, and `run_dir` on
 [`DriveResult`](@ref) stay empty.
 
-Ctrl-C restores the active project and the `DISTRIBUTED_*` entries this call
+Ctrl-C restores the active project and the `DISTSSH_*` entries this call
 changed, then rethrows `InterruptException` or, when Julia has it,
 `Base.CancellationRequest`. `drive!` does not `exit` and does not throw the
 private CLI exception. With `Base.CANCEL_TOKEN`, the caller's task may stay
@@ -144,7 +144,7 @@ function drive!(
         return _with_kit_inproc_run!(:drive) do
             return with_kit_invocation_env!(session.cli_session.process_env) do
                 # Outside `run_drive_parsed!`: `apply_session_env!` runs first, and
-                # this frame restores DISTRIBUTED_* after the inner drive returns.
+                # this frame restores DISTSSH_* after the inner drive returns.
                 return _with_drive_process!(session.project) do
                     return _with_session_env!(session) do
                         # Scoped for `remote_layout_path` / worker path mapping only.

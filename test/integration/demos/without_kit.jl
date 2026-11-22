@@ -47,7 +47,7 @@ using Test
         solo_file_proc, solo_file_out = _run_subprocess(
             setenv(
                 Cmd([julia, "--startup-file=no", "--project=$kit_root", file, "--n", "4"]),
-                _child_julia_env(Dict("DISTRIBUTED_OUTPUT_DIR" => solo_dir))
+                _child_julia_env(Dict("DISTSSH_OUTPUT_DIR" => solo_dir))
             )
         )
         _assert_proc_ok(solo_file_proc, solo_file_out; label = "pi_file solo")

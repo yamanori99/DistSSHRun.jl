@@ -90,7 +90,7 @@ function doctor_launch_assert_host!(
             "  then:   $(cli_m_project()) go --ship-id ID …\n" *
             "Or from Julia: setup!(session, :ship_tree, :instantiate)\n" *
             "  (or :git_clone, :instantiate; repo=\"…\" for clone; later :git_sync)\n" *
-            "Set DISTRIBUTED_REMOTE_PROJECT_ROOT if the remote path is not the default."
+            "Set DISTSSH_REMOTE_PROJECT_ROOT if the remote path is not the default."
         !isempty(ssh_hint) && (msg *= "\n  $ssh_hint")
         throw(ArgumentError(DistSSHBase._append_remote_shell_hint(String(host), code, msg)))
     end

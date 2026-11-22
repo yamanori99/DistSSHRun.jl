@@ -1,4 +1,4 @@
-# Shared paths: project + `DISTRIBUTED_OUTPUT_DIR` + content-hash cache.
+# Shared paths: project + `DISTSSH_OUTPUT_DIR` + content-hash cache.
 # Does not mount FUSE. Project rsync excludes `.distssh/` (and legacy `.distsshkit/`).
 
 """SHA-256 hex digest of file contents at `path`."""
@@ -55,7 +55,7 @@ end
 """
     stored_path(rel; project=pwd(), output=nothing) -> String
 
-Where `rel` is stored. `output=nothing` reads `DISTRIBUTED_OUTPUT_DIR`.
+Where `rel` is stored. `output=nothing` reads `DISTSSH_OUTPUT_DIR`.
 A passed string is used as given and does not read that variable.
 `""` means no output directory.
 
@@ -79,7 +79,7 @@ function stored_path(
     isabspath(r) && return canonical_local_path(r)
     proj = canonical_local_path(project)
     out = if output === nothing
-        strip(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
+        strip(get(ENV, "DISTSSH_OUTPUT_DIR", ""))
     else
         strip(String(output))
     end

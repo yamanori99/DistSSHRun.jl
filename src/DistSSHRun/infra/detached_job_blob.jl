@@ -1,7 +1,7 @@
 # Versioned detached/Queue job settings (`job.toml`); argv is bootstrap only.
 
 const DETACHED_JOB_BLOB_FILENAME::String = "job.toml"
-const DETACHED_JOB_BLOB_ENV::String = "DISTSSH_JOB_BLOB"
+const DETACHED_JOB_BLOB_ENV::String = "DISTSSH_INTERNAL_JOB_BLOB"
 
 const _DETACHED_PLACEMENT_ENV_KEYS = (
     "DISTSSH_HOSTS",
@@ -19,7 +19,7 @@ const _DETACHED_JOB_SHARED_ENV_KEYS = (
     "JULIA_DISTRIBUTED_EXE",
     "DISTSSH_REQUIRE_ALL_HOSTS",
     "DISTSSH_BEST_EFFORT",
-    "DISTSSH_JOB_BLOB",
+    "DISTSSH_INTERNAL_JOB_BLOB",
 )
 
 const _JOB_BLOB_BOOTSTRAP_YES = ("-y", "--yes")
@@ -138,8 +138,8 @@ end
 
 const _DETACHED_BLOB_HEARTBEAT_DEADLINE = "distributed_heartbeat_deadline_sec"
 const _DETACHED_BLOB_HEARTBEAT_INTERVAL = "distributed_heartbeat_interval_sec"
-const _DETACHED_HEARTBEAT_DEADLINE_ENV = "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC"
-const _DETACHED_HEARTBEAT_INTERVAL_ENV = "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC"
+const _DETACHED_HEARTBEAT_DEADLINE_ENV = "DISTSSH_HEARTBEAT_DEADLINE_SEC"
+const _DETACHED_HEARTBEAT_INTERVAL_ENV = "DISTSSH_HEARTBEAT_INTERVAL_SEC"
 
 """Job-default option fields to store in the blob from the parent `ProcessEnv` at write time."""
 function detached_job_blob_fields_from_env(env::ProcessEnv = snapshot_process_env())

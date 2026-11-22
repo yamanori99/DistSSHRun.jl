@@ -24,7 +24,7 @@ using Test
         @test env.env_dir == DistSSHBase.canonical_local_path(lab)
         @test env.manifest == DistSSHBase.canonical_local_path(joinpath(lab, "Manifest.toml"))
         @test DistSSHBase.julia_project_rel(env) == joinpath("experiments", "run1")
-        withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => nothing) do
+        withenv("DISTSSH_REMOTE_PROJECT_ROOT" => nothing) do
             deploy = DistSSHBase.remote_deploy_root(member)
             julia_remote = DistSSHBase.resolve_remote_project_root(member)
             @test deploy == joinpath("~", basename(dirname(lab)), "lab")
@@ -49,7 +49,7 @@ using Test
         write(joinpath(locks, "Mine.toml"), "# lock\n")
         cenv = DistSSHBase.resolve_pkg_env(custom)
         @test cenv.env_dir == DistSSHBase.canonical_local_path(locks)
-        withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => nothing) do
+        withenv("DISTSSH_REMOTE_PROJECT_ROOT" => nothing) do
             @test DistSSHBase.remote_deploy_root(custom) ==
                 joinpath("~", basename(dirname(locks)), basename(locks))
             # Worker project is deploy + relpath(project_dir, env_dir).
@@ -123,7 +123,7 @@ using Test
             write(joinpath(nest, "lab", "Manifest.toml"), "# lock\n")
             write(joinpath(nest_member, "Project.toml"), "name = \"NestRun\"\n[deps]\n")
             run(pipeline(`git -C $nest init -q`; stdout = devnull, stderr = devnull))
-            withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => nothing) do
+            withenv("DISTSSH_REMOTE_PROJECT_ROOT" => nothing) do
                 nest_deploy = DistSSHBase.remote_deploy_root(nest_member)
                 @test DistSSHBase.remote_git_clone_dest(nest_member) == dirname(nest_deploy)
                 @test DistSSHBase.remote_delete_root(nest_member) == dirname(nest_deploy)

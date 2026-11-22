@@ -21,7 +21,7 @@ isfile(_ssh_config) ||
     error("docker-ssh not ready: missing $(_ssh_config). Run testenv/docker-ssh/scripts/up.sh")
 
 @testset "DistSSHUp SSH" verbose = true begin
-    withenv("DISTRIBUTED_SSH_OPTS" => "-F $(_ssh_config) -o RequestTTY=no") do
+    withenv("DISTSSH_SSH_OPTS" => "-F $(_ssh_config) -o RequestTTY=no") do
         ch = DistSSHUp.juliaup_channel()
         lines = DistSSHUp.juliaup_status_lines("child-1")
         @test !isempty(lines)

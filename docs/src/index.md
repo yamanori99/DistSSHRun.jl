@@ -35,9 +35,9 @@ stops answering. The startup summary says so, and run provenance records
 
 Opt in with CLI `--unsafe-master-silence-exit` or
 `DISTSSH_UNSAFE_MASTER_SILENCE_EXIT=1`, and set a **positive**
-`DISTRIBUTED_HEARTBEAT_DEADLINE_SEC` (seconds). There is no default
+`DISTSSH_HEARTBEAT_DEADLINE_SEC` (seconds). There is no default
 deadline when self-exit is on. Optionally set
-`DISTRIBUTED_HEARTBEAT_INTERVAL_SEC` (default 30). When enabled, workers
+`DISTSSH_HEARTBEAT_INTERVAL_SEC` (default 30). When enabled, workers
 ping the controller on that interval; if it does not answer within the
 deadline, they exit with status 75. That deadline is also the longest the
 controller may go without yielding while the monitor runs. A worker that
@@ -175,7 +175,7 @@ process. `setup ship-tree` still confirms unless `-y` is used.
 `setup remote-root --deploy-root /absolute/path` creates that one
 directory with mode `700`. Group and other write are cleared again after
 `mkdir`. The parent must already exist. `~` and
-`DISTRIBUTED_REMOTE_PROJECT_ROOT` are not a source for this command.
+`DISTSSH_REMOTE_PROJECT_ROOT` are not a source for this command.
 Confirmation is required unless `-y` is used.
 The directory must be owned by the SSH user and must not be group-writable
 or world-writable. No marker file is written, and `ships/` is not created.
@@ -269,23 +269,23 @@ go!("job.jl")
 The default root is `--output-dir`, else
 `{script}/.distssh/drive/<stem>_<UTC>/`. Files written under the project
 (for example `data/sims`) are not collected unless
-`DISTRIBUTED_COLLECT_DIRS` lists those directories (colon-separated,
+`DISTSSH_COLLECT_DIRS` lists those directories (colon-separated,
 relative to the project root or absolute). Example in the driver:
-`ENV["DISTRIBUTED_COLLECT_DIRS"] = "data/sims"`. A second `drive --ship-id`
+`ENV["DISTSSH_COLLECT_DIRS"] = "data/sims"`. A second `drive --ship-id`
 that does not rewrite those files prints `(nothing to collect)`. Use
 `drive --collect-missing ROOT HOST...` with `--ship-id` to pull files that
 already exist. A new `setup ship-tree` starts an empty tree; files left
 from an earlier ship do not carry over.
 
 `go` pull-back is the slot output directory only
-(`DISTRIBUTED_OUTPUT_DIR`). Project-relative files outside that slot stay
+(`DISTSSH_OUTPUT_DIR`). Project-relative files outside that slot stay
 on the remote.
 
 SSH workers and `go` slots receive `JULIA_PROJECT`, `JULIA_LOAD_PATH`,
 `JULIA_NUM_THREADS`, optional BLAS/OMP thread variables, and when a rank
 or job id is set `DISTSSH_JOB_SEED`, `DISTSSH_WORKER_RANK`,
 `DISTSSH_WORKER_SEED`, and `DISTSSH_JOB_ID`. `go` also sets
-`DISTRIBUTED_OUTPUT_DIR` to the slot directory. Other controller
+`DISTSSH_OUTPUT_DIR` to the slot directory. Other controller
 environment variables are not forwarded. Local `drive` workers may still
 see the controller process environment; do not rely on that.
 

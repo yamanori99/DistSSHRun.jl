@@ -3,6 +3,18 @@
 
 const _WAIT_SCALE_ENV = "DISTSSH_WAIT_SCALE"
 
+const _WAIT_ENV = Dict{Symbol, String}(
+    :child_reply => "DISTSSH_WAIT_CHILD_REPLY",
+    :go_job => "DISTSSH_WAIT_GO_JOB",
+    :drive_job => "DISTSSH_WAIT_DRIVE_JOB",
+    :stop_grace => "DISTSSH_WAIT_STOP_GRACE",
+    :sigint_grace => "DISTSSH_WAIT_SIGINT_GRACE",
+    :e2e_stop => "DISTSSH_WAIT_E2E_STOP",
+    :ssh_connect => "DISTSSH_WAIT_SSH_CONNECT",
+    :ssh_auth => "DISTSSH_WAIT_SSH_AUTH",
+    :peer_silent => "DISTSSH_WAIT_PEER_SILENT",
+)
+
 # A fresh child that must print or exit, and a job that keeps running after that.
 const _WAIT_RESPOND = (:child_reply, :go_job, :drive_job)
 
@@ -15,21 +27,18 @@ function _wait_known(name::Symbol)::Bool
     return name in _WAIT_RESPOND || name in _WAIT_STOP || name in _WAIT_LIVENESS
 end
 
-# Empty or not a finite number ≥ 0 means "not set".
 function _wait_env_number(key::AbstractString)::Union{Nothing, Float64}
-    raw = strip(get(ENV, String(key), ""))
-    isempty(raw) && return nothing
-    value = tryparse(Float64, raw)
-    value === nothing && return nothing
-    isfinite(value) && value >= 0 || return nothing
-    return Float64(value)
+    haskey(ENV, String(key)) || return nothing
+    raw = String(get(ENV, String(key), ""))
+    isempty(strip(raw)) && return nothing
+    return parse_env_float(key, raw; default = nothing, nonnegative = true)
 end
 
 function _wait_scale()::Float64
-    value = _wait_env_number(_WAIT_SCALE_ENV)
-    value === nothing && return 1.0
-    value > 0 || return 1.0
-    return value
+    haskey(ENV, _WAIT_SCALE_ENV) || return 1.0
+    raw = String(get(ENV, _WAIT_SCALE_ENV, ""))
+    isempty(strip(raw)) && return 1.0
+    return parse_env_float(_WAIT_SCALE_ENV, raw; default = 1.0, positive = true)
 end
 
 """
@@ -39,15 +48,15 @@ Resolve a named wait. `default` is the caller's seconds. This module does not
 choose them.
 
 `:until_exit` returns `Inf` and ignores `default`. For any other known name,
-`DISTSSH_WAIT_<NAME>` wins when it is a finite number ≥ 0. An unreadable
-value is ignored. `DISTSSH_WAIT_SCALE` then multiplies `:child_reply`,
-`:go_job`, and `:drive_job` only. Scale `1` is used when that variable is
-missing, unreadable, or `0`.
+the matching wait environment variable wins when it is a finite number ≥ 0.
+An unreadable value is an error that names the variable. `DISTSSH_WAIT_SCALE`
+then multiplies `:child_reply`, `:go_job`, and `:drive_job` only. Scale `1`
+is used when that variable is missing.
 """
 function wait_seconds(name::Symbol, default::Real)::Float64
     _wait_known(name) || throw(ArgumentError("unknown wait name: $name"))
     name === :until_exit && return Inf
-    override = _wait_env_number("DISTSSH_WAIT_" * uppercase(String(name)))
+    override = _wait_env_number(_WAIT_ENV[name])
     override !== nothing && return override
     seconds = Float64(default)
     name in _WAIT_RESPOND || return seconds

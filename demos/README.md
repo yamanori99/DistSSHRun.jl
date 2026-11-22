@@ -71,7 +71,7 @@ julia --project=. distsshkit_demos/without_kit/pipeline_pi.jl
 `--n N` (default 1000). A commented remote example is at the bottom of that
 file (`setup!` first).
 
-Remote: set `DISTRIBUTED_REMOTE_PROJECT_ROOT` when needed. Optional:
+Remote: set `DISTSSH_REMOTE_PROJECT_ROOT` when needed. Optional:
 `DISTSSH_HOSTS` (comma-separated `N*host` machine tokens for
 `go` / `drive` / `pipeline!`; `go --repeat` may omit `:N`). Deploy with
 `setup git-sync` / `setup ship-tree` (and `setup instantiate` when needed)

@@ -41,7 +41,7 @@ const _EXECUTE_DETACHED_DRIVE_ONLY = (
 )
 const _EXECUTE_DETACHED_HARD_DROP = (
     "JULIA_LOAD_PATH",
-    "DISTSSH_CLI_SUBCOMMAND_DONE",
+    "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE",
     "DIST_SSH_KIT_CLI_INCLUDE",
 )
 # Removed from the child unless `threads=:unset`. `OPENBLAS_DEFAULT_NUM_THREADS`
@@ -167,7 +167,7 @@ Uses the same tables as the detached throw path, plus the named parameters
 (`output_dir`, `args`, `project`, `sync`, `julia`, `detached`, `source`,
 `dir`, `threads`, `env_allow`, `env`).
 `source` is a provenance dict. Detached passes it to the child as
-`DISTSSH_SOURCE_*`. It is not a `go!` / `drive!` keyword.
+`DISTSSH_INTERNAL_SOURCE_COMMIT` and the other source hand-off keys. It is not a `go!` / `drive!` keyword.
 `dir`, `threads`, `env_allow`, and `env` are detached launch policy, not
 `go!` / `drive!` keywords.
 """
@@ -255,7 +255,7 @@ Handle to a detached [`execute!`](@ref) child (`detached=true`).
 `run_dir` is always allocated in the parent before spawn (pid / `kit.out` /
 `run.toml`). Read it with [`result_run_dir`](@ref). The field is not API.
 `output_dir` is the artifact root when known at spawn (`go` /
-explicit `output_dir=`, or inherited `DISTRIBUTED_OUTPUT_DIR`).
+explicit `output_dir=`, or inherited `DISTSSH_OUTPUT_DIR`).
 Detached `:drive` without those leaves `output_dir` as `nothing` so the child
 can honor `init_output_dir!`. `log_dir` is `nothing` for `:go`.
 [`wait`](@ref) returns a [`DistSSHJobResult`](@ref); it does not fill
@@ -455,15 +455,15 @@ Keywords are then an allow-list (unknown names throw):
 `workers`, `worker_include`,
 `allow_external_symlinks`, `dir`, `threads`, `env_allow`, and `env`.
 `source` is a provenance
-dict for every kind. Detached passes it as `DISTSSH_SOURCE_*`. Go-only
+dict for every kind. Detached passes it as source hand-off keys. Go-only
 `repeat`. Neither go nor drive takes sizing flags. `yes` must be `true` (the
 default): an unattended child cannot answer a prompt. `remote` that starts
-with `~` is stored in `DISTRIBUTED_REMOTE_PROJECT_ROOT` as a layout path
+with `~` is stored in `DISTSSH_REMOTE_PROJECT_ROOT` as a layout path
 (not `expanduser` on the kit parent). Child stdio defaults to
 `kit.out` / `kit.err` in `run_dir`. Pass `stdout` / `stderr` (`IO`) to
 override; `stdout=stdout` inherits the parent. Parent `redirect_stdout` does
 not apply to the subprocess. Detached `:drive` omits `--output-dir` unless
-`output_dir=` or inherited `DISTRIBUTED_OUTPUT_DIR` is set, so
+`output_dir=` or inherited `DISTSSH_OUTPUT_DIR` is set, so
 `init_output_dir!` can choose the artifact root.
 
 `job_id`, if given, is passed to the child as `DISTSSH_JOB_ID`, which
@@ -888,11 +888,11 @@ function _execute_detached!(
     )
     argv = _execute_detached_bootstrap_argv(kind; job_blob = job_blob_path)
     extra = Dict{String, String}(
-        "DISTRIBUTED_PROJECT_ROOT" => proj,
+        "DISTSSH_PROJECT_ROOT" => proj,
         DISTSSH_RUN_DIR_ENV => run_dir,
     )
     if remote !== nothing && !isempty(strip(String(remote)))
-        extra["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote_env_project_root(String(remote))
+        extra["DISTSSH_REMOTE_PROJECT_ROOT"] = remote_env_project_root(String(remote))
     end
     if job_id_s !== nothing
         extra["DISTSSH_JOB_ID"] = job_id_s
@@ -1270,12 +1270,18 @@ function _leftover_worker_host(pid::Integer)::String
     return "unknown"
 end
 
-"""SSH workers sleep `DISTRIBUTED_INIT_DELAY_SEC` (default 5). Local-only is 0."""
+"""SSH workers sleep `DISTSSH_INIT_DELAY_SEC` (default 5). Local-only is 0."""
 function _drive_init_delay_sec(; ssh::Bool)::Float64
     ssh || return 0.0
-    d = tryparse(Float64, get(ENV, "DISTRIBUTED_INIT_DELAY_SEC", "5"))
-    d === nothing && return 0.0
-    return d > 0 ? d : 0.0
+    DistSSHBase.throw_if_legacy_env!(ENV)
+    raw = get(ENV, "DISTSSH_INIT_DELAY_SEC", "")
+    v = DistSSHBase.parse_env_float(
+        "DISTSSH_INIT_DELAY_SEC",
+        raw;
+        default = 5.0,
+        positive = true,
+    )
+    return Float64(v)
 end
 
 """Hosts whose registered workers are no longer alive (`:left`)."""
@@ -1894,9 +1900,9 @@ retried so two allocations do not share a directory.
 This matches omitted in-process defaults for go and drive:
 `{script}/.distssh/<kind>/<stem>_<UTC>/`. Drive still honors
 `output_dir` / `--output-dir` and a driver's `init_output_dir!`
-(`DISTRIBUTED_OUTPUT_DIR`) when those are set. Detached `execute!(:drive)`
+(`DISTSSH_OUTPUT_DIR`) when those are set. Detached `execute!(:drive)`
 does not pin `--output-dir` unless `output_dir=` or inherited
-`DISTRIBUTED_OUTPUT_DIR` is set.
+`DISTSSH_OUTPUT_DIR` is set.
 """
 function allocate_output_dir(
         kind::Symbol,
@@ -1921,7 +1927,7 @@ function allocate_output_dir(
     return _mkdir_unique!(dir)
 end
 
-"""Set `DISTRIBUTED_OUTPUT_DIR` for a drive run and return it.
+"""Set `DISTSSH_OUTPUT_DIR` for a drive run and return it.
 
 If the env is already non-blank (`--output-dir`, `output_dir=`, or
 `init_output_dir!`), canonicalize and keep it. Otherwise allocate a unique
@@ -1931,15 +1937,15 @@ function _ensure_drive_output_env!(
         script_path::AbstractString;
         project::AbstractString = pwd(),
     )::String
-    existing = strip(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
+    existing = strip(get(ENV, "DISTSSH_OUTPUT_DIR", ""))
     if !isempty(existing)
         dir = canonical_local_path(existing)
         mkpath(dir)
-        ENV["DISTRIBUTED_OUTPUT_DIR"] = dir
+        ENV["DISTSSH_OUTPUT_DIR"] = dir
         return dir
     end
     dir = allocate_output_dir(:drive, script_path; project = project)
-    ENV["DISTRIBUTED_OUTPUT_DIR"] = dir
+    ENV["DISTSSH_OUTPUT_DIR"] = dir
     return dir
 end
 
@@ -1957,7 +1963,7 @@ function _execute_detached_dirs(
     elseif kind === :go
         _go_batch_output_dir(project, script_path)
     else
-        inherited = strip(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
+        inherited = strip(get(ENV, "DISTSSH_OUTPUT_DIR", ""))
         if !isempty(inherited)
             d = canonical_local_path(inherited)
             mkpath(d)
@@ -2277,7 +2283,7 @@ end
 `parent` is not modified. Thread and BLAS variables stay out unless
 `threads` is `:unset`. The five BLAS variables are then set to
 `DISTSSH_BLAS_THREADS` or `"1"`. `OPENBLAS_DEFAULT_NUM_THREADS` is not
-set. Bookkeeping `DISTSSH_LAUNCH_*` and `DISTSSH_SKIP_GLOBAL_WORKER_PKILL`
+set. Bookkeeping launch keys and `DISTSSH_SKIP_GLOBAL_WORKER_PKILL`
 are written on the child only.
 """
 function _detached_child_env(
@@ -2376,9 +2382,9 @@ function _detached_child_env(
     unique!(sensitive)
 
     child["DISTSSH_SKIP_GLOBAL_WORKER_PKILL"] = "1"
-    child["DISTSSH_LAUNCH_THREADS"] = flag
-    child["DISTSSH_LAUNCH_DIR"] = String(launch_dir)
-    child["DISTSSH_LAUNCH_DROPPED"] = join(dropped, ",")
+    child["DISTSSH_INTERNAL_LAUNCH_THREADS"] = flag
+    child["DISTSSH_INTERNAL_LAUNCH_DIR"] = String(launch_dir)
+    child["DISTSSH_INTERNAL_LAUNCH_DROPPED"] = join(dropped, ",")
     return (
         env = child,
         dropped = dropped,

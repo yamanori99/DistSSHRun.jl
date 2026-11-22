@@ -6,8 +6,8 @@ const _PROVENANCE_HEARTBEAT = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const UNSAFE_MASTER_SILENCE_EXIT_ENV = "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT"
 const UNSAFE_MASTER_SILENCE_EXIT_FLAG = "--unsafe-master-silence-exit"
 
-const _HEARTBEAT_DEADLINE_ENV = "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC"
-const _HEARTBEAT_INTERVAL_ENV = "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC"
+const _HEARTBEAT_DEADLINE_ENV = "DISTSSH_HEARTBEAT_DEADLINE_SEC"
+const _HEARTBEAT_INTERVAL_ENV = "DISTSSH_HEARTBEAT_INTERVAL_SEC"
 
 """Plain summary line when self-exit is off (also written to the kit log)."""
 const HEARTBEAT_SELF_EXIT_OFF_LINE =
@@ -20,7 +20,7 @@ end
 """
     explain_heartbeat_missing_deadline(; surface=:cli) -> String
 
-Opt-in is on but `DISTRIBUTED_HEARTBEAT_DEADLINE_SEC` is missing or not positive.
+Opt-in is on but `DISTSSH_HEARTBEAT_DEADLINE_SEC` is missing or not positive.
 """
 function explain_heartbeat_missing_deadline(; surface::Symbol = :cli)::String
     surface in (:cli, :api) || throw(ArgumentError("surface must be :cli or :api"))
@@ -108,6 +108,8 @@ function write_heartbeat_startup_summary!(policy)
 end
 
 function _heartbeat_env_flag(name::AbstractString, env::ProcessEnv)::Bool
+    haskey(env, String(name)) || return false
     raw = strip(get(env, String(name), ""))
-    return raw in ("1", "true", "yes", "on")
+    isempty(raw) && return false
+    return DistSSHBase.parse_env_bool(name, raw)
 end

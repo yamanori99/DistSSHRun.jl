@@ -212,7 +212,7 @@ function add_drive_workers!(
                     writeln_both("    hint: julia --project=. -m DistSSHKit setup ship-tree $(setup_cli_host_token(host_name))")
                     writeln_both("          julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host_name))")
                     writeln_both("          then drive --ship-id ID")
-                    writeln_both("           or export DISTRIBUTED_REMOTE_PROJECT_ROOT=<abs path on host>")
+                    writeln_both("           or export DISTSSH_REMOTE_PROJECT_ROOT=<abs path on host>")
                     push!(
                         launch_failures,
                         HostLaunchFailure(

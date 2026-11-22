@@ -134,7 +134,7 @@ function _assert_sftp_subsystem!()
 end
 
 @testset "DistSSHShip SSH" verbose = true begin
-    withenv("DISTRIBUTED_SSH_OPTS" => "-F $(_ssh_config) -o RequestTTY=no") do
+    withenv("DISTSSH_SSH_OPTS" => "-F $(_ssh_config) -o RequestTTY=no") do
         @testset "OpenSSH scp prerequisites" begin
             @test_nowarn _assert_sftp_subsystem!()
         end

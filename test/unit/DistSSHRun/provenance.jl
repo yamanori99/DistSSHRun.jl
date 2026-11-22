@@ -2,11 +2,11 @@ using Test
 using Distributed
 
 const _PROV_ENV_OFF = (
-    "DISTSSH_SOURCE_COMMIT" => nothing,
-    "DISTSSH_SOURCE_DIRTY" => nothing,
+    "DISTSSH_INTERNAL_SOURCE_COMMIT" => nothing,
+    "DISTSSH_INTERNAL_SOURCE_DIRTY" => nothing,
     "DISTSSH_SOURCE_DIFF_SHA256" => nothing,
-    "DISTSSH_SOURCE_CAPTURED" => nothing,
-    "DISTSSH_SOURCE_UNTRACKED" => nothing,
+    "DISTSSH_INTERNAL_SOURCE_CAPTURED" => nothing,
+    "DISTSSH_INTERNAL_SOURCE_UNTRACKED" => nothing,
 )
 
 function _prov_snap(;
@@ -120,7 +120,7 @@ end
             out_io = IOBuffer()
             cmd = setenv(
                 `$(Base.julia_cmd()) --startup-file=no -L $loader $main`,
-                "DISTRIBUTED_OUTPUT_DIR" => tmp
+                "DISTSSH_OUTPUT_DIR" => tmp
             )
             proc = run(
                 pipeline(cmd; stdout = out_io, stderr = err_io);
@@ -158,7 +158,7 @@ end
                 )
             end
             DistSSHRun.reset_worker_seeds!()
-            withenv("DISTRIBUTED_OUTPUT_DIR" => tmp, "DISTSSH_WORKER_RANK" => "2") do
+            withenv("DISTSSH_OUTPUT_DIR" => tmp, "DISTSSH_WORKER_RANK" => "2") do
                 @test_logs DistSSHRun.worker_pmap(identity, [1])
                 @test_logs DistSSHRun._flush_go_slot_pmap_items!()
             end
@@ -175,7 +175,7 @@ end
             mkpath(slot_dir)
             write(joinpath(slot_dir, "provenance-slot.toml"), "[[[")
             DistSSHRun.reset_worker_seeds!()
-            withenv("DISTRIBUTED_OUTPUT_DIR" => tmp) do
+            withenv("DISTSSH_OUTPUT_DIR" => tmp) do
                 @test_logs (:warn, r"go-slot provenance pmap flush failed") begin
                     @test_logs DistSSHRun.worker_pmap(identity, [1])
                     DistSSHRun._flush_go_slot_pmap_items!()
@@ -257,7 +257,7 @@ end
             run(
                 addenv(
                     `$(Base.julia_cmd()) --startup-file=no $script`,
-                    "DISTRIBUTED_OUTPUT_DIR" => tmp
+                    "DISTSSH_OUTPUT_DIR" => tmp
                 )
             )
             slot = DistSSHRun._read_go_slot_snapshot(
@@ -497,37 +497,37 @@ end
                 "untracked" => 0
             )
         )
-        @test env["DISTSSH_SOURCE_COMMIT"] == "abc"
-        @test env["DISTSSH_SOURCE_DIRTY"] == "false"
+        @test env["DISTSSH_INTERNAL_SOURCE_COMMIT"] == "abc"
+        @test env["DISTSSH_INTERNAL_SOURCE_DIRTY"] == "false"
         @test !haskey(env, "DISTSSH_SOURCE_DIFF_SHA256")
-        @test env["DISTSSH_SOURCE_CAPTURED"] == "submit:client"
-        @test env["DISTSSH_SOURCE_UNTRACKED"] == "0"
+        @test env["DISTSSH_INTERNAL_SOURCE_CAPTURED"] == "submit:client"
+        @test env["DISTSSH_INTERNAL_SOURCE_UNTRACKED"] == "0"
         inherited = Dict{String, String}(
-            "DISTSSH_SOURCE_COMMIT" => "new",
-            "DISTSSH_SOURCE_DIRTY" => "true",
+            "DISTSSH_INTERNAL_SOURCE_COMMIT" => "new",
+            "DISTSSH_INTERNAL_SOURCE_DIRTY" => "true",
             "OTHER" => "keep"
         )
         DistSSHRun._drop_unspecified_source_env!(
             inherited,
             Dict("commit" => "new"),
-            Dict{String, String}("DISTSSH_SOURCE_COMMIT" => "new")
+            Dict{String, String}("DISTSSH_INTERNAL_SOURCE_COMMIT" => "new")
         )
-        @test inherited["DISTSSH_SOURCE_COMMIT"] == "new"
-        @test !haskey(inherited, "DISTSSH_SOURCE_DIRTY")
+        @test inherited["DISTSSH_INTERNAL_SOURCE_COMMIT"] == "new"
+        @test !haskey(inherited, "DISTSSH_INTERNAL_SOURCE_DIRTY")
         @test inherited["OTHER"] == "keep"
-        kept = Dict{String, String}("DISTSSH_SOURCE_DIRTY" => "true")
+        kept = Dict{String, String}("DISTSSH_INTERNAL_SOURCE_DIRTY" => "true")
         DistSSHRun._drop_unspecified_source_env!(kept, nothing, Dict{String, String}())
-        @test kept["DISTSSH_SOURCE_DIRTY"] == "true"
+        @test kept["DISTSSH_INTERNAL_SOURCE_DIRTY"] == "true"
         @test isempty(DistSSHRun._provenance_source_env(nothing))
         for kind in (:go, :drive)
             @test DistSSHRun.execute_detached_accepts(:source; kind = kind)
         end
         withenv(
-            "DISTSSH_SOURCE_COMMIT" => "from-env",
-            "DISTSSH_SOURCE_DIRTY" => "true",
+            "DISTSSH_INTERNAL_SOURCE_COMMIT" => "from-env",
+            "DISTSSH_INTERNAL_SOURCE_DIRTY" => "true",
             "DISTSSH_SOURCE_DIFF_SHA256" => "abc",
-            "DISTSSH_SOURCE_CAPTURED" => "submit:client",
-            "DISTSSH_SOURCE_UNTRACKED" => "2"
+            "DISTSSH_INTERNAL_SOURCE_CAPTURED" => "submit:client",
+            "DISTSSH_INTERNAL_SOURCE_UNTRACKED" => "2"
         ) do
             DistSSHRun._set_provenance_source!(nothing)
             _with_tempdir() do tmp

@@ -44,7 +44,7 @@ function _validate_distributed_ssh_o!(extra::AbstractVector{String})
         want = _SSH_FORBIDDEN_OPT_OVERRIDES[key]
         keyval != want && throw(
             ArgumentError(
-                "DISTRIBUTED_SSH_OPTS cannot override $(repr(want)); " *
+                "DISTSSH_SSH_OPTS cannot override $(repr(want)); " *
                     "DistSSH requires non-interactive SSH",
             ),
         )
@@ -71,12 +71,14 @@ function _default_ssh_o_values(; request_tty::Bool)
 end
 
 """
-Build SSH options. `DISTRIBUTED_SSH_OPTS` tokens come first; kit defaults for
+Build SSH options. `DISTSSH_SSH_OPTS` tokens come first; kit defaults for
 each `-o` name follow only when that name is absent (OpenSSH uses the first
 value on the command line). Forbidden overrides in ENV still throw.
+A leftover `DISTRIBUTED_SSH_OPTS` is an error.
 """
 function build_ssh_opts(; request_tty::Bool = false)
-    custom = strip(get(ENV, "DISTRIBUTED_SSH_OPTS", ""))
+    throw_if_legacy_env!(ENV)
+    custom = strip(get(ENV, "DISTSSH_SSH_OPTS", ""))
     extra = isempty(custom) ? String[] : _split_ssh_opts(custom)
     !isempty(extra) && _validate_distributed_ssh_o!(extra)
     user_keys = _ssh_o_option_keys(extra)
@@ -97,13 +99,13 @@ function ssh_noninteractive_env()::Dict{String, String}
     )
 end
 
-"""Split `DISTRIBUTED_SSH_OPTS` with shell quoting. Unmatched quotes throw `ArgumentError`."""
+"""Split `DISTSSH_SSH_OPTS` with shell quoting. Unmatched quotes throw `ArgumentError`."""
 function _split_ssh_opts(custom::AbstractString)::Vector{String}
     try
         return String[String(x) for x in Base.shell_split(custom)]
     catch e
         e isa ErrorException || rethrow()
-        throw(ArgumentError("DISTRIBUTED_SSH_OPTS: $(e.msg)"))
+        throw(ArgumentError("DISTSSH_SSH_OPTS: $(e.msg)"))
     end
 end
 
@@ -112,10 +114,10 @@ end
 
 SSH argv flags for `ssh` / `scp`.
 
-Reads `DISTRIBUTED_SSH_OPTS` **live** (not frozen at package precompile). Prefer
+Reads `DISTSSH_SSH_OPTS` **live** (not frozen at package precompile). Prefer
 this over a `const` so E2E / ProxyJump overrides apply in the same process.
 
-Non-empty `DISTRIBUTED_SSH_OPTS` is split with `Base.shell_split` and placed
+Non-empty `DISTSSH_SSH_OPTS` is split with `Base.shell_split` and placed
 **before** kit defaults. For each `-o` option name, the first token on the
 command line wins, so ENV can override timeouts and extras like `-F`. Kit
 still fills any missing default names (`BatchMode=yes`, and so on). An
@@ -174,7 +176,7 @@ end
 """OpenSSH flags for parallel short remote phases (`kill`, tagged `pkill`).
 
 Forced `-o` tokens are placed before forwarded user opts so they win over
-`DISTRIBUTED_SSH_OPTS` (OpenSSH uses the first value per option name).
+`DISTSSH_SSH_OPTS` (OpenSSH uses the first value per option name).
 """
 function ssh_phase_argv(;
         request_tty::Bool = false,
@@ -961,7 +963,7 @@ function detect_julia_path(host::String)::Union{Nothing, String}
     return found
 end
 
-"""`--version` over the setup SSH transport (honors `DISTSSH_TEST_SSH`)."""
+"""`--version` over the setup SSH transport (honors an injected test transport)."""
 function _remote_julia_reports_version(host::String, path::AbstractString)::Bool
     pq = _remote_shell_path_word(String(path))
     try
@@ -1225,7 +1227,7 @@ end
 #
 # Precedence for a deployment root:
 # 1. Explicit per-call `cli_override` (`--deploy-root` / `session.remote`)
-# 2. Caller `DISTRIBUTED_REMOTE_PROJECT_ROOT`
+# 2. Caller `DISTSSH_REMOTE_PROJECT_ROOT`
 # 3. [`default_remote_project_path`](@ref) from local `env_dir`
 # A per-call override must not be written back as a process-global default.
 
@@ -1241,7 +1243,7 @@ function default_remote_project_path(local_project_root::AbstractString)::String
     return joinpath("~", basename(dirname(root)), basename(root))
 end
 
-"""Remote tree root for `local_tree` (override, else `DISTRIBUTED_REMOTE_PROJECT_ROOT`, else the default layout)."""
+"""Remote tree root for `local_tree` (override, else `DISTSSH_REMOTE_PROJECT_ROOT`, else the default layout)."""
 function _remote_tree_root(
         local_tree::AbstractString;
         cli_override::Union{Nothing, AbstractString} = nothing,
@@ -1253,7 +1255,7 @@ function _remote_tree_root(
             return s
         end
     end
-    env = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
+    env = strip(get(ENV, "DISTSSH_REMOTE_PROJECT_ROOT", ""))
     if !isempty(env)
         _reject_control_path(env)
         return env
@@ -1266,7 +1268,7 @@ end
 """
 Directory on the worker that receives `setup ship-tree` of [`resolve_pkg_env`](@ref) `env_dir`.
 
-An override (`--deploy-root` / `DISTRIBUTED_REMOTE_PROJECT_ROOT`) is this tree
+An override (`--deploy-root` / `DISTSSH_REMOTE_PROJECT_ROOT`) is this tree
 root, not the member directory. Workspace member relative paths are applied
 only by [`resolve_remote_project_root`](@ref), not here.
 """
@@ -1429,7 +1431,7 @@ function _remote_ancestor_or_nothing(
     return _remote_path_forbidden(p) ? nothing : p
 end
 
-"""Layout path for `DISTRIBUTED_REMOTE_PROJECT_ROOT` (kit parent ENV / `execute!`).
+"""Layout path for `DISTSSH_REMOTE_PROJECT_ROOT` (kit parent ENV / `execute!`).
 
 `~…` stays a remote-shell layout (do not `expanduser` on the kit parent).
 Absolute paths are [`canonical_local_path`](@ref).
@@ -1508,7 +1510,7 @@ That result is the local absolute path, not a remote path.
 A path under the repo root is the same relative path under
 [`resolve_remote_project_root`](@ref). The default root matches
 `setup git-clone` (`~/Parent/RepoName`). Override with
-`DISTRIBUTED_REMOTE_PROJECT_ROOT` or `--deploy-root`.
+`DISTSSH_REMOTE_PROJECT_ROOT` or `--deploy-root`.
 """
 function remote_layout_path(
         local_abs_dir::AbstractString,
@@ -1528,18 +1530,13 @@ function remote_layout_path(
     return ld
 end
 
-"""Test doubles replace ssh and local juliaup only when this is `1`."""
-function _test_doubles_on()::Bool
-    return strip(get(ENV, "DISTSSH_TEST", "")) == "1"
-end
-
-"""Julia argv for a `DISTSSH_TEST_SSH` `.jl` double (`--compile=min`)."""
+"""Julia argv for a test SSH `.jl` double (`--compile=min`)."""
 function _test_double_julia_argv(script::AbstractString)::Vector{String}
     julia = joinpath(Sys.BINDIR, Base.julia_exename())
     return [julia, "--startup-file=no", "--compile=min", abspath(script)]
 end
 
-"""ENV for a `DISTSSH_TEST_SSH` Julia child (see `test/support/subprocess.jl`)."""
+"""ENV for an injected test SSH Julia child (see `test/support/subprocess.jl`)."""
 function _fake_double_child_julia_env()::Dict{String, String}
     skip = Set(("JULIA_PROJECT", "JULIA_LOAD_PATH"))
     env = Dict{String, String}()
@@ -1547,7 +1544,7 @@ function _fake_double_child_julia_env()::Dict{String, String}
         ks = String(k)
         ks in skip && continue
         vs = String(v)
-        isempty(vs) && !startswith(ks, "DISTSSH_TEST") && continue
+        isempty(vs) && continue
         env[ks] = vs
     end
     env["JULIA_LOAD_PATH"] = _child_load_path_string()
@@ -1564,10 +1561,10 @@ function _host_sync_remote_shell_cmd(
         remote_script::String;
         forward_stdin::Bool = false,
     )::Cmd
-    custom = _test_doubles_on() ? strip(get(ENV, "DISTSSH_TEST_SSH", "")) : ""
-    if !isempty(custom)
-        base = Cmd(vcat(_test_double_julia_argv(custom), [host, remote_script]))
-        return setenv(base, _fake_double_child_julia_env())
+    t = _injected_ssh[]
+    if t !== nothing
+        cmd = t.remote_cmd(host, remote_script; forward_stdin = forward_stdin)
+        cmd !== nothing && return cmd
     end
     # Default `-n`: do not forward kit stdin (juliaup/git must not wait on a TTY).
     # Tar ship needs stdin (`forward_stdin=true`).
@@ -1576,7 +1573,7 @@ function _host_sync_remote_shell_cmd(
 end
 
 # Login-shell POSIX passes. Key is host plus live `ssh_opts()` (not host alone:
-# `DISTRIBUTED_SSH_OPTS` can change the login user). Failures are not stored.
+# `DISTSSH_SSH_OPTS` can change the login user). Failures are not stored.
 const _REMOTE_POSIX_SHELL_OK = Set{String}()
 const _REMOTE_POSIX_SHELL_LOCK = ReentrantLock()
 
@@ -1655,18 +1652,20 @@ function _remote_shell_capture(
     return (code = shell_status(proc), out = String(take!(out_buf)))
 end
 
-"""A `DISTSSH_TEST_SSH` double is not a login shell unless the test asks."""
+"""A test SSH double is not a login shell unless the test asks."""
 function _posix_probe_is_strict()::Bool
     _test_doubles_on() || return true
-    isempty(strip(get(ENV, "DISTSSH_TEST_SSH", ""))) && return true
-    # Test double only. Not a user setting, and it does not disable the probe.
-    return strip(get(ENV, "DISTSSH_TEST_POSIX_SHELL", "1")) == "0"
+    t = _injected_ssh[]
+    t === nothing && return true
+    script = t.double_script()
+    (script === nothing || isempty(script)) && return true
+    return t.posix_strict()::Bool
 end
 
 """`:pass`, `:fail`, or `:unknown`. Exit 255 and a probe that did not run are unknown.
 
 A test double that exits 0 without the marker is a pass (it is not a shell).
-Any other double exit is unknown. `DISTSSH_TEST_POSIX_SHELL=0` keeps the strict check.
+Any other double exit is unknown. The injected transport can keep the strict check.
 """
 function _probe_remote_login_shell(host::String)::Symbol
     nonce = _posix_probe_nonce()
@@ -1816,10 +1815,14 @@ function _cmd_exec(cmd)::Union{Nothing, Vector{String}}
 end
 
 function _test_ssh_double_path()::Union{Nothing, String}
+    t = _injected_ssh[]
+    t === nothing && return nothing
     _test_doubles_on() || return nothing
-    script = strip(get(ENV, "DISTSSH_TEST_SSH", ""))
-    isempty(script) && return nothing
-    return abspath(script)
+    script = t.double_script()
+    script === nothing && return nothing
+    s = strip(String(script))
+    isempty(s) && return nothing
+    return abspath(s)
 end
 
 function _remote_shell_host_from_exec(exec::Vector{String})::Union{Nothing, String}

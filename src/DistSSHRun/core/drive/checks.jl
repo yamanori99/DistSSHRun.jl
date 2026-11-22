@@ -2,7 +2,7 @@
 
 function check_git_hashes(hosts::Vector{String}, proj_dir::String)
     remote_root = resolve_remote_project_root(proj_dir)
-    env_remote = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
+    env_remote = strip(get(ENV, "DISTSSH_REMOTE_PROJECT_ROOT", ""))
 
     local_hash = get_local_git_hash(proj_dir)
     if local_hash === nothing

@@ -19,8 +19,8 @@ if !isdefined(@__MODULE__, :_run_kit_drive)
         return _child_julia_env(
             merge(
                 Dict(
-                    "DISTRIBUTED_INIT_DELAY_SEC" => "0",
-                    "DISTRIBUTED_PROJECT_ROOT" => _drive_host_root(host_root)
+                    "DISTSSH_INIT_DELAY_SEC" => "0",
+                    "DISTSSH_PROJECT_ROOT" => _drive_host_root(host_root)
                 ),
                 extra_env
             )
@@ -57,7 +57,7 @@ if !isdefined(@__MODULE__, :_run_kit_drive)
         return setenv(cmd, _drive_host_env(host_root; extra_env))
     end
 
-    # Run the kit `drive` CLI with a host `DISTRIBUTED_PROJECT_ROOT`.
+    # Run the kit `drive` CLI with a host `DISTSSH_PROJECT_ROOT`.
     # Name every keyword. A `kwargs...` merge hides the required names from JETLS.
     function _run_kit_drive(;
             script::AbstractString,
@@ -107,7 +107,7 @@ if !isdefined(@__MODULE__, :_run_kit_drive)
         env = _child_julia_env(
             merge(
                 Dict(
-                    "DISTRIBUTED_PROJECT_ROOT" => _drive_host_root(host_root)
+                    "DISTSSH_PROJECT_ROOT" => _drive_host_root(host_root)
                 ), extra_env
             )
         )

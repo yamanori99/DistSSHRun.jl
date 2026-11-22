@@ -33,7 +33,7 @@ using Test
 
     @testset "project layout" begin
         # Standalone kit vs host-app embedding (the two layouts that matter).
-        withenv("DISTRIBUTED_PROJECT_ROOT" => nothing) do
+        withenv("DISTSSH_PROJECT_ROOT" => nothing) do
             _with_tempdir() do tmp
                 d = tmp
                 write(joinpath(d, "Project.toml"), "name = \"DistSSHRun\"\n")
@@ -45,7 +45,7 @@ using Test
                 end
                 @test DistSSHRun._cli_job_root(d, d) == d
             end
-            withenv("DISTRIBUTED_PROJECT_ROOT" => "/override/root") do
+            withenv("DISTSSH_PROJECT_ROOT" => "/override/root") do
                 @test DistSSHRun.cli_project_root("/unused") == "/override/root"
             end
             _with_tempdir() do tmp

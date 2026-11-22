@@ -157,14 +157,14 @@ using Test
                 unset DISTSSH_QUIET
                 unset DISTSSH_PROGRESS
                 unset DISTSSH_VERBOSE
-                unset DISTSSH_CLI_SUBCOMMAND_DONE
+                unset DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE
                 unset DIST_SSH_KIT_CLI_INCLUDE
                 export DISTSSH_TEST=1
                 export DISTSSH_YES=1
                 export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
                 unset JULIA_PROJECT
-                export DISTRIBUTED_PROJECT_ROOT=$(sh_quote(proj))
-                export DISTRIBUTED_INIT_DELAY_SEC=0
+                export DISTSSH_PROJECT_ROOT=$(sh_quote(proj))
+                export DISTSSH_INIT_DELAY_SEC=0
                 $(argv_line(drive_ok))
                 echo '___SPLIT___'
                 $(argv_line(drive_fail))
@@ -275,15 +275,15 @@ using Test
                 unset NO_COLOR
                 unset DISTSSH_QUIET
                 unset DISTSSH_VERBOSE
-                unset DISTSSH_CLI_SUBCOMMAND_DONE
+                unset DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE
                 unset DIST_SSH_KIT_CLI_INCLUDE
                 export DISTSSH_TEST=1
                 export DISTSSH_YES=1
                 export DISTSSH_PROGRESS=1
                 export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
                 unset JULIA_PROJECT
-                export DISTRIBUTED_PROJECT_ROOT=$(sh_quote(proj))
-                export DISTRIBUTED_INIT_DELAY_SEC=0
+                export DISTSSH_PROJECT_ROOT=$(sh_quote(proj))
+                export DISTSSH_INIT_DELAY_SEC=0
                 $(argv_line(drive_cmd)) >$(sh_quote(out_file)) 2>$(sh_quote(err_file))
                 """
             )
@@ -332,14 +332,14 @@ using Test
                     unset DISTSSH_QUIET
                     unset DISTSSH_PROGRESS
                     unset DISTSSH_VERBOSE
-                    unset DISTSSH_CLI_SUBCOMMAND_DONE
+                    unset DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE
                     unset DIST_SSH_KIT_CLI_INCLUDE
                     export DISTSSH_TEST=1
                     export DISTSSH_YES=1
                     export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
                     unset JULIA_PROJECT
-                    export DISTRIBUTED_PROJECT_ROOT=$(sh_quote(proj))
-                    export DISTRIBUTED_INIT_DELAY_SEC=0
+                    export DISTSSH_PROJECT_ROOT=$(sh_quote(proj))
+                    export DISTSSH_INIT_DELAY_SEC=0
                     $(argv_line(drive_cmd))
                     """
                 )

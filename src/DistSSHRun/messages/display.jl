@@ -778,7 +778,7 @@ Job root for the CLI when DistSSHRun is loaded from `kit`.
 
 `kit` is [`kit_project_root`](@ref). If that tree is DistSSHRun's own project
 (checkout, `Pkg.add` depot, or an apps env) and `cwd` is not inside it, use the
-host `Project.toml` walked from `cwd`, or `cwd` if none. `DISTRIBUTED_PROJECT_ROOT`
+host `Project.toml` walked from `cwd`, or `cwd` if none. `DISTSSH_PROJECT_ROOT`
 is applied in [`cli_project_root`](@ref), not here.
 """
 function _cli_job_root(kit::AbstractString, cwd::AbstractString)::String
@@ -796,9 +796,9 @@ function _cli_job_root(kit::AbstractString, cwd::AbstractString)::String
     return cwd_abs
 end
 
-"""Local project root for kit CLI scripts (`ENV[DISTRIBUTED_PROJECT_ROOT]` or cwd / [`kit_project_root`](@ref))."""
+"""Local project root for kit CLI scripts (`ENV[DISTSSH_PROJECT_ROOT]` or cwd / [`kit_project_root`](@ref))."""
 function cli_project_root(kit_src_dir::AbstractString)
-    return get(ENV, "DISTRIBUTED_PROJECT_ROOT") do
+    return get(ENV, "DISTSSH_PROJECT_ROOT") do
         _cli_job_root(kit_project_root(kit_src_dir), pwd())
     end
 end

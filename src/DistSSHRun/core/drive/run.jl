@@ -217,7 +217,7 @@ function _drive_isolated_cmd(
     pairs = Pair{String, String}["JULIA_LOAD_PATH" => _isolated_child_load_path()]
     if project_root !== nothing
         root = strip(String(project_root))
-        isempty(root) || push!(pairs, "DISTRIBUTED_PROJECT_ROOT" => root)
+        isempty(root) || push!(pairs, "DISTSSH_PROJECT_ROOT" => root)
     end
     cmd = addenv(Cmd(argv), pairs...)
     isempty(drop_env) && return cmd
@@ -338,7 +338,7 @@ function _run_drive_parsed_specialized!(
         return 0
     end
 
-    project = something(project_root, get(ENV, "DISTRIBUTED_PROJECT_ROOT", pwd()))
+    project = something(project_root, get(ENV, "DISTSSH_PROJECT_ROOT", pwd()))
     let diag = finish_run_job_diagnostics!(
             parsed;
             command = :drive,
@@ -352,7 +352,7 @@ function _run_drive_parsed_specialized!(
     if parsed.collect_root !== nothing && parsed.collect_hosts !== nothing
         apply_shared_cli_flags!(parsed.cli_session)
         root = canonical_local_path(
-            something(project_root, get(ENV, "DISTRIBUTED_PROJECT_ROOT", pwd())),
+            something(project_root, get(ENV, "DISTSSH_PROJECT_ROOT", pwd())),
         )
         collect_opts = collect_job_options_from_parsed(parsed)
         session = DistSSHSession(
@@ -437,9 +437,9 @@ function _run_drive_parsed_specialized!(
                 Ref{Vector{HostRunResult}}(HostRunResult[]) :
                 resolved_hosts
             if output_dir !== nothing
-                ENV["DISTRIBUTED_OUTPUT_DIR"] = DistSSHRun.canonical_local_path(String(output_dir))
+                ENV["DISTSSH_OUTPUT_DIR"] = DistSSHRun.canonical_local_path(String(output_dir))
             end
-            # Drivers may set `DISTRIBUTED_OUTPUT_DIR` in `init_output_dir!` (demos: `output/`).
+            # Drivers may set `DISTSSH_OUTPUT_DIR` in `init_output_dir!` (demos: `output/`).
             # If still unset, kit allocates `{script}/.distssh/drive/<stem>_<UTC>/`.
             # Lock after that so `.kit.lock` is not the kind root when the driver
             # chose `output/` (or `--output-dir` / a unique batch dir).
@@ -458,7 +458,7 @@ function _run_drive_parsed_specialized!(
                 surface = hasproperty(parsed, :hint_surface) ? parsed.hint_surface::Symbol : :cli,
                 allow_parent_sidecars = old_run isa AbstractString && !isempty(strip(old_run)),
             )
-            ENV["DISTRIBUTED_OUTPUT_DIR"] = out_ready
+            ENV["DISTSSH_OUTPUT_DIR"] = out_ready
             release_output_dir_lock = DistSSHRun.kit_output_dir_lock!(out_ready)
             try
                 code = _run_drive_parsed_locked!(
@@ -514,10 +514,10 @@ end
 
 # Process-global slots a drive frame writes. Empty string is a value; absence is `nothing`.
 const _DRIVE_PROCESS_ENV = (
-    "DISTRIBUTED_PROJECT_ROOT",
-    "DISTRIBUTED_REMOTE_PROJECT_ROOT",
-    "DISTRIBUTED_OUTPUT_DIR",
-    "DISTRIBUTED_RUNNER",
+    "DISTSSH_PROJECT_ROOT",
+    "DISTSSH_REMOTE_PROJECT_ROOT",
+    "DISTSSH_OUTPUT_DIR",
+    "DISTSSH_INTERNAL_RUNNER",
 )
 
 """
@@ -820,8 +820,8 @@ function _run_drive_parsed_locked!(
         empty!(ARGS)
         append!(ARGS, script_args)
 
-        ENV["DISTRIBUTED_RUNNER"] = "1"
-        skip_collect = get(ENV, "DISTRIBUTED_SKIP_COLLECT", "") == "1"
+        ENV["DISTSSH_INTERNAL_RUNNER"] = "1"
+        skip_collect = get(ENV, "DISTSSH_SKIP_COLLECT", "") == "1"
         sentinel_placed = place_drive_sentinels!(
             successful_hosts, script_dir, skip_collect, project_root,
         )

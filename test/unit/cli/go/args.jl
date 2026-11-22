@@ -298,7 +298,7 @@ using Test
         @test occursin("slot pull-back uses Tar", txt)
         @test occursin("only tree go pulls back", txt)
         @test occursin("--deploy-root", txt)
-        @test occursin("Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT", txt)
+        @test occursin("Omit for DISTSSH_REMOTE_PROJECT_ROOT", txt)
         @test !occursin("--remote-path PATH", txt)
     end
 
@@ -352,7 +352,7 @@ using Test
         end
         mktemp() do out_path, out_io
             mktemp() do err_path, err_io
-                code = withenv("DISTSSH_CLI_SUBCOMMAND_DONE" => "") do
+                code = withenv("DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE" => "") do
                     redirect_stdout(out_io) do
                         redirect_stderr(err_io) do
                             DistSSHRun.go(String[])
@@ -368,7 +368,7 @@ using Test
         end
         mktemp() do out_path, out_io
             mktemp() do err_path, err_io
-                code = withenv("DISTSSH_CLI_SUBCOMMAND_DONE" => "") do
+                code = withenv("DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE" => "") do
                     redirect_stdin(devnull) do
                         redirect_stdout(out_io) do
                             redirect_stderr(err_io) do

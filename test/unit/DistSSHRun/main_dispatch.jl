@@ -1,13 +1,13 @@
 using Test
 
 @testset "(@main) dispatch" begin
-    saved_done = get(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE", nothing)
+    saved_done = get(ENV, "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE", nothing)
     try
         # `julia -m DistSSHRun` invokes this module's `main`.
         function _main_capture(args)
             mktemp() do out_path, out_io
                 mktemp() do err_path, err_io
-                    code = withenv("DISTSSH_CLI_SUBCOMMAND_DONE" => "") do
+                    code = withenv("DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE" => "") do
                         redirect_stdout(out_io) do
                             redirect_stderr(err_io) do
                                 DistSSHRun.main(args)
@@ -297,13 +297,13 @@ using Test
                     write(joinpath(proj_a, "Project.toml"), "name = \"ProjAlpha\"\n")
                     write(joinpath(proj_b, "Project.toml"), "name = \"ProjBeta\"\n")
 
-                    let (code_a, out_a, err_a) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_a) do
+                    let (code_a, out_a, err_a) = withenv("DISTSSH_PROJECT_ROOT" => proj_a) do
                             _main_capture(["hostinfo"])
                         end
                         @test code_a == 0
                         @test occursin("ProjAlpha", out_a * err_a)
                     end
-                    let (code_b, out_b, err_b) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_b) do
+                    let (code_b, out_b, err_b) = withenv("DISTSSH_PROJECT_ROOT" => proj_b) do
                             _main_capture(["hostinfo"])
                         end
                         @test code_b == 0
@@ -316,7 +316,7 @@ using Test
 
         # Not `_main_capture`: that `withenv` clears the handshake flag between calls.
         @testset "second main() in the same process (#184)" begin
-            had = get(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE", nothing)
+            had = get(ENV, "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE", nothing)
             function _capture_main(args)
                 mktemp() do out_path, out_io
                     mktemp() do err_path, err_io
@@ -332,17 +332,17 @@ using Test
                 end
             end
             try
-                delete!(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
+                delete!(ENV, "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE")
                 ver = DistSSHRun.dist_ssh_kit_version()
                 let (code, out, _) = _capture_main(["drive", "--version"])
                     @test code == 0
                     @test occursin("DistSSHRun $ver", out)
-                    @test !haskey(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
+                    @test !haskey(ENV, "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE")
                 end
                 let (code, out, _) = _capture_main(["go", "--version"])
                     @test code == 0
                     @test occursin("DistSSHRun $ver", out)
-                    @test !haskey(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
+                    @test !haskey(ENV, "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE")
                 end
                 mktempdir() do dir
                     missing = joinpath(dir, "missing.jl")
@@ -352,7 +352,7 @@ using Test
                         end
                     end
                     @test code != 0
-                    @test !haskey(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
+                    @test !haskey(ENV, "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE")
                 end
                 let (code, out, _) = _capture_main(["--version"])
                     @test code == 0
@@ -360,17 +360,17 @@ using Test
                 end
             finally
                 if had === nothing
-                    delete!(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
+                    delete!(ENV, "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE")
                 else
-                    ENV["DISTSSH_CLI_SUBCOMMAND_DONE"] = had
+                    ENV["DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE"] = had
                 end
             end
         end
     finally
         if saved_done === nothing
-            delete!(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
+            delete!(ENV, "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE")
         else
-            ENV["DISTSSH_CLI_SUBCOMMAND_DONE"] = saved_done
+            ENV["DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE"] = saved_done
         end
     end
 end

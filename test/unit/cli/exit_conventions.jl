@@ -6,7 +6,7 @@ using Test
         mktemp() do out_path, out_io
             mktemp() do err_path, err_io
                 code = withenv(
-                    "DISTSSH_CLI_SUBCOMMAND_DONE" => "",
+                    "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE" => "",
                     "DISTSSH_YES" => nothing,
                 ) do
                     redirect_stdin(devnull) do

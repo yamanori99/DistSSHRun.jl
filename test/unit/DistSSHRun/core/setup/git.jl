@@ -6,7 +6,7 @@ function _git_sync_via_ssh_shim!(bindir, work, remote; hosts = ["dest"])
     return withenv(
         "PATH" => bindir * ":" * path0,
         "DISTSSH_TEST" => nothing,
-        "DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes"
+        "DISTSSH_SSH_OPTS" => "-o BatchMode=yes"
     ) do
         return _capture_stdio() do _, _
             DistSSHRun.git_sync_project_to_hosts!(
@@ -305,7 +305,7 @@ end
         @testset "remote checkout: unreachable host" begin
             if _test_skip_unless_ssh()
                 _apply_quiet_setup_session!()
-                withenv("DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes -o ConnectTimeout=1") do
+                withenv("DISTSSH_SSH_OPTS" => "-o BatchMode=yes -o ConnectTimeout=1") do
                     _with_tempdir() do tmp
                         work = joinpath(tmp, "work")
                         mkpath(work)
@@ -398,7 +398,7 @@ end
                 withenv(
                     "PATH" => bindir * ":" * path0,
                     "DISTSSH_TEST" => nothing,
-                    "DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes"
+                    "DISTSSH_SSH_OPTS" => "-o BatchMode=yes"
                 ) do
                     out, raw = _capture_stdio() do _, _
                         DistSSHRun.git_sync_project_to_hosts!(

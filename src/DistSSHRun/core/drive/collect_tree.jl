@@ -83,7 +83,7 @@ function drive_collect_tree(
             if host_remote === nothing
                 reason = "cannot resolve remote root $(repr(remote_root))"
                 writeln_both("(skip: $reason)")
-                writeln_both("      hint: export DISTRIBUTED_REMOTE_PROJECT_ROOT=<abs path on SSH host>")
+                writeln_both("      hint: export DISTSSH_REMOTE_PROJECT_ROOT=<abs path on SSH host>")
                 _push_collect_skip!(skipped, host, reason)
                 continue
             end
@@ -97,7 +97,7 @@ function drive_collect_tree(
                 )
                 reason = "no directory on host at $host_remote"
                 writeln_both("(skip: $reason)")
-                writeln_both("      hint: export DISTRIBUTED_REMOTE_PROJECT_ROOT=<repo root on SSH host>")
+                writeln_both("      hint: export DISTSSH_REMOTE_PROJECT_ROOT=<repo root on SSH host>")
                 _push_collect_skip!(skipped, host, reason)
                 continue
             end

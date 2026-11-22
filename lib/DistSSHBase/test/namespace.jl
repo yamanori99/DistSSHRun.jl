@@ -21,7 +21,7 @@ using Test
         @test DistSSHBase.cache_relpath(h) == joinpath(".distssh", "cache", "sha256", h)
         @test_throws ArgumentError DistSSHBase.cache_relpath("zz")
 
-        withenv("DISTRIBUTED_OUTPUT_DIR" => nothing) do
+        withenv("DISTSSH_OUTPUT_DIR" => nothing) do
             @test DistSSHBase.stored_path("a.bin"; project = tmp) == joinpath(
                 DistSSHBase.canonical_local_path(tmp), "a.bin",
             )
@@ -30,7 +30,7 @@ using Test
         out = joinpath(tmp, "slot")
         mkpath(out)
         write(joinpath(out, "a.bin"), "from slot")
-        withenv("DISTRIBUTED_OUTPUT_DIR" => out) do
+        withenv("DISTSSH_OUTPUT_DIR" => out) do
             @test DistSSHBase.stored_path("a.bin"; project = tmp) == joinpath(
                 DistSSHBase.canonical_local_path(out), "a.bin",
             )

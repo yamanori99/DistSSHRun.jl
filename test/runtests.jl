@@ -77,6 +77,7 @@ end
             end
             _runtest_include("unit/DistSSHRun/options/heartbeat.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "heartbeat.jl"))
             _runtest_include("unit/DistSSHRun/options/config.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "config.jl"))
+            _runtest_include("unit/DistSSHRun/options/env_contract.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "env_contract.jl"))
             _runtest_include("unit/DistSSHRun/options/job_options.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "job_options.jl"))
             if !_distsshrun_short_skip("unit/DistSSHRun/options/process_env.jl")
                 _runtest_include("unit/DistSSHRun/options/process_env.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "process_env.jl"))

@@ -122,7 +122,7 @@ using Test
             unset DISTSSH_QUIET
             unset DISTSSH_PROGRESS
             unset DISTSSH_VERBOSE
-            unset DISTSSH_CLI_SUBCOMMAND_DONE
+            unset DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE
             unset DIST_SSH_KIT_CLI_INCLUDE
             export DISTSSH_TEST=1
             export DISTSSH_TEST_LOCAL_JULIAUP=$(sh_quote(ju))
@@ -144,7 +144,7 @@ using Test
             $(argv_line(preflight_cmd))
             echo '___SPLIT___'
             export DISTSSH_TEST_SSH=$(sh_quote(ssh))
-            export DISTRIBUTED_PROJECT_ROOT=$(sh_quote(go_proj))
+            export DISTSSH_PROJECT_ROOT=$(sh_quote(go_proj))
             export DISTSSH_YES=1
             $(argv_line(size_cmd))
             echo '___SPLIT___'
@@ -179,7 +179,7 @@ using Test
                 "NO_COLOR",
                 "JULIA_LOAD_PATH",
                 "JULIA_PROJECT",
-                "DISTSSH_CLI_SUBCOMMAND_DONE",
+                "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE",
                 "DIST_SSH_KIT_CLI_INCLUDE",
             )
             env = Dict{String, String}(

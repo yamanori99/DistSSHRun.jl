@@ -11,6 +11,7 @@ end
 
 """Copy the current process `ENV` for parsers and option resolution."""
 function snapshot_process_env()::ProcessEnv
+    DistSSHBase.throw_if_legacy_env!(ENV)
     return ProcessEnv(ENV)
 end
 

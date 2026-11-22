@@ -62,7 +62,7 @@ const _GO_SLOT_LOADER_SRC = let _go_slot_state_dir = DistSSHBase.LOCAL_STATE_DIR
                     parent = dirname(dir)
                 end
             end
-            dir = get(ENV, "DISTRIBUTED_OUTPUT_DIR", pwd())
+            dir = get(ENV, "DISTSSH_OUTPUT_DIR", pwd())
             dest = joinpath(dir, $(_go_slot_state_dir |> repr))
             mkpath(dest)
             open(joinpath(dest, "provenance-slot.toml"), "w") do io
@@ -76,7 +76,7 @@ const _GO_SLOT_LOADER_SRC = let _go_slot_state_dir = DistSSHBase.LOCAL_STATE_DIR
             println(io)
         end
         try
-            dir = get(ENV, "DISTRIBUTED_OUTPUT_DIR", pwd())
+            dir = get(ENV, "DISTSSH_OUTPUT_DIR", pwd())
             dest = joinpath(dir, $(_go_slot_state_dir |> repr))
             mkpath(dest)
             open(joinpath(dest, "provenance-slot.toml"), "w") do io
@@ -100,10 +100,10 @@ const _GIT_DIFF_FLAGS = (
 )
 
 const _PROVENANCE_SOURCE_ENV = (
-    commit = "DISTSSH_SOURCE_COMMIT",
-    dirty = "DISTSSH_SOURCE_DIRTY",
-    captured = "DISTSSH_SOURCE_CAPTURED",
-    untracked = "DISTSSH_SOURCE_UNTRACKED",
+    commit = "DISTSSH_INTERNAL_SOURCE_COMMIT",
+    dirty = "DISTSSH_INTERNAL_SOURCE_DIRTY",
+    captured = "DISTSSH_INTERNAL_SOURCE_CAPTURED",
+    untracked = "DISTSSH_INTERNAL_SOURCE_UNTRACKED",
 )
 
 const _SNAP_KEYS = (
@@ -728,7 +728,7 @@ end
 """Write this process's `worker_pmap` rows into the go-slot snapshot. No-op elsewhere."""
 function _flush_go_slot_pmap_items!()
     try
-        dir = strip(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
+        dir = strip(get(ENV, "DISTSSH_OUTPUT_DIR", ""))
         isempty(dir) && return nothing
         path = DistSSHBase.resolve_local_state_item(dir, _GO_SLOT_PROVENANCE_NAME)
         isfile(path) || return nothing
@@ -840,7 +840,7 @@ function _source_from_env()::Union{Nothing, Dict{String, Any}}
     return isempty(built) ? nothing : built
 end
 
-"""Drop inherited `DISTSSH_SOURCE_*` keys that this explicit `source` did not set.
+"""Drop inherited source hand-off keys that this explicit `source` did not set.
 
 `_execute_detached_env` copies the parent environment first. A partial `source`
 would otherwise keep stale fields from that copy.

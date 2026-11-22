@@ -1184,7 +1184,7 @@ end
     ) == "/home/dev/app/output"
 end
 
-@testset "work layout ignores poisoned DISTRIBUTED_REMOTE_PROJECT_ROOT" begin
+@testset "work layout ignores poisoned DISTSSH_REMOTE_PROJECT_ROOT" begin
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"LayoutPoison\"\n")
         write(
@@ -1205,7 +1205,7 @@ end
             )
         )
         try
-            withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => work) do
+            withenv("DISTSSH_REMOTE_PROJECT_ROOT" => work) do
                 got = DistSSHRun._remote_work_layout_path(
                     joinpath(proj, "output"), proj, ["child-1"]
                 )
@@ -1240,7 +1240,7 @@ end
         )
         try
             # Session/ENV points at a different deploy root than the stale selection.
-            withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/home/dev/app") do
+            withenv("DISTSSH_REMOTE_PROJECT_ROOT" => "/home/dev/app") do
                 deploy = DistSSHRun._layout_intended_deploy_root(
                     proj, DistSSHRun.active_source_selection()
                 )
@@ -1373,20 +1373,20 @@ end
         return nothing
     end
     function _with_saved_project_env(f::Function)
-        old_proj = get(ENV, "DISTRIBUTED_PROJECT_ROOT", nothing)
-        old_remote = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+        old_proj = get(ENV, "DISTSSH_PROJECT_ROOT", nothing)
+        old_remote = get(ENV, "DISTSSH_REMOTE_PROJECT_ROOT", nothing)
         try
             return f()
         finally
             if old_proj === nothing
-                delete!(ENV, "DISTRIBUTED_PROJECT_ROOT")
+                delete!(ENV, "DISTSSH_PROJECT_ROOT")
             else
-                ENV["DISTRIBUTED_PROJECT_ROOT"] = old_proj
+                ENV["DISTSSH_PROJECT_ROOT"] = old_proj
             end
             if old_remote === nothing
-                delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+                delete!(ENV, "DISTSSH_REMOTE_PROJECT_ROOT")
             else
-                ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = old_remote
+                ENV["DISTSSH_REMOTE_PROJECT_ROOT"] = old_remote
             end
         end
     end

@@ -43,7 +43,7 @@ check_write_kit_env() {
   env_file="${base}/.generated/env.sh"
   [[ -f "${env_file}" ]] || { fail "${label}: missing env.sh"; return; }
 
-  unset DISTRIBUTED_SSH_OPTS GIT_SSH_COMMAND
+  unset DISTSSH_SSH_OPTS GIT_SSH_COMMAND
   set -a
   # shellcheck disable=SC1090
   source "${env_file}"
@@ -68,15 +68,15 @@ check_write_kit_env() {
   if command -v julia >/dev/null 2>&1; then
     local jl
     jl="$(
-      WANT_CFG="${ssh_config}" DISTRIBUTED_SSH_OPTS="${DISTRIBUTED_SSH_OPTS}" \
+      WANT_CFG="${ssh_config}" DISTSSH_SSH_OPTS="${DISTSSH_SSH_OPTS}" \
         julia --startup-file=no -e '
-          opts = String[String(x) for x in Base.shell_split(ENV["DISTRIBUTED_SSH_OPTS"])]
+          opts = String[String(x) for x in Base.shell_split(ENV["DISTSSH_SSH_OPTS"])]
           want = ENV["WANT_CFG"]
           println(opts == ["-F", want, "-o", "RequestTTY=no"] ? "OK" : "BAD $(repr(opts))")
         '
     )"
     if [[ "${jl}" == "OK" ]]; then
-      pass "${label}: Base.shell_split DISTRIBUTED_SSH_OPTS"
+      pass "${label}: Base.shell_split DISTSSH_SSH_OPTS"
     else
       fail "${label}: Base.shell_split ${jl}"
     fi
@@ -150,7 +150,7 @@ if [[ "${LIVE}" -eq 1 ]]; then
   else
     "${SCRIPT_DIR}/prepare-manual-remote-root.sh"
     "${SCRIPT_DIR}/write-kit-env.sh"
-    unset DISTRIBUTED_SSH_OPTS GIT_SSH_COMMAND
+    unset DISTSSH_SSH_OPTS GIT_SSH_COMMAND
     set -a
     # shellcheck disable=SC1090
     source "${ROOT}/.generated/env.sh"
@@ -169,8 +169,8 @@ if [[ "${LIVE}" -eq 1 ]]; then
         fail "live ${host}: mode=${mode}"
       fi
     done
-    if "${SCRIPT_DIR}/with-env.sh" bash -c 'test -n "${DISTRIBUTED_SSH_OPTS:-}" && test -n "${GIT_SSH_COMMAND:-}"'; then
-      pass "live: with-env provides DISTRIBUTED_SSH_OPTS and GIT_SSH_COMMAND"
+    if "${SCRIPT_DIR}/with-env.sh" bash -c 'test -n "${DISTSSH_SSH_OPTS:-}" && test -n "${GIT_SSH_COMMAND:-}"'; then
+      pass "live: with-env provides DISTSSH_SSH_OPTS and GIT_SSH_COMMAND"
     else
       fail "live: with-env missing env"
     fi

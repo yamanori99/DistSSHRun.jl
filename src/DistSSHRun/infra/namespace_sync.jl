@@ -263,8 +263,9 @@ function _tar_cache_one_host!(
         return HostResult(h, false, "could not create remote cache directory")
     end
     julia_bin = if _test_doubles_on()
-        w = strip(get(ENV, "DISTSSH_TEST_JULIA_WHICH", ""))
-        isempty(w) ? "/usr/bin/julia" : w
+        t = DistSSHBase._injected_ssh[]
+        w = t === nothing ? "" : String(something(t.remote_julia_which(), ""))
+        isempty(strip(w)) ? "/usr/bin/julia" : w
     else
         try
             pin_remote_julia(h)

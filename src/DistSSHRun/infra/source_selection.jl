@@ -860,7 +860,7 @@ function _layout_intended_deploy_root(
         local_repo::AbstractString,
         sel::Union{Nothing, SourceSelection},
     )::String
-    env_rr = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
+    env_rr = strip(get(ENV, "DISTSSH_REMOTE_PROJECT_ROOT", ""))
     if sel !== nothing && !isempty(env_rr) &&
             _deploy_roots_equivalent(env_rr, sel.work_root)
         # After assign, ENV is the work root; keep the selection's deploy root.

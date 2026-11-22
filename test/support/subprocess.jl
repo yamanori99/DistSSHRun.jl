@@ -14,14 +14,14 @@ if !isdefined(@__MODULE__, :_child_julia_env)
     # Drop parent `NO_COLOR` so a TTY child can use the live `:progress` default
     # (`kit_stdout_is_live`). Pass `NO_COLOR` in `extra` when a child must keep it.
     function _child_julia_env(extra::AbstractDict = Dict{String, String}())
-        # In-process `_run_kit_cli_script` sets DISTSSH_CLI_SUBCOMMAND_DONE so a
+        # In-process `_run_kit_cli_script` sets DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE so a
         # nested `main` does not run twice. Children must not inherit that, or
         # `DistSSHRun.main` / `-m DistSSHRun` returns 0 with empty output.
         skip = Set(
             (
                 "JULIA_LOAD_PATH",
                 "JULIA_PROJECT",
-                "DISTSSH_CLI_SUBCOMMAND_DONE",
+                "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE",
                 "DIST_SSH_KIT_CLI_INCLUDE",
                 "NO_COLOR",
             )

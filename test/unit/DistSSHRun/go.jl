@@ -6,8 +6,8 @@ using Dates
 # Concurrent local `go!` is integration/go/overlap.jl.
 
 @testset "go" begin
-    saved_proj = get(ENV, "DISTRIBUTED_PROJECT_ROOT", nothing)
-    saved_done = get(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE", nothing)
+    saved_proj = get(ENV, "DISTSSH_PROJECT_ROOT", nothing)
+    saved_done = get(ENV, "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE", nothing)
     @testset "_go_plan_slots" begin
         let s = DistSSHRun._go_plan_slots(String[])
             @test length(s) == 1
@@ -437,7 +437,7 @@ using Dates
             DistSSHRun._remote_shell_path_word("slot/.distssh/provenance-slot.jl"),
             with_args
         )
-        @test occursin("DISTSSH_PROVENANCE_SLOT", with_args)
+        @test occursin("DISTSSH_INTERNAL_PROVENANCE_SLOT", with_args)
 
         withenv("DISTSSH_JOB_ID" => "repro-1") do
             tagged = DistSSHRun._go_remote_slot_shell_inner(
@@ -679,7 +679,7 @@ using Dates
             write(
                 script,
                 """
-                slot = basename(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
+                slot = basename(get(ENV, "DISTSSH_OUTPUT_DIR", ""))
                 if endswith(slot, "-1")
                     exit(2)
                 else
@@ -807,8 +807,8 @@ using Dates
                 status = redirect_stdout(devnull) do
                     redirect_stderr(err_io) do
                         withenv(
-                            "DISTRIBUTED_PROJECT_ROOT" => proj,
-                            "DISTSSH_CLI_SUBCOMMAND_DONE" => ""
+                            "DISTSSH_PROJECT_ROOT" => proj,
+                            "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE" => ""
                         ) do
                             DistSSHRun.main(["go", "-q", "--head-slots", "1", "--output-dir", dirty, script])
                         end
@@ -1001,13 +1001,13 @@ using Dates
         end
     end
     if saved_proj === nothing
-        delete!(ENV, "DISTRIBUTED_PROJECT_ROOT")
+        delete!(ENV, "DISTSSH_PROJECT_ROOT")
     else
-        ENV["DISTRIBUTED_PROJECT_ROOT"] = saved_proj
+        ENV["DISTSSH_PROJECT_ROOT"] = saved_proj
     end
     if saved_done === nothing
-        delete!(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
+        delete!(ENV, "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE")
     else
-        ENV["DISTSSH_CLI_SUBCOMMAND_DONE"] = saved_done
+        ENV["DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE"] = saved_done
     end
 end
