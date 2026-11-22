@@ -12,7 +12,7 @@ function with_churn_repo(f)
         run(`git -C $dir config user.name test`)
         f(dir)
     finally
-        rm(dir; force=true, recursive=true)
+        rm(dir; force = true, recursive = true)
     end
     return nothing
 end
@@ -40,7 +40,7 @@ end
                 run(`git -C $dir clone --depth 1 file://$dir $shallow`)
                 @test_throws ErrorException ChurnCompute.compute_churn(shallow)
             finally
-                rm(shallow; force=true, recursive=true)
+                rm(shallow; force = true, recursive = true)
             end
         end
     end
@@ -55,7 +55,7 @@ end
             git_commit(dir, "rename only")
             write(new, "module Beta\nline1\nline2\nline3\nend\n")
             git_commit(dir, "edit beta")
-            report = ChurnCompute.compute_churn(dir; now=DateTime(2026, 1, 31, 15))
+            report = ChurnCompute.compute_churn(dir; now = DateTime(2026, 1, 31, 15))
             row = only(report.areas)
             @test row.package == "DistSSHRun"
             @test row.added_30 >= 1
@@ -80,7 +80,7 @@ end
             ENV["GIT_AUTHOR_DATE"] = "2026-06-12T12:00:00"
             ENV["GIT_COMMITTER_DATE"] = "2026-06-12T12:00:00"
             git_commit(dir, "remove old")
-            report = ChurnCompute.compute_churn(dir; now=fixed)
+            report = ChurnCompute.compute_churn(dir; now = fixed)
             @test any(r.path == "src/Old.jl" for r in report.removed)
             keep = only(filter(r -> occursin("Keep", r.area) || r.files == 1, report.areas))
             @test keep.added_7 >= 1

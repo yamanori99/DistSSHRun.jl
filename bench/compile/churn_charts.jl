@@ -12,22 +12,22 @@ function write_churn_summary_chart(report, path::AbstractString)
     added = [r.added_30 for r in report.areas]
     deleted = [-r.deleted_30 for r in report.areas]
     net = [r.added_30 - r.deleted_30 for r in report.areas]
-    trace_add = bar(; x=added, y=labels, orientation="h", name="+30d", marker_color="#3b82f6")
-    trace_del = bar(; x=deleted, y=labels, orientation="h", name="−30d", marker_color="#ef4444")
+    trace_add = bar(; x = added, y = labels, orientation = "h", name = "+30d", marker_color = "#3b82f6")
+    trace_del = bar(; x = deleted, y = labels, orientation = "h", name = "−30d", marker_color = "#ef4444")
     trace_net = scatter(;
-        x=net,
-        y=labels,
-        mode="markers",
-        name="net",
-        marker=attr(symbol="line-ns", size=10, color="#111827"),
+        x = net,
+        y = labels,
+        mode = "markers",
+        name = "net",
+        marker = attr(symbol = "line-ns", size = 10, color = "#111827"),
     )
     layout = Layout(;
-        title="30-day churn by area",
-        xaxis=attr(title="lines"),
-        yaxis=attr(autorange="reversed"),
-        barmode="overlay",
-        height=max(360, 18 * length(labels)),
-        margin=attr(l=220),
+        title = "30-day churn by area",
+        xaxis = attr(title = "lines"),
+        yaxis = attr(autorange = "reversed"),
+        barmode = "overlay",
+        height = max(360, 18 * length(labels)),
+        margin = attr(l = 220),
     )
     p = Plot([trace_add, trace_del, trace_net], layout)
     savefig(p, path)
@@ -43,15 +43,15 @@ function write_churn_weekly_chart(report, path::AbstractString)
     pos = [get(report.weekly_added, wk, 0) for wk in weeks]
     neg = [-get(report.weekly_deleted, wk, 0) for wk in weeks]
     net = [get(report.weekly_added, wk, 0) - get(report.weekly_deleted, wk, 0) for wk in weeks]
-    trace_add = bar(; x=labels, y=pos, name="+", marker_color="#3b82f6")
-    trace_del = bar(; x=labels, y=neg, name="−", marker_color="#ef4444")
-    trace_net = scatter(; x=labels, y=net, mode="markers+lines", name="net", line=attr(color="#111827"))
+    trace_add = bar(; x = labels, y = pos, name = "+", marker_color = "#3b82f6")
+    trace_del = bar(; x = labels, y = neg, name = "−", marker_color = "#ef4444")
+    trace_net = scatter(; x = labels, y = net, mode = "markers+lines", name = "net", line = attr(color = "#111827"))
     layout = Layout(;
-        title="Weekly churn (all areas)",
-        barmode="relative",
-        xaxis=attr(title="week start (JST)"),
-        yaxis=attr(title="lines"),
-        height=420,
+        title = "Weekly churn (all areas)",
+        barmode = "relative",
+        xaxis = attr(title = "week start (JST)"),
+        yaxis = attr(title = "lines"),
+        height = 420,
     )
     p = Plot([trace_add, trace_del, trace_net], layout)
     savefig(p, path)
@@ -71,11 +71,11 @@ function write_churn_heatmap(report, path::AbstractString)
         by_week = Dict(pairs)
         push!(z, Float64[get(by_week, wk, 0) for wk in weeks])
     end
-    trace = heatmap(; z=z, x=string.(weeks), y=labels, colorscale="RdBu", zmid=0)
+    trace = heatmap(; z = z, x = string.(weeks), y = labels, colorscale = "RdBu", zmid = 0)
     layout = Layout(;
-        title="Weekly net churn heatmap",
-        height=max(360, 16 * length(labels)),
-        margin=attr(l=220),
+        title = "Weekly net churn heatmap",
+        height = max(360, 16 * length(labels)),
+        margin = attr(l = 220),
     )
     p = Plot([trace], layout)
     savefig(p, path)
