@@ -22,8 +22,7 @@ end
 @testset "drive require-git dirty tree warning newline" begin
     Sys.which("git") === nothing && @test_skip "git not in PATH"
     _with_tempdir() do proj
-        write(joinpath(proj, "Project.toml"), "name = \"DriveWarn\"\n")
-        _sync_test_project_manifest!(proj)
+        _write_test_job_with_distsshrun!(proj; name = "DriveWarn")
         write(joinpath(proj, "README.md"), "seed\n")
         _git_init_min!(proj)
         write(joinpath(proj, "README.md"), "dirty\n")

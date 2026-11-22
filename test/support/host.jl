@@ -1,6 +1,52 @@
 if !isdefined(@__MODULE__, :_write_host_project!)
 
     # `Pkg.is_manifest_current` must be `true` before drive/go verification.
+    # Job env that passes drive/go DistSSHRun verification (resolve + instantiate).
+    function _ensure_test_job_lists_distsshrun!(proj::AbstractString)
+        proj = abspath(string(proj))
+        pf = joinpath(proj, "Project.toml")
+        isfile(pf) || return nothing
+        raw = read(pf, String)
+        occursin("DistSSHRun", raw) && return nothing
+        dep = "DistSSHRun = \"b568025c-2759-4ef1-8b14-17d00e2cd000\""
+        if occursin("[deps]", raw)
+            raw = replace(raw, "[deps]" => "[deps]\n    $dep")
+        else
+            raw = raw * "\n[deps]\n    $dep\n"
+        end
+        write(pf, raw)
+        _sync_test_project_manifest!(proj)
+        julia = _julia_exe()
+        cmd = setenv(
+            `$julia --startup-file=no --project=$proj -e "using Pkg; Pkg.instantiate()"`,
+            _child_julia_env(),
+        )
+        proc, combined = _run_subprocess(cmd)
+        _assert_proc_ok(proc, combined; label = "Pkg.instantiate ensure DistSSHRun")
+        return nothing
+    end
+
+    function _write_test_job_with_distsshrun!(proj::AbstractString; name::String = "Job")
+        proj = abspath(string(proj))
+        write(
+            joinpath(proj, "Project.toml"),
+            """
+            name = "$(name)"
+            [deps]
+            DistSSHRun = "b568025c-2759-4ef1-8b14-17d00e2cd000"
+            """,
+        )
+        _sync_test_project_manifest!(proj)
+        julia = _julia_exe()
+        cmd = setenv(
+            `$julia --startup-file=no --project=$proj -e "using Pkg; Pkg.instantiate()"`,
+            _child_julia_env(),
+        )
+        proc, combined = _run_subprocess(cmd)
+        _assert_proc_ok(proc, combined; label = "Pkg.instantiate test job DistSSHRun")
+        return nothing
+    end
+
     function _sync_test_project_manifest!(proj::AbstractString)
         proj = abspath(string(proj))
         isfile(joinpath(proj, "Project.toml")) ||

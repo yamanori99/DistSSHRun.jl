@@ -733,8 +733,7 @@ end
 
 @testset "distributed worker snapshot sysimage.default" begin
     _with_tempdir() do proj
-        write(joinpath(proj, "Project.toml"), "name = \"WorkerDefSys\"\n")
-        _sync_test_project_manifest!(proj)
+        _write_test_job_with_distsshrun!(proj; name = "WorkerDefSys")
         flags = DistSSHRun.worker_exeflag_strings(proj)
         env = Dict(DistSSHRun.worker_env_pairs(proj))
         addprocs(1; exeflags = Cmd(flags), env = env)

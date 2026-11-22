@@ -5,23 +5,7 @@ using TOML
 using DistSSHRun
 
 function _env_verify_job!(proj::AbstractString)
-    write(
-        joinpath(proj, "Project.toml"),
-        """
-        name = "EnvVerifyJob"
-        [deps]
-        DistSSHRun = "b568025c-2759-4ef1-8b14-17d00e2cd000"
-        """,
-    )
-    _sync_test_project_manifest!(proj)
-    julia = _julia_exe()
-    cmd = setenv(
-        `$julia --startup-file=no --project=$proj -e "using Pkg; Pkg.instantiate()"`,
-        _child_julia_env(),
-    )
-    proc, combined = _run_subprocess(cmd)
-    _assert_proc_ok(proc, combined; label = "Pkg.instantiate env verify job")
-    return nothing
+    return _write_test_job_with_distsshrun!(proj; name = "EnvVerifyJob")
 end
 
 function _env_verify_job_distssh_pkg!(proj::AbstractString)

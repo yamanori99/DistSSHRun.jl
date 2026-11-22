@@ -605,8 +605,7 @@ using Dates
 
     @testset "quiet suppresses Log file on stdout" begin
         _with_tempdir() do proj
-            write(joinpath(proj, "Project.toml"), "name = \"GoQuietLog\"\n")
-            _sync_test_project_manifest!(proj)
+            _write_test_job_with_distsshrun!(proj; name = "GoQuietLog")
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
             with_kit_verbosity(:verbose) do
@@ -651,8 +650,7 @@ using Dates
 
     @testset "DISTSSH_HOSTS_FILE not reapplied when workers set" begin
         _with_tempdir() do proj
-            write(joinpath(proj, "Project.toml"), "name = \"GoHosts\"\n")
-            _sync_test_project_manifest!(proj)
+            _write_test_job_with_distsshrun!(proj; name = "GoHosts")
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
             hf = joinpath(proj, "hosts")
@@ -671,8 +669,7 @@ using Dates
 
     @testset "later succeeding slot does not mask earlier failure" begin
         _with_tempdir() do proj::String
-            write(joinpath(proj, "Project.toml"), "name = \"GoMask\"\n")
-            _sync_test_project_manifest!(proj)
+            _write_test_job_with_distsshrun!(proj; name = "GoMask")
             script = joinpath(proj, "job.jl")
             write(
                 script,
@@ -715,8 +712,7 @@ using Dates
 
     @testset "failed slot names last top-level" begin
         _with_tempdir() do proj
-            write(joinpath(proj, "Project.toml"), "name = \"GoFailSlot\"\n")
-            _sync_test_project_manifest!(proj)
+            _write_test_job_with_distsshrun!(proj; name = "GoFailSlot")
             script = joinpath(proj, "job.jl")
             write(
                 script,
@@ -744,8 +740,7 @@ using Dates
 
     @testset "non-empty output directory" begin
         _with_tempdir() do proj
-            write(joinpath(proj, "Project.toml"), "name = \"GoDirty\"\n")
-            _sync_test_project_manifest!(proj)
+            _write_test_job_with_distsshrun!(proj; name = "GoDirty")
             script = joinpath(proj, "job.jl")
             write(script, "println(\"ran\")\n")
             dirty = joinpath(proj, "batch")
@@ -825,8 +820,7 @@ using Dates
 
     @testset "early go! exit drains deferred input hashes" begin
         _with_tempdir() do proj
-            write(joinpath(proj, "Project.toml"), "name = \"GoHashDrain\"\n")
-            _sync_test_project_manifest!(proj)
+            _write_test_job_with_distsshrun!(proj; name = "GoHashDrain")
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
             out = joinpath(proj, "out")
@@ -952,8 +946,7 @@ using Dates
         proj = mktempdir()
         released = Ref(false)
         try
-            write(joinpath(proj, "Project.toml"), "name = \"GoDrift\"\n")
-            _sync_test_project_manifest!(proj)
+            _write_test_job_with_distsshrun!(proj; name = "GoDrift")
             write(joinpath(proj, "job.jl"), "1\n")
             pack = DistSSHRun._pack_project_tree(proj)
             rows = Any[

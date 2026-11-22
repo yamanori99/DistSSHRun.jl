@@ -28,8 +28,7 @@ end
     function _drive_bind_reject_session(tmp::AbstractString, hosts_path::AbstractString, best_effort::Bool)
         proj = joinpath(tmp, "proj")
         mkpath(proj)
-        write(joinpath(proj, "Project.toml"), "name = \"BindPreSsh\"\n")
-        _sync_test_project_manifest!(proj)
+        _write_test_job_with_distsshrun!(proj; name = "BindPreSsh")
         script = joinpath(proj, "job.jl")
         # No `function main`. `integration/drive/api.jl` is the first in-process
         # driver include with `main` and asserts stderr has no warn-overwrite.
@@ -141,8 +140,7 @@ end
             )
             proj = joinpath(tmp, "proj")
             mkpath(proj)
-            write(joinpath(proj, "Project.toml"), "name = \"BindCli\"\n")
-            _sync_test_project_manifest!(proj)
+            _write_test_job_with_distsshrun!(proj; name = "BindCli")
             script = joinpath(proj, "job.jl")
             write(
                 script,

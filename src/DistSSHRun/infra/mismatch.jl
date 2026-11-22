@@ -538,8 +538,8 @@ public assert_controller_default_sysimage!
 
 """Controller gates for drive, and go before worker environment verification."""
 function assert_controller_environment_for_verify!(project::AbstractString)
-    assert_job_resolves_required_distssh!(project)
     assert_controller_manifest_for_environment_verify!(project)
+    assert_job_resolves_required_distssh!(project)
     assert_controller_manifest_current!(project)
     assert_controller_default_sysimage!()
     assert_controller_loaded_identity!()

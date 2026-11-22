@@ -1151,8 +1151,7 @@ end
 
     @testset ":go dispatch" begin
         _with_tempdir() do proj
-            write(joinpath(proj, "Project.toml"), "name = \"ExecuteGo\"\n")
-            _sync_test_project_manifest!(proj)
+            _write_test_job_with_distsshrun!(proj; name = "ExecuteGo")
             script = joinpath(proj, "job.jl")
             write(
                 script, """

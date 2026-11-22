@@ -30,8 +30,7 @@ const _CLI_BIND_FAKE_SSH =
     function _minimal_proj(tmp::AbstractString)
         proj = joinpath(tmp, "proj")
         mkpath(proj)
-        write(joinpath(proj, "Project.toml"), "name = \"CliBindEntry\"\n")
-        _sync_test_project_manifest!(proj)
+        _write_test_job_with_distsshrun!(proj; name = "CliBindEntry")
         script = joinpath(proj, "job.jl")
         write(
             script,
