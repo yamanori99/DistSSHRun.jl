@@ -12,7 +12,7 @@ if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
     function _capture_test_harness_env!()
         if _TEST_HARNESS_ENV[] === nothing
             _TEST_HARNESS_ENV[] = (
-                load_path = copy(LOAD_PATH),
+                load_path = String[LOAD_PATH...],
                 julia_lp = get(ENV, "JULIA_LOAD_PATH", nothing),
                 active = Base.ACTIVE_PROJECT[],
             )
@@ -84,14 +84,12 @@ if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
         return nothing
     end
 
+    const _TEST_MIN_LOAD_PATH = ("@", "@stdlib")
+
     function _restore_test_harness_env!()
         snap = _TEST_HARNESS_ENV[]
         snap === nothing && return nothing
-        try
-            empty!(LOAD_PATH)
-            append!(LOAD_PATH, snap.load_path)
-        catch
-        end
+        lp = isempty(snap.load_path) ? collect(String, _TEST_MIN_LOAD_PATH) : snap.load_path
         try
             if snap.julia_lp === nothing
                 delete!(ENV, "JULIA_LOAD_PATH")
@@ -104,11 +102,22 @@ if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
             Base.ACTIVE_PROJECT[] = snap.active
         catch
         end
+        try
+            empty!(LOAD_PATH)
+            append!(LOAD_PATH, lp)
+        catch
+            empty!(LOAD_PATH)
+            append!(LOAD_PATH, _TEST_MIN_LOAD_PATH)
+        end
+        if !any(==("@stdlib"), LOAD_PATH)
+            push!(LOAD_PATH, "@stdlib")
+        end
         return nothing
     end
 
     function _with_test_load_path_guard(f::Function)
         _capture_test_harness_env!()
+        _restore_test_harness_env!()
         try
             return f()
         finally

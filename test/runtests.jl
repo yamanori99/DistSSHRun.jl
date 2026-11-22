@@ -22,6 +22,9 @@ using Test
 using DistSSHRun
 
 include(joinpath(@__DIR__, "support.jl"))
+if isdefined(Main, :_capture_test_harness_env!)
+    _capture_test_harness_env!()
+end
 
 # In-process default matches TTY CLI (`:progress`), not module-load `:verbose`
 # or a pipe. Child CLI processes still auto-detect their own stdout.
