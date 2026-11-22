@@ -26,8 +26,9 @@ end
 function splice_churn_section(readme_path::AbstractString, section::AbstractString)
     isfile(readme_path) || return open(io -> write(io, section), readme_path, "w")
     text = read(readme_path, String)
-    start_m = match(r"\n## Source churn\n", text)
-    if start_m === nothing
+    marker = "\n## Source churn\n"
+    idx = findfirst(marker, text)
+    if idx === nothing
         open(readme_path, "w") do io
             print(io, text)
             endswith(text, "\n") || println(io)
@@ -36,15 +37,11 @@ function splice_churn_section(readme_path::AbstractString, section::AbstractStri
         end
         return nothing
     end
-    start_i = last(start_m.offset)
-    rest = text[(start_i + length(start_m.match)):end]
-    stop = findfirst("\n## ", rest[2:end])
-    tail = if stop === nothing
-        ""
-    else
-        rest[(stop + 1):end]
-    end
-    head = text[1:(start_i - 1)]
+    start_pos = first(idx)
+    head = text[begin:start_pos]
+    rest = text[(start_pos + length(marker)):end]
+    stop = findfirst("\n## ", rest)
+    tail = stop === nothing ? "" : rest[first(stop):end]
     open(readme_path, "w") do io
         write(io, head)
         write(io, section)
