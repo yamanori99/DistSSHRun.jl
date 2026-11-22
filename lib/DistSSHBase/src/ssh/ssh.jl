@@ -1543,9 +1543,7 @@ function _fake_double_child_julia_env()::Dict{String, String}
     for (k, v) in ENV
         ks = String(k)
         ks in skip && continue
-        vs = String(v)
-        isempty(vs) && continue
-        env[ks] = vs
+        env[ks] = String(v)
     end
     env["JULIA_LOAD_PATH"] = _child_load_path_string()
     return env
