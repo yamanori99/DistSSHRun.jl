@@ -333,6 +333,17 @@ function _identity_env_file_mismatches(parent::AbstractDict, other::AbstractDict
     return lines
 end
 
+function _identity_job_distssh_load_mismatches(other::AbstractDict)::Vector{String}
+    st = strip(get(other, "job.distssh", ""))
+    st == "ok" && return String[]
+    st == "" && return String[]
+    err = strip(get(other, "job.distssh.error", ""))
+    if isempty(err)
+        return String["job environment: DistSSHRun is not loadable from --project (job.distssh=$(st))"]
+    end
+    return String[replace(err, '\n' => ' ')]
+end
+
 """
     identity_mismatches(parent, other; unsafe_skip_env_digests=false) -> Vector{String}
 
@@ -351,17 +362,6 @@ When the parent has a non-empty `manifest.sha256`, the worker must supply the
 same digest or the check fails (unless `unsafe_skip_env_digests`); an empty worker
 snapshot is a mismatch. `"julia"` binary path is not compared.
 """
-function _identity_job_distssh_load_mismatches(other::AbstractDict)::Vector{String}
-    st = strip(get(other, "job.distssh", ""))
-    st == "ok" && return String[]
-    st == "" && return String[]
-    err = strip(get(other, "job.distssh.error", ""))
-    if isempty(err)
-        return String["job environment: DistSSHRun is not loadable from --project (job.distssh=$(st))"]
-    end
-    return String[replace(err, '\n' => ' ')]
-end
-
 function identity_mismatches(
         parent::AbstractDict,
         other::AbstractDict;
