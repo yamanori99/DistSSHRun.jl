@@ -721,9 +721,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TITLE: CI weekly failed
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          BODY_PREFIX: "Not a PR check. Re-run **CI weekly** after a fix. Downstream is not monitored.
-
-          "
+          BODY_PREFIX: 'Not a PR check. Re-run **CI weekly** after a fix. Downstream is not monitored.'
           MONITOR_RESULTS: |
             test:${{ needs.test.result }}
             test-macos:${{ needs.test-macos.result }}
