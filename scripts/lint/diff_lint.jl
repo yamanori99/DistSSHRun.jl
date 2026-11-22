@@ -1457,6 +1457,18 @@ function self_test_body_main()
     skip_ok = "for kind in ks\n    kind == \"x\" && continue #1\nend\n"
     isempty(collect_loop_skip("", Dict("test/t.jl" => [Hunk(2, 0, 2, 1, String[])]), _ -> skip_ok; whole = false)) ||
         die("self-test: loop skip reason")
+    if_src = "for kind in kinds\n    if kind == \"slow\"\n        continue\n    end\nend\n"
+    length(collect_loop_skip("", Dict("test/t.jl" => [Hunk(2, 0, 2, 3, String[])]), _ -> if_src; whole = false)) >= 1 ||
+        die("self-test: loop skip if continue")
+    if_ok = "for kind in kinds\n    if kind == \"slow\" #1\n        continue\n    end\nend\n"
+    isempty(collect_loop_skip("", Dict("test/t.jl" => [Hunk(2, 0, 2, 3, String[])]), _ -> if_ok; whole = false)) ||
+        die("self-test: loop skip if continue reason")
+    if_flag = "for kind in kinds\n    if flag\n        continue\n    end\nend\n"
+    isempty(collect_loop_skip("", Dict("test/t.jl" => [Hunk(2, 0, 2, 3, String[])]), _ -> if_flag; whole = false)) ||
+        die("self-test: loop skip if flag")
+    nest_src = "for k in ks\n    if k == \"slow\"\n        if extra\n            continue\n        end\n    end\nend\n"
+    isempty(collect_loop_skip("", Dict("test/t.jl" => [Hunk(2, 0, 2, 5, String[])]), _ -> nest_src; whole = false)) ||
+        die("self-test: loop skip nested if")
     pref = "const S = \"see DistSSHQueue #12\"\n"
     length(collect_pr_refs("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> pref; whole = false)) >= 1 ||
         die("self-test: pr-refs hit")
@@ -2538,6 +2550,45 @@ function loop_skip_reason(src, line::Int)::Bool
     return occursin(r"\"[^\"]+\"", notes)
 end
 
+function is_string_eq_cond(node)::Bool
+    while kind(node) == K"parens" && numchildren(node) >= 1
+        node = node[1]
+    end
+    kind(node) == K"call" || return false
+    numchildren(node) >= 3 || return false
+    sourcetext(node[2]) in ("==", "===") || return false
+    a, b = node[1], node[3]
+    return kind(a) in (K"string", K"String") || kind(b) in (K"string", K"String")
+end
+
+function scan_then_continues!(node, src, path, added, if_line, hits)
+    k = kind(node)
+    k in (K"if", K"for", K"while") && return
+    if k == K"continue"
+        cl = line_of(src, Int(first(byte_range(node))))
+        (cl in added || if_line in added) || return
+        loop_skip_reason(src, cl) && return
+        loop_skip_reason(src, if_line) && return
+        push!(hits, (path, cl, "skip-reasons"))
+        return
+    end
+    for i in 1:numchildren(node)
+        scan_then_continues!(node[i], src, path, added, if_line, hits)
+    end
+    return
+end
+
+function walk_if_continue!(node, src, path, added, hits)
+    if kind(node) == K"if" && numchildren(node) >= 2 && is_string_eq_cond(node[1])
+        if_line = line_of(src, Int(first(byte_range(node))))
+        scan_then_continues!(node[2], src, path, added, if_line, hits)
+    end
+    for i in 1:numchildren(node)
+        walk_if_continue!(node[i], src, path, added, hits)
+    end
+    return
+end
+
 function collect_loop_skip(root, files, src_for_path; whole::Bool)
     hits = Tuple{String, Int, String}[]
     paths = whole ? filter(test_path, tracked_jl(root)) : collect(keys(files))
@@ -2556,6 +2607,7 @@ function collect_loop_skip(root, files, src_for_path; whole::Bool)
             loop_skip_reason(src, i) && continue
             push!(hits, (path, i, "skip-reasons"))
         end
+        endswith(path, ".jl") && walk_if_continue!(parse_tree(src), src, path, added, hits)
     end
     return unique(hits)
 end

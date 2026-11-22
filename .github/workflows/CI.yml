@@ -1330,7 +1330,7 @@ jobs:
         with:
           cache-scratchspaces: false
           delete-old-caches: false
-      - name: Run added tests against merge-base src
+      - name: Run added tests on HEAD src then merge-base src
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -1341,8 +1341,19 @@ jobs:
             echo "no added or changed test files (e2e.jl is not run here)" >&2
             exit 1
           fi
-          git checkout "$BASE" -- src lib/DistSSHBase/src lib/DistSSHUp/src lib/DistSSHShip/src lib/DistSSHHeartbeat/src
           julia --project=. --startup-file=no -e 'using Pkg; Pkg.instantiate()'
+          failed=0
+          for f in "${files[@]}"; do
+            [ -f "$f" ] || continue
+            if ! julia --project=. --startup-file=no "$f"; then
+              failed=1
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "selected tests failed on pull request source" >&2
+            exit 1
+          fi
+          git checkout "$BASE" -- src lib/DistSSHBase/src lib/DistSSHUp/src lib/DistSSHShip/src lib/DistSSHHeartbeat/src
           failed=0
           for f in "${files[@]}"; do
             [ -f "$f" ] || continue
@@ -1646,6 +1657,7 @@ jobs:
       - detect
       - runic
       - diff-lint-self-test
+      - fix-tests-on-base
       - jetls
       - aqua
       - aqua-1-14-pre
@@ -1796,9 +1808,11 @@ jobs:
           DETECT_DOWNSTREAM: ${{ needs.detect.outputs.downstream }}
           DETECT_PRECHECK: ${{ needs.detect.outputs.precheck }}
           DETECT_EVENT: ${{ github.event_name }}
+          DETECT_FIX_TITLE: ${{ github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'fix') }}
           RESULT_detect: ${{ needs.detect.result }}
           RESULT_runic: ${{ needs.runic.result }}
           RESULT_diff_lint_self_test: ${{ needs.diff-lint-self-test.result }}
+          RESULT_fix_tests_on_base: ${{ needs.fix-tests-on-base.result }}
           RESULT_jetls: ${{ needs.jetls.result }}
           RESULT_aqua: ${{ needs.aqua.result }}
           RESULT_aqua_1_14_pre: ${{ needs.aqua-1-14-pre.result }}
