@@ -18,7 +18,10 @@ const TEST_PROJECT = let active = Base.active_project()
 end
 include(joinpath(ROOT, "support.jl"))
 
-const FILES = _runtest_selected_files(read(joinpath(ROOT, "runtests.jl"), String))
+const RUNTESTS_SRC = read(joinpath(ROOT, "runtests.jl"), String)
+const PARITY = _runtest_assert_parallel_runtests_parity!(RUNTESTS_SRC)
+const FILES = PARITY.planned_files
+const SERIAL_KEYS = PARITY.serial_keys
 
 const TESTSUITE = Dict{String, Expr}(
     replace(rel, r"\.jl$" => "") => quote
@@ -64,4 +67,6 @@ runtests(
     testsuite = TESTSUITE,
     init_worker_code = INIT_WORKER,
     init_code = INIT_CODE,
+    serial = SERIAL_KEYS,
+    serial_position = :after,
 )

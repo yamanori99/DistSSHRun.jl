@@ -59,6 +59,20 @@ const _RUNTESTS_SRC = read(joinpath(_test_root(), "runtests.jl"), String)
         end
     end
 
+    @testset "parallel parity" begin
+        withenv(clear...) do
+            info = _runtest_assert_parallel_runtests_parity!(_RUNTESTS_SRC)
+            selected = _runtest_selected_files(_RUNTESTS_SRC)
+            @test info.planned_files == selected
+            @test info.suite_keys == _runtest_parallel_suite_key.(selected)
+            serial_paths = collect(_runtest_parallel_serial_paths())
+            @test length(info.serial_keys) == length(serial_paths)
+            if !isempty(serial_paths)
+                @test info.serial_keys == _runtest_parallel_suite_key.(serial_paths)
+            end
+        end
+    end
+
     @testset "runtests.jl has no standalone _runtest_announce" begin
         calls = [
             line for line in eachline(IOBuffer(_RUNTESTS_SRC), keep = true) if

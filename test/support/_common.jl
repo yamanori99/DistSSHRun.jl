@@ -227,6 +227,53 @@ if !isdefined(@__MODULE__, :_test_root)
         return unguarded
     end
 
+    # ParallelTestRunner names: `runtests.jl` paths without `.jl`.
+    function _runtest_parallel_suite_key(rel::AbstractString)::String
+        return replace(String(rel), r"\.jl$" => "")
+    end
+
+    # Test files that must not share a worker batch (ports, PTYs, process-wide ENV).
+    # Each path is relative to `test/` as in `runtests.jl`. Extend only after a
+    # reproduced parallel collision, not with retries or sleeps.
+    function _runtest_parallel_serial_paths()
+        return (
+            # Detached go, tagged handshake process scans, and hung-wait timing
+            # races under parallel worker load (see execute.jl "wait timeout hung").
+            "unit/DistSSHRun/execute.jl",
+            # SIGINT/grace timing and ready files under parallel host load.
+            "integration/drive/interrupt_grace.jl",
+        )
+    end
+
+    function _runtest_parallel_serial_keys(runtests_src::AbstractString)
+        selected = Set(_runtest_selected_files(runtests_src))
+        serial = String[]
+        for rel in _runtest_parallel_serial_paths()
+            rel in selected || continue
+            push!(serial, _runtest_parallel_suite_key(rel))
+        end
+        return serial
+    end
+
+    # Fail closed: `test/parallel.jl` must cover exactly the files `runtests.jl`
+    # would run for the same `DISTSSH_TEST_GROUP` and short-skip env.
+    function _runtest_assert_parallel_runtests_parity!(runtests_src::AbstractString)
+        planned = _runtest_selected_files(runtests_src)
+        expected_keys = _runtest_parallel_suite_key.(planned)
+        serial = _runtest_parallel_serial_keys(runtests_src)
+        unknown = setdiff(serial, expected_keys)
+        !isempty(unknown) &&
+            error("parallel serial list not in selected files: $(join(sort(unknown), ", "))")
+        parallel_keys = filter(key -> key ∉ serial, expected_keys)
+        return (;
+            planned_files = planned,
+            suite_keys = expected_keys,
+            parallel_keys = parallel_keys,
+            serial_keys = serial,
+            n_files = length(planned),
+        )
+    end
+
     function _runtest_assert_planned_executed!(
             planned::AbstractVector{<:AbstractString},
             executed::AbstractVector{<:AbstractString},

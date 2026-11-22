@@ -31,7 +31,8 @@ real SSH clusters stay in `e2e.jl`. Reproduce that sandbox:
 [PkgEval](#pkgeval).
 
 The same file list runs in worker processes with ParallelTestRunner.jl. It is
-opt-in; `Pkg.test()` and CI still run `runtests.jl`:
+opt-in for local runs; CI unit and integration jobs use it. `Pkg.test()` and
+the main-push coverage job still run `runtests.jl`:
 
 ```bash
 julia --project=test test/parallel.jl                       # all files
