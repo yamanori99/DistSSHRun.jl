@@ -47,9 +47,14 @@ jobs:
         run: |
           set -euo pipefail
           json=""
-          for i in 1 2 3 4 5; do
+          tries=0
+          while :; do
             json="$(gh pr list --state open --json number,mergeable,mergeStateStatus)"
             echo "$json" | grep -q '"UNKNOWN"' || break
+            tries=$((tries + 1))
+            if ((tries >= 5)); then
+              break
+            fi
             sleep 2
           done
           echo "$json" | jq -c '.[]' | while read -r row; do
