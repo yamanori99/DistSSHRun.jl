@@ -1,0 +1,41 @@
+# Re-run fix-tests-on-base when a pull request title changes without a new push.
+# Does not use the Test workflow concurrency group (no cancel of in-flight CI).
+name: Fix title on PR edit
+
+on:
+  pull_request:
+    types:
+      - edited
+
+concurrency:
+  group: fix-title-pr-edit-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  fix-tests-on-base:
+    name: fix tests fail on merge-base src
+    if: >-
+      github.event.changes.title != null
+      && (startsWith(github.event.pull_request.title, 'fix:')
+        || startsWith(github.event.pull_request.title, 'fix('))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: Run added tests on HEAD src then merge-base src
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: ./scripts/gate/fix-tests-on-base.sh

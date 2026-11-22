@@ -292,16 +292,31 @@ if gh pr view --json body --jq .body >"${pr_body}" 2>"${pr_err}"; then
     gate_ok "pr body" "" "$((SECONDS - _pr_start))"
     pr_body_print_hints "${pr_body}"
   fi
-elif grep -q 'no pull requests found' "${pr_err}"; then
-  if [[ "${CHECK_VERBOSE}" == 1 ]]; then
-    echo "check: pr body: no pull request"
-    section "check: pr body ok"
-  else
-    gate_ok "pr body" "(no pull request)" "$((SECONDS - _pr_start))"
-  fi
 else
-  cat "${pr_err}" >&2
-  die "pr body: could not read the pull request"
+  # shellcheck source=gate/gh-pr-note.sh
+  source "${ROOT}/scripts/gate/gh-pr-note.sh"
+  set +e
+  gh_pr_note_or_continue "${pr_err}"
+  _gh_rc=$?
+  set -e
+  if ((_gh_rc == 2)); then
+    if [[ "${CHECK_VERBOSE}" == 1 ]]; then
+      echo "check: pr body: no pull request"
+      section "check: pr body ok"
+    else
+      gate_ok "pr body" "(no pull request)" "$((SECONDS - _pr_start))"
+    fi
+  elif ((_gh_rc == 0)); then
+    if [[ "${CHECK_VERBOSE}" == 1 ]]; then
+      printf 'note: %s; pr body lint skipped\n' "${gh_pr_note_reason}"
+      section "check: pr body ok"
+    else
+      gate_ok "pr body" "(note: ${gh_pr_note_reason})" "$((SECONDS - _pr_start))"
+    fi
+  else
+    cat "${pr_err}" >&2
+    die "pr body: could not read the pull request"
+  fi
 fi
 
 gate_capture "runic ${runic_pin}" env JULIA_APPS_JULIA_CMD="${JULIA_BIN}" "${runic_bin}" --check --diff .
@@ -364,8 +379,17 @@ if ((_behind > 40)) || ((_age > 48 * 3600)); then
       die "stale branch with cut label"
     fi
   else
-    if grep -q 'no pull requests found' "${_pr_err}"; then
+    # shellcheck source=gate/gh-pr-note.sh
+    source "${ROOT}/scripts/gate/gh-pr-note.sh"
+    set +e
+    gh_pr_note_or_continue "${_pr_err}"
+    _gh_rc=$?
+    set -e
+    if ((_gh_rc == 2)); then
       rm -f "${_pr_err}"
+    elif ((_gh_rc == 0)); then
+      rm -f "${_pr_err}"
+      printf 'note: %s; stale-branch label check skipped\n' "${gh_pr_note_reason}"
     else
       cat "${_pr_err}" >&2
       rm -f "${_pr_err}"

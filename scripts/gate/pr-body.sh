@@ -32,10 +32,21 @@ if [[ -n "${GATE_PR_PATHS_FILE:-}" && -n "${GATE_PR_BODY_FILE:-}" ]]; then
   cp "${GATE_PR_BODY_FILE}" "${pr_body}"
 elif gh pr view --json body --jq .body >"${pr_body}" 2>"${pr_err}"; then
   git diff --name-only "${diff_range}" >"${pr_paths}"
-elif grep -q 'no pull requests found' "${pr_err}"; then
-  echo "pr body: no pull request"
-  exit 0
 else
+  # shellcheck source=gh-pr-note.sh
+  source "${ROOT}/scripts/gate/gh-pr-note.sh"
+  set +e
+  gh_pr_note_or_continue "${pr_err}"
+  _gh_rc=$?
+  set -e
+  if ((_gh_rc == 2)); then
+    echo "pr body: no pull request"
+    exit 0
+  fi
+  if ((_gh_rc == 0)); then
+    printf 'note: %s; pr body lint skipped\n' "${gh_pr_note_reason}"
+    exit 0
+  fi
   cat "${pr_err}" >&2
   echo "pr body: could not read the pull request" >&2
   exit 1

@@ -1141,14 +1141,15 @@ function self_test_body_main()
     long = "tone_instructions: >\n  " * repeat("a", 251) * "\n"
     any(occursin("250", e) for e in coderabbit_tone_errors(long)) || die("self-test: tone limit")
     listed = ["scripts/check.sh", "CONTRIBUTING.md"]
-    dump = "## Summary\n\n## Testing\n\n## Risk\n\n## Revert\n\n- `scripts/check.sh`\n- `CONTRIBUTING.md`\n"
+    dump = "## Summary\n\n## Risk\n\n## Revert\n\n- `scripts/check.sh`\n- `CONTRIBUTING.md`\n"
     any(==("file list"), pr_body_errors(dump, listed)) || die("self-test: pr body file list")
-    fenced = "## Summary\n\n## Testing\n\n## Risk\n\n## Revert\n\n```\nscripts/check.sh\nCONTRIBUTING.md\n```\n"
+    fenced = "## Summary\n\n## Risk\n\n## Revert\n\n```\nscripts/check.sh\nCONTRIBUTING.md\n```\n"
     any(==("file list"), pr_body_errors(fenced, listed)) || die("self-test: pr body fence")
     short = "## Summary\n\nscripts/check.sh is the gate.\n\n## Testing\n\nRan it.\n\n## Risk\n\nThe hook remains.\n\n## Revert\n\nRevert the merge.\n"
-    isempty(pr_body_errors(short, listed)) || die("self-test: pr body $(pr_body_errors(short, listed))")
+    any(x -> occursin("Testing", x), pr_body_errors(short, listed)) ||
+        die("self-test: pr body prose Testing $(pr_body_errors(short, listed))")
     isempty(pr_body_errors(dump, ["scripts/check.sh"])) || die("self-test: pr body one path")
-    star = "## Summary\n\n## Testing\n\n## Risk\n\n## Revert\n\n* `scripts/check.sh`\n* `CONTRIBUTING.md`\n"
+    star = "## Summary\n\n## Risk\n\n## Revert\n\n* `scripts/check.sh`\n* `CONTRIBUTING.md`\n"
     any(==("file list"), pr_body_errors(star, listed)) || die("self-test: pr body star list")
     dup_ai = "## Summary\n\n## Testing\n\nRan it.\n\nGenerative tool: Cursor Agent.\n\nMade with [Cursor](https://cursor.com)\n"
     any(==("duplicate AI attribution (Generative tool and a Made with footer)"), pr_body_hints(dup_ai, "")) ||
@@ -1390,9 +1391,12 @@ function self_test_body_main()
     judge_norm == "success" || die("self-test: judge result normalization $(judge_norm)")
     judge_script = joinpath(@__DIR__, "..", "gate", "judge_self_test.sh")
     judge_buf = IOBuffer()
-    judge_proc = run(pipeline(`$judge_script`, stdout = judge_buf, stderr = judge_buf), wait = true)
+    judge_proc = run(ignorestatus(pipeline(`$judge_script`, stdout = judge_buf, stderr = judge_buf)))
     judge_self = String(take!(judge_buf))
     if !success(judge_proc)
+        for line in split(strip(judge_self), '\n'; keepempty = false)
+            println(stderr, line)
+        end
         for line in split(strip(judge_self), '\n'; keepempty = false)
             startswith(line, "FAIL  ") && die("self-test: judge_self_test $(line)")
         end
@@ -1483,13 +1487,36 @@ function self_test_body_main()
     any(endswith(e, "known") for e in excuse_word_errors(section_named_text(fence_ev, "Testing"))) ||
         die("self-test: evidence after fence heading")
     check_ceiling("CEILING_ID_MATCH", 1, 0) == 1 || die("self-test: ceiling mismatch")
-    notes = testing_shape_notes("## Testing\n\nran it\n", "abc")
-    any(startswith(n, "note: Testing has no environment") for n in notes) || die("self-test: testing shape")
-    any(occursin("HEAD abc: passed", n) for n in notes) || die("self-test: testing head")
-    shaped = "## Testing\n\nmacOS arm64, Julia 1.13.4.\n\n`./scripts/check.sh`\n\n```text\nHEAD abc: passed\n```\n"
-    isempty(testing_shape_notes(shaped, "abc")) || die("self-test: testing shape without git")
-    win = "## Testing\n\nWindows x86_64, Julia 1.13.4.\n\n`./scripts/check.sh`\n\n```text\nHEAD abc: passed\n```\n"
-    isempty(testing_shape_notes(win, "abc")) || die("self-test: testing shape Windows")
+    prose_testing = "## Testing\n\nran it\n"
+    any(x -> occursin("Testing", x), testing_format_errors(section_named_text(prose_testing, "Testing"))) ||
+        die("self-test: testing format prose")
+    table_testing = "## Testing\n\n| os | julia |\n|---|---|\n"
+    any(x -> occursin("table", x), testing_format_errors(section_named_text(table_testing, "Testing"))) ||
+        die("self-test: testing format table")
+    shaped = "## Testing\n\nmacOS arm64, Julia 1.13.4.\n\n`julia --version`\n\n```text\njulia version 1.13.4\n```\n"
+    isempty(testing_format_errors(section_named_text(shaped, "Testing"))) ||
+        die("self-test: testing format good $(testing_format_errors(section_named_text(shaped, "Testing")))")
+    stale_head = "## Summary\n\nx\n\n## Testing\n\nLinux x86_64, Julia 1.13.4.\n\n`true`\n\n```text\nok\n```\n\n## Risk\n\n## Revert\n"
+    isempty(pr_body_errors(stale_head, ["README.md"])) ||
+        die("self-test: testing format pr pass")
+    no_fence = "## Summary\n\nx\n\n## Testing\n\nLinux x86_64, Julia 1.13.4.\n\n`true`\n\n## Risk\n\n## Revert\n"
+    any(x -> occursin("text output", x), pr_body_errors(no_fence, ["README.md"])) ||
+        die("self-test: testing missing fence")
+    pending_fail = "## Risk\n\nStill pending on main.\n"
+    any(endswith(e, "pending") for e in excuse_word_errors(section_named_text(pending_fail, "Risk"))) ||
+        die("self-test: pending evidence")
+    table_in_fence = "## Testing\n\nLinux x86_64, Julia 1.13.4.\n\n`true`\n\n```text\n| a | b |\n|---|---|\n```\n"
+    isempty(testing_format_errors(section_named_text(table_in_fence, "Testing"))) ||
+        die("self-test: table in text fence $(testing_format_errors(section_named_text(table_in_fence, "Testing")))")
+    testing_has_env_line("Linux x86_64, Julia 1.13.4") &&
+        die("self-test: version dot must not satisfy env line")
+    testing_has_env_line("Linux x86_64, Julia 1.13.4.") ||
+        die("self-test: sentence period env line")
+    cmd_fence_only = "## Testing\n\nLinux x86_64, Julia 1.13.4.\n\n```text\n`only in fence`\n```\n"
+    any(x -> occursin("command", x), testing_format_errors(section_named_text(cmd_fence_only, "Testing"))) ||
+        die("self-test: cmd in fence only")
+    hdr_in_fence = "## Summary\n\n```markdown\n## Testing\n```\n\n## Risk\n"
+    testing_section_present(hdr_in_fence) && die("self-test: testing heading in fence")
     banned_hit("# until later") == "until" || die("self-test: until phrase $(repr(banned_hit("# until later")))")
     println("self-test: passed")
     return 0
@@ -1758,16 +1785,96 @@ function file_list_errors(body::AbstractString, paths)
     return unique(errs)
 end
 
+function unfenced_lines(text::AbstractString)
+    lines = collect(eachsplit(text, '\n'; keepempty = true))
+    out = Tuple{Int, String}[]
+    in_fence = false
+    for (i, line) in enumerate(lines)
+        if startswith(strip(line), "```")
+            in_fence = !in_fence
+            continue
+        end
+        in_fence || push!(out, (i, line))
+    end
+    return out
+end
+
+function has_markdown_table_outside_fences(text::AbstractString)
+    for (_, line) in unfenced_lines(text)
+        startswith(strip(line), "|") && return true
+    end
+    return false
+end
+
+function has_inline_command_outside_fences(text::AbstractString)
+    for (_, line) in unfenced_lines(text)
+        occursin(r"`[^`\n]+`", line) && return true
+    end
+    return false
+end
+
+function section_heading_outside_fences(body::AbstractString, hdr::AbstractString)
+    h = strip(hdr)
+    for (_, line) in unfenced_lines(body)
+        s = strip(line)
+        (s == h || (startswith(line, h) && length(s) <= length(h) + 2)) && return true
+    end
+    return false
+end
+
+function testing_format_errors(text::AbstractString)
+    errs = String[]
+    if isempty(strip(text))
+        push!(errs, "Testing section empty")
+        return errs
+    end
+    if has_markdown_table_outside_fences(text)
+        push!(errs, "Testing uses a markdown table")
+        return errs
+    end
+    lines = collect(eachsplit(text, '\n'; keepempty = true))
+    env_lines = Int[]
+    for (i, line) in unfenced_lines(text)
+        if testing_has_env_line(line) && !isempty(strip(line))
+            push!(env_lines, i)
+        end
+    end
+    if isempty(env_lines)
+        line = 1
+        for (i, ln) in unfenced_lines(text)
+            if !isempty(strip(ln))
+                line = i
+                break
+            end
+        end
+        push!(errs, "$line: Testing environment line (OS/arch, Julia, trailing period)")
+        return errs
+    end
+    for (idx, env_i) in enumerate(env_lines)
+        stop = idx < length(env_lines) ? env_lines[idx + 1] - 1 : length(lines)
+        segment = join(lines[env_i:stop], '\n')
+        if !has_inline_command_outside_fences(segment)
+            push!(errs, "$env_i: Testing command in a code span")
+        elseif !occursin(r"(?m)^```text\s*$", segment)
+            push!(errs, "$env_i: Testing ```text output fence")
+        end
+    end
+    return unique(errs)
+end
+
 function pr_body_errors(body::AbstractString, paths)
     errs = pr_template_errors(body)
     append!(errs, file_list_errors(body, paths))
+    if testing_section_present(body)
+        append!(errs, testing_format_errors(section_named_text(body, "Testing")))
+    end
     append!(errs, excuse_word_errors(section_named_text(body, "Testing")))
     append!(errs, excuse_word_errors(section_named_text(body, "Risk")))
     return errs
 end
 
 function testing_section_present(body::AbstractString)
-    return occursin(r"(?m)^## Testing\s*$", body)
+    return section_heading_outside_fences(body, "## Testing")
 end
 
 function markdown_section_text(body::AbstractString, hdr::AbstractString)
@@ -1807,7 +1914,7 @@ end
 
 function testing_has_env_line(text::AbstractString)
     return occursin(
-        r"(?im)^[^\n]*\b(arm64|aarch64|x86_64|x64|amd64|i686|riscv64)\b[^\n]*\bjulia\b[^\n]*\.",
+        r"(?im)^[^\n]*\b(arm64|aarch64|x86_64|x64|amd64|i686|riscv64)\b[^\n]*\bjulia\b[^\n]*\.\s*$",
         text,
     )
 end
@@ -1868,10 +1975,6 @@ function pr_body_hints(
             else
                 push!(hints, "add env to ## Testing ($ex)")
             end
-        end
-        head = get(ENV, "CHECK_HEAD", "")
-        if !isempty(head)
-            append!(hints, testing_shape_notes(body, head))
         end
     end
     return hints
@@ -2833,6 +2936,7 @@ function excuse_word_errors(section::AbstractString)
         (r"(?<![A-Za-z])unrelated(?![A-Za-z])"i, "unrelated"),
         (r"(?<![A-Za-z])flaky(?![A-Za-z])"i, "flaky"),
         (r"left to CI"i, "left to CI"),
+        (r"(?<![A-Za-z])pending(?![A-Za-z])"i, "pending"),
     )
     for (s, text) in paras
         has_main_run_url(text) && continue
@@ -2844,22 +2948,6 @@ function excuse_word_errors(section::AbstractString)
         end
     end
     return errs
-end
-
-function testing_shape_notes(body::AbstractString, head::AbstractString)
-    notes = String[]
-    testing_section_present(body) || return notes
-    txt = testing_section_text(body)
-    env = testing_has_env_line(txt)
-    cmd = occursin(r"`[^`]+`", txt)
-    fence = occursin(r"(?m)^```text\s*$", txt)
-    if !(env && cmd && fence)
-        push!(notes, "note: Testing has no environment line / command / text-fenced output; see CONTRIBUTING.md")
-    end
-    if !isempty(head) && !occursin("HEAD $(head): passed", txt)
-        push!(notes, "note: Testing has no 'HEAD $(head): passed' line for HEAD $(head)")
-    end
-    return notes
 end
 
 function lint_id_match(root, files, src_for_path)

@@ -1315,7 +1315,7 @@ jobs:
   fix-tests-on-base:
     name: fix tests fail on merge-base src
     needs: detect
-    if: github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'fix')
+    if: github.event_name == 'pull_request' && (startsWith(github.event.pull_request.title, 'fix:') || startsWith(github.event.pull_request.title, 'fix('))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -1333,38 +1333,7 @@ jobs:
       - name: Run added tests on HEAD src then merge-base src
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          git fetch --no-tags origin "$BASE"
-          mapfile -t files < <(git diff --name-only "$BASE"...HEAD -- 'test/**/*.jl' 'lib/*/test/**/*.jl' | grep -v '/e2e.jl$' || true)
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "no added or changed test files (e2e.jl is not run here)" >&2
-            exit 1
-          fi
-          julia --project=. --startup-file=no -e 'using Pkg; Pkg.instantiate()'
-          failed=0
-          for f in "${files[@]}"; do
-            [ -f "$f" ] || continue
-            if ! julia --project=. --startup-file=no "$f"; then
-              failed=1
-            fi
-          done
-          if [ "$failed" -ne 0 ]; then
-            echo "selected tests failed on pull request source" >&2
-            exit 1
-          fi
-          git checkout "$BASE" -- src lib/DistSSHBase/src lib/DistSSHUp/src lib/DistSSHShip/src lib/DistSSHHeartbeat/src
-          failed=0
-          for f in "${files[@]}"; do
-            [ -f "$f" ] || continue
-            if ! julia --project=. --startup-file=no "$f"; then
-              failed=1
-            fi
-          done
-          if [ "$failed" -eq 0 ]; then
-            echo "new tests also passed on merge-base src" >&2
-            exit 1
-          fi
+        run: ./scripts/gate/fix-tests-on-base.sh
 
   aqua:
     name: Aqua (1.13, ubuntu-latest, x64)
@@ -1808,7 +1777,7 @@ jobs:
           DETECT_DOWNSTREAM: ${{ needs.detect.outputs.downstream }}
           DETECT_PRECHECK: ${{ needs.detect.outputs.precheck }}
           DETECT_EVENT: ${{ github.event_name }}
-          DETECT_FIX_TITLE: ${{ github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'fix') }}
+          DETECT_FIX_TITLE: ${{ github.event_name == 'pull_request' && (startsWith(github.event.pull_request.title, 'fix:') || startsWith(github.event.pull_request.title, 'fix(')) }}
           RESULT_detect: ${{ needs.detect.result }}
           RESULT_runic: ${{ needs.runic.result }}
           RESULT_diff_lint_self_test: ${{ needs.diff-lint-self-test.result }}
