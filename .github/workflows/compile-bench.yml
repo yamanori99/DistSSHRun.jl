@@ -97,15 +97,37 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
         with:
           version: "1.13"
-      - name: Render
+      - name: Render compile bench
         env:
           BENCH_TOKEN: ${{ github.token }}
           BENCH_PUSH: "1"
         run: bash .github/compile-bench-render.sh
+
+  source-churn-render:
+    name: Source churn render
+    if: always() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
+        with:
+          version: "1.13"
+      - name: Render source churn
+        env:
+          BENCH_TOKEN: ${{ github.token }}
+          BENCH_PUSH: "1"
+        run: bash .github/source-churn-bench.sh
 
   notify-bench:
     needs: compile-bench
