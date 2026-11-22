@@ -1283,24 +1283,28 @@ function _go_run!(
             _foreach_bounded(collect(1:n_slots), kit_host_jobs()) do i
                 slot = slots[i]
                 kit_progress_item!(slot.label; status = :running)
-                err = nothing
-                outcome = try
-                    _go_exec_slot!(
-                        slot,
-                        proj,
-                        script_path,
-                        args,
-                        batch_dir,
-                        run_rr;
-                        quiet = quiet,
-                        julia = julia,
+                outcome, err = try
+                    (
+                        _go_exec_slot!(
+                            slot,
+                            proj,
+                            script_path,
+                            args,
+                            batch_dir,
+                            run_rr;
+                            quiet = quiet,
+                            julia = julia,
+                        ),
+                        nothing,
                     )
                 catch e
-                    err = e
                     (
-                        run = DriveResult(false, 1),
-                        collect = nothing,
-                        collect_fail = false,
+                        (
+                            run = DriveResult(false, 1),
+                            collect = nothing,
+                            collect_fail = false,
+                        ),
+                        e,
                     )
                 end
                 slot_run_ok[i] = outcome.run.ok
@@ -1342,14 +1346,15 @@ function _go_run!(
                 ]
                 _foreach_bounded(collect_idx, kit_host_jobs()) do i
                     slot = slots[i]
-                    err = nothing
-                    outcome = try
-                        _go_collect_slot!(
-                            slot, proj, batch_dir, run_rr; julia = julia,
+                    outcome, err = try
+                        (
+                            _go_collect_slot!(
+                                slot, proj, batch_dir, run_rr; julia = julia,
+                            ),
+                            nothing,
                         )
                     catch e
-                        err = e
-                        (collect = CollectResult(false, 1), collect_fail = true)
+                        ((collect = CollectResult(false, 1), collect_fail = true), e)
                     end
                     lock(_GO_IO_LOCK) do
                         if outcome.collect !== nothing

@@ -21,9 +21,10 @@ if !isdefined(@__MODULE__, :_run_subprocess)
 end
 
 function _distssh_base_for_tests()
-    isdefined(@__MODULE__, :DistSSHBase) && return DistSSHBase
-    isdefined(@__MODULE__, :DistSSHRun) && return DistSSHRun.DistSSHBase
-    return Main.DistSSHRun.DistSSHBase
+    m = @__MODULE__
+    isdefined(m, :DistSSHBase) && return getfield(m, :DistSSHBase)
+    isdefined(m, :DistSSHRun) && return getfield(getfield(m, :DistSSHRun), :DistSSHBase)
+    return getfield(getfield(Main, :DistSSHRun), :DistSSHBase)
 end
 
 function _install_injected_ssh!()
@@ -31,6 +32,7 @@ function _install_injected_ssh!()
     BaseMod._injected_ssh[] = BaseMod.InjectedSshTransport(
         () -> strip(get(ENV, "DISTSSH_TEST", "")) == "1",
         function (host, remote; forward_stdin = false)
+            _ = forward_stdin
             strip(get(ENV, "DISTSSH_TEST", "")) == "1" || return nothing
             custom = strip(get(ENV, "DISTSSH_TEST_SSH", ""))
             isempty(custom) && return nothing

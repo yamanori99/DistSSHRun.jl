@@ -75,16 +75,16 @@ function parse_env_float(
 end
 
 """Test-only SSH/juliaup hooks. Product code never reads test env names."""
-struct InjectedSshTransport
-    is_on::Function
-    remote_cmd::Function
-    posix_strict::Function
-    double_script::Function
-    local_juliaup::Function
-    remote_julia_which::Function
+struct InjectedSshTransport{A, B, C, D, E, F}
+    is_on::A
+    remote_cmd::B
+    posix_strict::C
+    double_script::D
+    local_juliaup::E
+    remote_julia_which::F
 end
 
-const _injected_ssh = Ref{Union{Nothing, InjectedSshTransport}}(nothing)
+const _injected_ssh = Ref{Any}(nothing)
 
 function _test_doubles_on()::Bool
     t = _injected_ssh[]
