@@ -19,7 +19,7 @@ function write_churn_summary_chart(report, path::AbstractString)
         y = labels,
         mode = "markers",
         name = "net",
-        marker = attr(symbol = "line-ns", size = 10, color = "#111827"),
+        marker = attr(symbol = "diamond", size = 14, color = "#111827", line = attr(width = 1, color = "#111827")),
     )
     layout = Layout(;
         title = "30-day churn by area",

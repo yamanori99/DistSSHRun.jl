@@ -29,27 +29,31 @@ function render_churn_markdown(report, chart_prefix::AbstractString)::String
         "![Net churn heatmap]($chart_prefix/churn-heatmap.png)",
         "",
     ]
-    current_pkg = ""
-    for row in report.areas
-        if row.package != current_pkg
-            current_pkg = row.package
-            push!(lines, "### $current_pkg")
-            push!(
-                lines,
-                "| area | files | LOC | +7d | −7d | net7 | +30d | −30d | net30 | %≥30d old | last touch |",
-            )
-            push!(lines, "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |")
-        end
-        net7 = row.added_7 - row.deleted_7
-        net30 = row.added_30 - row.deleted_30
-        area_cell = row.area
-        if !isempty(row.root_files)
-            area_cell = "$(row.area) ($(join(row.root_files, ", ")))"
-        end
+    pkgs = unique(r.package for r in report.areas)
+    for pkg in sort(collect(pkgs))
+        pkg_rows = filter(r -> r.package == pkg, report.areas)
+        push!(lines, "### $pkg")
         push!(
             lines,
-            "| $(area_cell) | $(row.files) | $(row.loc) | $(row.added_7) | $(row.deleted_7) | $net7 | $(row.added_30) | $(row.deleted_30) | $net30 | $(round(row.stale_pct; digits = 1)) | $(fmt_date(row.last_touch)) |",
+            "| area | files | LOC | +7d | −7d | net7 | +30d | −30d | net30 | %≥30d old | last touch |",
         )
+        push!(lines, "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |")
+        root_files = String[]
+        for row in pkg_rows
+            net7 = row.added_7 - row.deleted_7
+            net30 = row.added_30 - row.deleted_30
+            row.area == "(root files)" && append!(root_files, row.root_files)
+            push!(
+                lines,
+                "| $(row.area) | $(row.files) | $(row.loc) | $(row.added_7) | $(row.deleted_7) | $net7 | $(row.added_30) | $(row.deleted_30) | $net30 | $(round(row.stale_pct; digits = 1)) | $(fmt_date(row.last_touch)) |",
+            )
+        end
+        if !isempty(root_files)
+            sort!(unique!(root_files))
+            push!(lines, "")
+            push!(lines, "*(root files)*: $(join(root_files, ", ")).")
+        end
+        push!(lines, "")
     end
     if !isempty(report.removed)
         push!(lines, "")
