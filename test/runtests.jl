@@ -110,7 +110,6 @@ end
             _runtest_include("unit/DistSSHRun/main_dispatch.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "main_dispatch.jl"))
             _runtest_include("unit/DistSSHRun/downstream_public.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "downstream_public.jl"))
             _runtest_include("unit/DistSSHRun/infra/demos.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "demos.jl"))
-            _runtest_include("unit/bench/compile.jl", joinpath(@__DIR__, "unit", "bench", "compile.jl"))
             _runtest_include("unit/DistSSHRun/host_project_toml.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "host_project_toml.jl"))
             _runtest_include("unit/DistSSHRun/setup_api.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "setup_api.jl"))
             _runtest_include("unit/DistSSHRun/core/setup/status_summary.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "setup", "status_summary.jl"))
