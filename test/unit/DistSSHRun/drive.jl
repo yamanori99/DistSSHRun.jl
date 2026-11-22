@@ -9,7 +9,32 @@ function _sigint_sa_handler()::Ptr{Cvoid}
     return GC.@preserve buf unsafe_load(Ptr{Ptr{Cvoid}}(pointer(buf)))
 end
 
+const _DRIVE_LEAK_ENV_KEYS = (
+    "DISTRIBUTED_PROJECT_ROOT",
+    "DISTRIBUTED_REMOTE_PROJECT_ROOT",
+    "DISTSSH_CLI_SUBCOMMAND_DONE",
+    "DISTSSH_TEST",
+    "DISTSSH_TEST_SSH",
+    "DISTSSH_TEST_STATE_ROOT",
+    "DISTSSH_YES",
+    "DISTSSH_TEST_SNAP_GIT_YES",
+)
+
+function _restore_env_keys!(saved::Dict{String, Union{Nothing, String}})
+    for (k, v) in saved
+        if v === nothing
+            delete!(ENV, k)
+        else
+            ENV[k] = v
+        end
+    end
+    return nothing
+end
+
 @testset "drive API" begin
+    saved_env = Dict{String, Union{Nothing, String}}(
+        k => get(ENV, k, nothing) for k in _DRIVE_LEAK_ENV_KEYS
+    )
     @testset "parse_worker_tokens" begin
         p = DistSSHRun.parse_worker_tokens(["4*host-a", "host-b"]; head_workers = 2)
         @test p.head_workers == 2
@@ -82,91 +107,120 @@ end
     end
 
     @testset "apply_session_env!" begin
-        _with_tempdir() do tmp
-            delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
-            session = DistSSHRun.DistSSHSession(
-                project = tmp,
-                workers = ["host-a"],
-                remote = "/remote/App.jl",
-                quiet = true
-            )
-            DistSSHRun.apply_session_env!(session)
-            @test ENV["DISTRIBUTED_PROJECT_ROOT"] == abspath(tmp)
-            @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
-            @test DistSSHRun.session_remote_root(session) == "/remote/App.jl"
-            @test DistSSHRun.kit_output_quiet()
-            @test !DistSSHRun.kit_noninteractive()
-        end
-        _with_tempdir() do tmp
-            delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
-            tilde = DistSSHRun.DistSSHSession(
-                project = tmp,
-                workers = ["host-a"],
-                remote = "~/jobs/abc",
-                quiet = true
-            )
-            DistSSHRun.apply_session_env!(tilde)
-            @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
-            @test DistSSHRun.session_remote_root(tilde) == "~/jobs/abc"
-        end
-        _with_tempdir() do tmp
-            ambient = DistSSHRun.DistSSHSession(
-                project = tmp,
-                workers = ["host-a"]
-            )
-            with_kit_verbosity(:progress) do
-                DistSSHRun.apply_session_env!(ambient)
-                @test DistSSHRun.kit_verbosity() === :progress
-                @test ambient.verbosity === :progress
-            end
-        end
-        _with_tempdir() do tmp
-            delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
-            a = DistSSHRun.DistSSHSession(
-                project = tmp, workers = ["host-a"],
-                remote = "/remote/A", quiet = true
-            )
-            DistSSHRun.apply_session_env!(a)
-            b = DistSSHRun.DistSSHSession(
-                project = tmp, workers = ["host-b"], quiet = true
-            )
-            default = DistSSHRun.remote_deploy_root(tmp)
-            @test DistSSHRun.session_remote_root(b) == default
-            @test DistSSHRun.session_remote_root(b) != "/remote/A"
-            ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = "/caller/Keep"
-            DistSSHRun.apply_session_env!(
-                DistSSHRun.DistSSHSession(
-                    project = tmp, workers = ["h"],
-                    remote = "/session/Override", quiet = true
-                )
-            )
-            @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == "/caller/Keep"
-            err = try
-                DistSSHRun.apply_session_env!(
-                    DistSSHRun.DistSSHSession(
-                        project = tmp, workers = ["h"],
-                        remote = "/after/Error", quiet = true
+        saved_proj = get(ENV, "DISTRIBUTED_PROJECT_ROOT", nothing)
+        saved_remote = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+        saved_quiet = DistSSHRun.kit_output_quiet()
+        saved_ni = DistSSHRun.kit_noninteractive()
+        try
+            _with_tempdir() do tmp
+                withenv(
+                    "DISTRIBUTED_PROJECT_ROOT" => nothing,
+                    "DISTRIBUTED_REMOTE_PROJECT_ROOT" => nothing,
+                ) do
+                    session = DistSSHRun.DistSSHSession(
+                        project = tmp,
+                        workers = ["host-a"],
+                        remote = "/remote/App.jl",
+                        quiet = true
                     )
-                )
-                throw(ErrorException("force-fail"))
-            catch e
-                e
+                    DistSSHRun.apply_session_env!(session)
+                    @test ENV["DISTRIBUTED_PROJECT_ROOT"] == abspath(tmp)
+                    @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+                    @test DistSSHRun.session_remote_root(session) == "/remote/App.jl"
+                    @test DistSSHRun.kit_output_quiet()
+                    @test !DistSSHRun.kit_noninteractive()
+                end
             end
-            @test err isa ErrorException
-            @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == "/caller/Keep"
-            delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
-            DistSSHRun.apply_session_env!(
-                DistSSHRun.DistSSHSession(
-                    project = tmp, workers = ["h"],
-                    remote = "/was/absent", quiet = true
-                )
-            )
-            @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            _with_tempdir() do tmp
+                withenv(
+                    "DISTRIBUTED_PROJECT_ROOT" => nothing,
+                    "DISTRIBUTED_REMOTE_PROJECT_ROOT" => nothing,
+                ) do
+                    tilde = DistSSHRun.DistSSHSession(
+                        project = tmp,
+                        workers = ["host-a"],
+                        remote = "~/jobs/abc",
+                        quiet = true
+                    )
+                    DistSSHRun.apply_session_env!(tilde)
+                    @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+                    @test DistSSHRun.session_remote_root(tilde) == "~/jobs/abc"
+                end
+            end
+            _with_tempdir() do tmp
+                withenv("DISTRIBUTED_PROJECT_ROOT" => nothing) do
+                    ambient = DistSSHRun.DistSSHSession(
+                        project = tmp,
+                        workers = ["host-a"]
+                    )
+                    with_kit_verbosity(:progress) do
+                        DistSSHRun.apply_session_env!(ambient)
+                        @test DistSSHRun.kit_verbosity() === :progress
+                        @test ambient.verbosity === :progress
+                    end
+                end
+            end
+            _with_tempdir() do tmp
+                withenv(
+                    "DISTRIBUTED_PROJECT_ROOT" => nothing,
+                    "DISTRIBUTED_REMOTE_PROJECT_ROOT" => nothing,
+                ) do
+                    a = DistSSHRun.DistSSHSession(
+                        project = tmp, workers = ["host-a"],
+                        remote = "/remote/A", quiet = true
+                    )
+                    DistSSHRun.apply_session_env!(a)
+                    b = DistSSHRun.DistSSHSession(
+                        project = tmp, workers = ["host-b"], quiet = true
+                    )
+                    default = DistSSHRun.remote_deploy_root(tmp)
+                    @test DistSSHRun.session_remote_root(b) == default
+                    @test DistSSHRun.session_remote_root(b) != "/remote/A"
+                    ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = "/caller/Keep"
+                    DistSSHRun.apply_session_env!(
+                        DistSSHRun.DistSSHSession(
+                            project = tmp, workers = ["h"],
+                            remote = "/session/Override", quiet = true
+                        )
+                    )
+                    @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == "/caller/Keep"
+                    err = try
+                        DistSSHRun.apply_session_env!(
+                            DistSSHRun.DistSSHSession(
+                                project = tmp, workers = ["h"],
+                                remote = "/after/Error", quiet = true
+                            )
+                        )
+                        throw(ErrorException("force-fail"))
+                    catch e
+                        e
+                    end
+                    @test err isa ErrorException
+                    @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == "/caller/Keep"
+                    delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+                    DistSSHRun.apply_session_env!(
+                        DistSSHRun.DistSSHSession(
+                            project = tmp, workers = ["h"],
+                            remote = "/was/absent", quiet = true
+                        )
+                    )
+                    @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+                end
+            end
+        finally
+            if saved_proj === nothing
+                delete!(ENV, "DISTRIBUTED_PROJECT_ROOT")
+            else
+                ENV["DISTRIBUTED_PROJECT_ROOT"] = saved_proj
+            end
+            if saved_remote === nothing
+                delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            else
+                ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = saved_remote
+            end
+            DistSSHRun.set_kit_output_quiet!(saved_quiet)
+            DistSSHRun.set_kit_noninteractive!(saved_ni)
         end
-        delete!(ENV, "DISTRIBUTED_PROJECT_ROOT")
-        delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
-        DistSSHRun.set_kit_output_quiet!(false)
-        DistSSHRun.set_kit_noninteractive!(false)
     end
 
     @testset "overlapping in-process kit runs are refused" begin
@@ -451,44 +505,53 @@ end
     end
 
     @testset "collect! scopes session.remote into ENV" begin
-        _with_tempdir() do state_dir
-            _with_tempdir() do tmp
-                write(joinpath(tmp, "Project.toml"), "name = \"DriveRemoteEnv\"\n")
-                ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = "/caller/Keep"
-                session = DistSSHRun.DistSSHSession(
-                    project = tmp,
-                    workers = ["host1"],
-                    remote = "/session/Custom",
-                    quiet = true
-                )
-                seen = Ref{Union{Nothing, String}}(nothing)
-                fake = merge(
-                    _fake_setup_remote_env(state_dir),
-                    Dict("DISTSSH_TEST_SNAP_GIT_YES" => "1")
-                )
-                withenv(fake...) do
-                    DistSSHRun._with_session_remote_env!(session) do
-                        seen[] = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
-                        @test DistSSHRun.remote_deploy_root(tmp) == "/session/Custom"
-                        @test DistSSHRun._remote_work_layout_path(
-                            tmp, tmp, ["host1"]
-                        ) == "/session/Custom"
+        saved_remote = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+        try
+            _with_tempdir() do state_dir
+                _with_tempdir() do tmp
+                    write(joinpath(tmp, "Project.toml"), "name = \"DriveRemoteEnv\"\n")
+                    ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = "/caller/Keep"
+                    session = DistSSHRun.DistSSHSession(
+                        project = tmp,
+                        workers = ["host1"],
+                        remote = "/session/Custom",
+                        quiet = true
+                    )
+                    seen = Ref{Union{Nothing, String}}(nothing)
+                    fake = merge(
+                        _fake_setup_remote_env(state_dir),
+                        Dict("DISTSSH_TEST_SNAP_GIT_YES" => "1")
+                    )
+                    withenv(fake...) do
+                        DistSSHRun._with_session_remote_env!(session) do
+                            seen[] = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+                            @test DistSSHRun.remote_deploy_root(tmp) == "/session/Custom"
+                            @test DistSSHRun._remote_work_layout_path(
+                                tmp, tmp, ["host1"]
+                            ) == "/session/Custom"
+                        end
                     end
+                    @test seen[] == DistSSHRun.remote_env_project_root("/session/Custom")
+                    @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == "/caller/Keep"
+                    delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+                    err = try
+                        DistSSHRun._with_session_remote_env!(session) do
+                            @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] ==
+                                DistSSHRun.remote_env_project_root("/session/Custom")
+                            error("force-fail")
+                        end
+                    catch e
+                        e
+                    end
+                    @test err isa ErrorException
+                    @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
                 end
-                @test seen[] == DistSSHRun.remote_env_project_root("/session/Custom")
-                @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == "/caller/Keep"
+            end
+        finally
+            if saved_remote === nothing
                 delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
-                err = try
-                    DistSSHRun._with_session_remote_env!(session) do
-                        @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] ==
-                            DistSSHRun.remote_env_project_root("/session/Custom")
-                        error("force-fail")
-                    end
-                catch e
-                    e
-                end
-                @test err isa ErrorException
-                @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            else
+                ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = saved_remote
             end
         end
     end
@@ -1328,4 +1391,5 @@ end
             @test err_bind isa ArgumentError
         end
     end
+    _restore_env_keys!(saved_env)
 end
