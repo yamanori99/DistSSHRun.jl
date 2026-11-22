@@ -8,7 +8,7 @@ end
 
 """CLI exit 2 line when `setup check` is invoked."""
 function setup_check_removed_message()::String
-    return "setup check was removed in 0.2.0; use: $(cli_m()) doctor --deploy [--run-id ID] HOSTS"
+    return "setup check was removed in 0.2.0; use: $(cli_m()) doctor --deploy [--ship-id ID] HOSTS"
 end
 
 """
@@ -87,7 +87,7 @@ function doctor_launch_assert_host!(
             "  git:    $(cli_m_project()) setup git-clone $(setup_cli_host_token(host))\n" *
             "          (later updates: setup git-sync $(setup_cli_host_token(host)))\n" *
             "  then:   $(cli_m_project()) setup instantiate $(setup_cli_host_token(host))\n" *
-            "  then:   $(cli_m_project()) go --run-id ID …\n" *
+            "  then:   $(cli_m_project()) go --ship-id ID …\n" *
             "Or from Julia: setup!(session, :ship_tree, :instantiate)\n" *
             "  (or :git_clone, :instantiate; repo=\"…\" for clone; later :git_sync)\n" *
             "Set DISTRIBUTED_REMOTE_PROJECT_ROOT if the remote path is not the default."
@@ -138,7 +138,7 @@ function doctor_launch_assert_hosts!(
 end
 
 """
-    doctor!(session::DistSSHSession; deploy::Bool, julia="auto", run_id=nothing, kwargs...) -> DoctorReport
+    doctor!(session::DistSSHSession; deploy::Bool, julia="auto", ship_id=nothing, kwargs...) -> DoctorReport
 
 Julia API for `julia -m DistSSHKit doctor --deploy …`. Other doctor groups ship in 0.2.x.
 """
@@ -146,7 +146,7 @@ function doctor!(
         session::DistSSHSession;
         deploy::Bool,
         julia::AbstractString = "auto",
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         ignore_julia_version::Bool = false,
     )::DoctorReport
     deploy || throw(
@@ -160,12 +160,12 @@ function doctor!(
         ),
     )
     validate_setup_hosts(session.hosts)
-    snap = run_id === nothing ? nothing : validate_run_id(run_id)
+    snap = ship_id === nothing ? nothing : validate_ship_id(ship_id)
     return _with_kit_inproc_run!(:doctor) do
         return _with_session_env!(session) do
             work_path = _project_work_root(
                 session.hosts, session.project;
-                cli_override = session.remote, run_id = snap,
+                cli_override = session.remote, ship_id = snap,
             )
             julia_path = isempty(strip(String(julia))) ? "auto" : String(julia)
             return doctor_deploy_check(

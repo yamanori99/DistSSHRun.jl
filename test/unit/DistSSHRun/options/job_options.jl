@@ -35,7 +35,7 @@ end
         unsafe_all_to_all = false,
         print_config = false,
         dry_run = false,
-        run_id = nothing,
+        ship_id = nothing,
         deploy_root = nothing,
         isolated = false,
         unsafe_master_silence_exit = missing,

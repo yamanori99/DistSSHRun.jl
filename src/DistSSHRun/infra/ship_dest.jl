@@ -32,7 +32,7 @@ public pack_ship_tree
 Send an existing [`DistSSHRun.DistSSHShip.Shipment`](@ref) to caller-chosen `dest`
 on each host using [`DistSSHRun.DistSSHShip.ship`](@ref).
 
-This does not allocate a run id, write `runs/<id>/run.toml`, instantiate, or touch
+This does not allocate a ship id, write `ships/<id>/run.toml`, instantiate, or touch
 controller provenance. `dest` must be absolute or start with `~`; it must be missing
 or an empty directory (non-empty is an error and is left unchanged). A failed host can
 leave a partial tree; callers must treat `ShipmentReceipt.ok` before using the destination.

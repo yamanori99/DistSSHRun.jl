@@ -12,7 +12,7 @@ function _hint_setup_ship_tree(command::AbstractString)::String
     m = _run_transfer_m()
     return string(
         "Run `$m setup ship-tree HOST`, then `$m setup instantiate HOST`, ",
-        "then `$m $command --run-id ID`.",
+        "then `$m $command --ship-id ID`.",
     )
 end
 
@@ -139,12 +139,12 @@ function _reject_script_outside_project_run!(
         command::AbstractString,
         project::AbstractString,
         script_path::AbstractString;
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         remote_argv::Bool = false,
     )
     remote_argv && return nothing
     _script_inside_project(project, script_path) && return nothing
-    run_id !== nothing && return nothing
+    ship_id !== nothing && return nothing
     m = _run_transfer_m()
     throw(
         ArgumentError(
@@ -152,7 +152,7 @@ function _reject_script_outside_project_run!(
                 "$(command): script must be inside project ($(canonical_local_path(project))): $(canonical_local_path(script_path))",
                 string(
                     "Ship it with `$(m) setup ship-tree HOST` (extra files supported), ",
-                    "then run with `--run-id ID`.",
+                    "then run with `--ship-id ID`.",
                 ),
             ),
         ),

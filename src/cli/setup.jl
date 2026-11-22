@@ -3,7 +3,7 @@
 #
 # Recommended workflow:
 #   1. ship-tree → 2. instantiate → 3. check → 4. runtest (optional) → `go` / `drive`
-#   instantiate/check/go use --run-id ID, else last-ship.toml, else a git
+#   instantiate/check/go use --ship-id ID, else last-ship.toml, else a git
 #   checkout with Project.toml at the deploy root. Lexical latest is not used.
 #   Optional git: git-clone → instantiate → check → git-sync / git-pull
 #   Replace a clone dest: delete, then git-clone
@@ -130,7 +130,7 @@ if !isdefined(@__MODULE__, :setup_main)
             DistSSHRun.check_setup_options!(
                 opts.mode;
                 extra_files = opts.extra_files,
-                run_id = opts.run_id,
+                ship_id = opts.ship_id,
             )
         catch e
             e isa ArgumentError || rethrow()
@@ -225,7 +225,7 @@ if !isdefined(@__MODULE__, :setup_main)
                     op_path = DistSSHRun._project_work_root(
                         opts.hosts, project;
                         cli_override = opts.deploy_root,
-                        run_id = opts.run_id,
+                        ship_id = opts.ship_id,
                     )
                 catch e
                     e isa ArgumentError || rethrow()
@@ -322,15 +322,15 @@ if !isdefined(@__MODULE__, :setup_main)
                 )
                 sel = ok ? DistSSHRun.active_source_selection() : nothing
                 if ok && sel !== nothing
-                    rid = sel.run_id
+                    rid = sel.ship_id
                     src = sel.work_root
                     path_flag = _setup_next_deploy_root_flag(opts.deploy_root)
                     if rid isa AbstractString && !isempty(rid)
                         kit_println(
-                            "  Next: $(DistSSHRun.cli_m()) setup instantiate --run-id $rid$path_flag",
+                            "  Next: $(DistSSHRun.cli_m()) setup instantiate --ship-id $rid$path_flag",
                         )
                         kit_println(
-                            "        $(DistSSHRun.cli_m()) doctor --deploy --run-id $rid$path_flag",
+                            "        $(DistSSHRun.cli_m()) doctor --deploy --ship-id $rid$path_flag",
                         )
                     elseif src isa AbstractString
                         flag = _setup_next_deploy_root_flag(src)

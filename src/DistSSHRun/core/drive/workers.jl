@@ -73,11 +73,11 @@ function add_drive_workers!(
         project_root::String;
         bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
         launch_plans::Union{Nothing, AbstractVector{HostLaunchPlan}} = nothing,
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
     )::Tuple{Vector{String}, LaunchReport}
     empty!(RUNNER_WORKER_PROJECT_DIRS)
     empty!(RUNNER_WORKER_SCRIPT_PATHS)
-    snap = run_id === nothing ? nothing : validate_run_id(run_id)
+    snap = ship_id === nothing ? nothing : validate_ship_id(ship_id)
     snapshot_run = snap !== nothing
     if snapshot_run
         DistSSHRun.assert_controller_environment_for_shipped_run!(proj_dir)
@@ -211,7 +211,7 @@ function add_drive_workers!(
                     writeln_both("")
                     writeln_both("    hint: julia --project=. -m DistSSHKit setup ship-tree $(setup_cli_host_token(host_name))")
                     writeln_both("          julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host_name))")
-                    writeln_both("          then drive --run-id ID")
+                    writeln_both("          then drive --ship-id ID")
                     writeln_both("           or export DISTRIBUTED_REMOTE_PROJECT_ROOT=<abs path on host>")
                     push!(
                         launch_failures,
@@ -407,7 +407,7 @@ function add_drive_workers!(
     assert_workers_joined!()
     try
         if snapshot_run
-            DistSSHRun.verify_workers_match_shipped_run!(proj_dir; run_id = snap)
+            DistSSHRun.verify_workers_match_shipped_run!(proj_dir; ship_id = snap)
             DistSSHRun.assert_loaded_verified_worker_set!()
         else
             DistSSHRun.verify_workers_match_job!(proj_dir)

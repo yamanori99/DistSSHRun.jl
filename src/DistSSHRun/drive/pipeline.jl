@@ -225,7 +225,7 @@ function _pipeline_run!(config::PipelineConfig, session::DistSSHSession, driver:
             log_dir = config.log_dir,
             package = config.package,
             julia = config.julia,
-            run_id = config.run_id,
+            ship_id = config.ship_id,
             isolated = config.isolated,
             reuse_main = config.reuse_main,
         )
@@ -256,7 +256,7 @@ function _pipeline_run!(config::PipelineConfig, session::DistSSHSession, driver:
             session,
             pipeline_collect_root(config);
             merge = config.collect_merge,
-            run_id = config.run_id,
+            ship_id = config.ship_id,
             best_effort = config.best_effort,
         )
         if !collect_result.ok

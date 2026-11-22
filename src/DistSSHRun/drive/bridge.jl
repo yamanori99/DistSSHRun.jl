@@ -40,8 +40,8 @@ function drive_api_isolated_argv(parsed)::Vector{String}
     let v = get(parsed, :julia, nothing)
         v !== nothing && push!(out, "--julia", String(v))
     end
-    let v = get(parsed, :run_id, nothing)
-        v !== nothing && push!(out, "--run-id", String(v))
+    let v = get(parsed, :ship_id, nothing)
+        v !== nothing && push!(out, "--ship-id", String(v))
     end
     let v = get(parsed, :deploy_root, nothing)
         v !== nothing && push!(out, DEPLOY_ROOT_FLAG, String(v))
@@ -87,7 +87,7 @@ function drive_parsed_from_session(
         sync_script::Union{Nothing, Bool} = nothing,
         unsafe_skip_env_digests = false,
         allow_external_symlinks::Bool = false,
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         unsafe_master_silence_exit::Union{Nothing, Bool} = nothing,
         unsafe_expose_port::Union{Nothing, Bool} = nothing,
         unsafe_all_to_all::Union{Nothing, Bool} = nothing,
@@ -124,7 +124,7 @@ function drive_parsed_from_session(
         hint_surface = hint_surface(session),
         process_env = session.cli_session.process_env,
     )
-    snap = run_id === nothing ? nothing : validate_run_id(run_id)
+    snap = ship_id === nothing ? nothing : validate_ship_id(ship_id)
     julia_exe = if julia === nothing || strip(String(julia)) == "" ||
             lowercase(strip(String(julia))) == "auto"
         nothing
@@ -157,7 +157,7 @@ function drive_parsed_from_session(
         unsafe_all_to_all = unsafe_all_to_all === nothing ? missing : cli_optional_bool(unsafe_all_to_all),
         print_config = missing,
         dry_run = missing,
-        run_id = snap,
+        ship_id = snap,
         deploy_root = session.remote,
         isolated = isolated,
         reuse_main = reuse_main,

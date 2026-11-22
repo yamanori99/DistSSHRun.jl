@@ -1188,7 +1188,7 @@ end
                     app,
                     :ship_tree;
                     deploy_id = snap_id,
-                    run_id = snap_id,
+                    ship_id = snap_id,
                     content_file_digests = digests,
                 )
             )
@@ -1201,7 +1201,7 @@ end
                         DistSSHRun.drive!(
                             script, String[]; head_workers = 1,
                             project = app,
-                            run_id = snap_id,
+                            ship_id = snap_id,
                             quiet = true,
                             enable_log = false,
                             reuse_main = true
@@ -1221,7 +1221,7 @@ end
         end
     end
 
-    @testset "run_id records verified-against-run-id when deploy record matches" begin
+    @testset "ship_id records verified-against-run-id when deploy record matches" begin
         _with_tempdir() do proj
             _write_host_project!(proj, "RunIdProv")
             script = joinpath(proj, "job.jl")
@@ -1236,7 +1236,7 @@ end
                     proj,
                     :ship_tree;
                     deploy_id = rid,
-                    run_id = rid,
+                    ship_id = rid,
                     content_file_digests = digests,
                 )
             )
@@ -1246,7 +1246,7 @@ end
                     script, String[]; head_workers = 1,
                     project = proj,
                     enable_log = false,
-                    run_id = rid,
+                    ship_id = rid,
                     reuse_main = true,
                 )
                 @test result.ok
@@ -1259,7 +1259,7 @@ end
         end
     end
 
-    @testset "run_id keyword on drive collect and outside-script guard" begin
+    @testset "ship_id keyword on drive collect and outside-script guard" begin
         root = mktempdir()
         try
             proj = joinpath(root, "proj")
@@ -1269,7 +1269,7 @@ end
             write(outside, "1\n")
             @test DistSSHRun._reject_script_outside_project_run!(
                 "drive", proj, outside;
-                run_id = "20260101T000000Z-aaaaaa",
+                ship_id = "20260101T000000Z-aaaaaa",
                 remote_argv = false
             ) === nothing
         finally
@@ -1277,11 +1277,11 @@ end
         end
         collect_m = methods(DistSSHRun.drive_collect_tree)[1]
         kws = Base.kwarg_decl(collect_m)
-        @test :run_id in kws
+        @test :ship_id in kws
         @test :snapshot ∉ kws
         rej_m = methods(DistSSHRun._reject_script_outside_project_run!)[1]
         rej_kws = Base.kwarg_decl(rej_m)
-        @test :run_id in rej_kws
+        @test :ship_id in rej_kws
         @test :snapshot ∉ rej_kws
     end
 

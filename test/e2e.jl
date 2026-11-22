@@ -243,7 +243,7 @@ function _e2e_wait_isfile(path::AbstractString; timeout::Real = 10)
     return false
 end
 
-function _e2e_wait_hb_monitors(kp, log_dir::AbstractString; timeout::Real = 240)
+function _e2e_wait_hb_monitors(detached, log_dir::AbstractString; timeout::Real = 240)
     t0 = time()
     while (time() - t0) < timeout
         log = _e2e_hb_log_text(log_dir)
@@ -251,7 +251,7 @@ function _e2e_wait_hb_monitors(kp, log_dir::AbstractString; timeout::Real = 240)
             occursin("Starting heartbeat monitors... ✓", log) ||
                 occursin(DistSSHRun.HEARTBEAT_SELF_EXIT_OFF_LINE, log)
         ) && return true
-        process_running(kp.process) || return false
+        process_running(detached.process) || return false
         sleep(0.5)
     end
     return false
@@ -373,7 +373,7 @@ end
                     Cmd(
                         [
                             "ssh", "-F", g.ssh_config, host,
-                            "test -n \"\$(ls -d $(remote_root)/runs/*/src/Project.toml 2>/dev/null)\"",
+                            "test -n \"\$(ls -d $(remote_root)/ships/*/src/Project.toml 2>/dev/null)\"",
                         ]
                     )
                 )
@@ -384,16 +384,16 @@ end
         @testset "setup instantiate" begin
             _e2e_announce("setup instantiate")
             # `--deploy-root` is the deploy root only. The ship leaf is
-            # `runs/<id>/src`; select it with `--run-id` (or the local
+            # `ships/<id>/src`; select it with `--ship-id` (or the local
             # last-ship record written by ship-tree).
-            p_src, src_out = _ssh_e2e_ssh(hosts[1], "ls -1d $(remote_root)/runs/*/src 2>/dev/null | tail -n 1")
+            p_src, src_out = _ssh_e2e_ssh(hosts[1], "ls -1d $(remote_root)/ships/*/src 2>/dev/null | tail -n 1")
             _assert_proc_ok(p_src, src_out; label = "ship src leaf")
             ship_src = strip(src_out)
             @test !isempty(ship_src)
             snap_id = basename(dirname(ship_src))
             proc, out = _run_kit_setup(;
                 setup_args = [
-                    "instantiate", "--deploy-root", remote_root, "--run-id", snap_id,
+                    "instantiate", "--deploy-root", remote_root, "--ship-id", snap_id,
                     setup_hosts...,
                 ],
                 project_root = proj,
@@ -402,8 +402,8 @@ end
             _assert_ssh_e2e_ok(suite, "setup_instantiate", proc, out; project = proj, kit = :setup)
         end
 
-        @testset "drive --run-id env digests" begin
-            _e2e_announce("drive --run-id env digests")
+        @testset "drive --ship-id env digests" begin
+            _e2e_announce("drive --ship-id env digests")
             run_id_root = "/home/dev/distsshkit-e2e-run-id-verify"
             run_env = _ssh_e2e_env(; remote_project = run_id_root)
             quiet = merge(run_env, Dict("DISTSSH_QUIET" => "0"))
@@ -428,14 +428,14 @@ end
                 rootq = DistSSHRun._remote_shell_path_word(run_id_root)
                 p_src, src_out = _ssh_e2e_ssh(
                     hosts[1],
-                    "ls -1d $(rootq)/runs/*/src 2>/dev/null | tail -n 1",
+                    "ls -1d $(rootq)/ships/*/src 2>/dev/null | tail -n 1",
                 )
                 _assert_proc_ok(p_src, src_out; label = "run-id env ship src")
                 snap_id = basename(dirname(strip(src_out)))
                 @test !isempty(snap_id)
                 proc, out = _run_kit_setup(;
                     setup_args = [
-                        "instantiate", "--deploy-root", run_id_root, "--run-id", snap_id,
+                        "instantiate", "--deploy-root", run_id_root, "--ship-id", snap_id,
                         setup_hosts...,
                     ],
                     project_root = proj,
@@ -444,7 +444,7 @@ end
                 _assert_ssh_e2e_ok(
                     suite, "run_id_env_instantiate", proc, out; project = proj, kit = :setup
                 )
-                runid_flags = ["-y", "-q", "--deploy-root", run_id_root, "--run-id", snap_id]
+                runid_flags = ["-y", "-q", "--deploy-root", run_id_root, "--ship-id", snap_id]
                 proc, out = _run_kit_drive(;
                     script = smoke,
                     host_root = proj,
@@ -465,7 +465,7 @@ end
                 )
                 _assert_ssh_e2e_ok(suite, "run_id_env_drive_unsafe_skip", proc_skip, out_skip)
 
-                proj_remote = "$(run_id_root)/runs/$(snap_id)/src/Project.toml"
+                proj_remote = "$(run_id_root)/ships/$(snap_id)/src/Project.toml"
                 tamper_jl = """
                 p = $(repr(proj_remote))
                 chmod(p, 0o644)
@@ -1174,8 +1174,8 @@ end
             end
         end
 
-        @testset "setup ship-tree then go --run-id empty remote" begin
-            _e2e_announce("setup ship-tree then go --run-id empty remote")
+        @testset "setup ship-tree then go --ship-id empty remote" begin
+            _e2e_announce("setup ship-tree then go --ship-id empty remote")
             oneshot = _ssh_e2e_go_ship_tree_remote_root()
             oneshot_env = _ssh_e2e_env(; remote_project = oneshot)
             try
@@ -1197,13 +1197,13 @@ end
                     extra_env = oneshot_env
                 )
                 _assert_ssh_e2e_ok(suite, "go_snapshot_empty_ship", proc, out; project = proj, kit = :setup)
-                p_src, src_out = _ssh_e2e_ssh(hosts[1], "ls -1d $(oneshot)/runs/*/src 2>/dev/null | tail -n 1")
+                p_src, src_out = _ssh_e2e_ssh(hosts[1], "ls -1d $(oneshot)/ships/*/src 2>/dev/null | tail -n 1")
                 _assert_proc_ok(p_src, src_out; label = "oneshot ship src leaf")
                 snap_id = basename(dirname(strip(src_out)))
                 @test !isempty(snap_id)
                 proc, out = _run_kit_setup(;
                     setup_args = [
-                        "instantiate", "--deploy-root", oneshot, "--run-id", snap_id,
+                        "instantiate", "--deploy-root", oneshot, "--ship-id", snap_id,
                         setup_hosts...,
                     ],
                     project_root = proj,
@@ -1216,7 +1216,7 @@ end
                     hosts = remote_tokens,
                     script_args = ["--n", "32"],
                     project_root = proj,
-                    go_flags = ["-y", "--run-id", snap_id],
+                    go_flags = ["-y", "--ship-id", snap_id],
                     extra_env = merge(oneshot_env, Dict("DISTSSH_QUIET" => "0"))
                 )
                 _assert_ssh_e2e_ok(suite, "go_snapshot_empty", proc, out; project = proj, kit = :go)
@@ -1228,7 +1228,7 @@ end
                         Cmd(
                             [
                                 "ssh", "-F", g.ssh_config, host,
-                                "test -n \"\$(ls -d $(oneshot)/runs/*/src/Project.toml 2>/dev/null)\"",
+                                "test -n \"\$(ls -d $(oneshot)/ships/*/src/Project.toml 2>/dev/null)\"",
                             ]
                         )
                     )
@@ -1432,7 +1432,7 @@ end
                     "DISTRIBUTED_INIT_DELAY_SEC" => "0"
                 )
             )
-            kp = withenv(hb_env...) do
+            detached = withenv(hb_env...) do
                 DistSSHRun.execute!(
                     :drive,
                     sleep_script,
@@ -1447,18 +1447,18 @@ end
             end
             # A queue that lost its in-memory `DetachedProcess` (e.g. restarted
             # mid-job) falls back to `kit.pid` — assert it names this run's
-            # real OS pid before using it below instead of `kp.process`.
+            # real OS pid before using it below instead of `detached.process`.
             pid_path = joinpath(log_dir, "kit.pid")
             pid_ready = _e2e_wait_isfile(pid_path; timeout = 10)
             _assert_ssh_e2e_api_ok(suite, "kit_pid_file", pid_ready, "path=$(pid_path)")
             @test pid_ready
             rec = pid_ready ? DistSSHRun._read_kit_pid_record(log_dir) : nothing
             detached_pid = rec === nothing ? -1 : rec.pid
-            @test detached_pid == getpid(kp.process)
+            @test detached_pid == getpid(detached.process)
 
             # Intel weekly (2026-10-15) still logged "Loading packages on workers"
             # at 90s, with `--worker` pids already present. Monitors start after that load.
-            monitors_ready = _e2e_wait_hb_monitors(kp, log_dir)
+            monitors_ready = _e2e_wait_hb_monitors(detached, log_dir)
             pids = _e2e_hb_worker_pids(host)
             pid_diag = _e2e_hb_worker_pid_diag(host, pids)
             _assert_ssh_e2e_api_ok(
@@ -1485,11 +1485,11 @@ end
                 attach_detail
             )
             @test trace_attached
-            # Kill by the `kit.pid`-derived pid, not `kp.process` — the path a
+            # Kill by the `kit.pid`-derived pid, not `detached.process` — the path a
             # queue without the original `DetachedProcess` handle would take.
             kill_t0 = time()
             run(`kill -9 $(detached_pid)`)
-            wait(kp.process)
+            wait(detached.process)
             gone, leftover, _ = _e2e_wait_worker_reap(host, pids)
             reap_elapsed = time() - kill_t0
             hb_log = _e2e_hb_log_text(log_dir)
@@ -1527,16 +1527,16 @@ end
             @test dist_exit
         end
 
-        # Detached SSH drive writes `kit.hosts`; `terminate!` SIGTERMs then
+        # Detached SSH drive writes `kit.hosts`; `cancel!` SIGTERMs then
         # tagged `pkill` (never `julia.*--worker`).
-        @testset "detached drive terminate! reaps remote workers" begin
-            _e2e_announce("detached drive terminate! reaps remote workers")
+        @testset "detached drive cancel! reaps remote workers" begin
+            _e2e_announce("detached drive cancel! reaps remote workers")
             drive_script = joinpath(proj, "drive_sleep.jl")
             host = hosts[1]
             pat_q = DistSSHRun.DistSSHBase._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)
             _ssh_e2e_ssh(host, "pkill -f $pat_q || true")
             term_out = mktempdir()
-            kp = withenv(_e2e_base_env()...) do
+            detached = withenv(_e2e_base_env()...) do
                 DistSSHRun.execute!(
                     :drive,
                     drive_script,
@@ -1549,7 +1549,7 @@ end
                     job_id = "e2e-drive-term"
                 )
             end
-            out_dir = kp.output_dir
+            out_dir = detached.output_dir
             @test out_dir !== nothing
             out = String(out_dir)
             hosts_path = joinpath(out, "kit.hosts")
@@ -1560,7 +1560,7 @@ end
                     hosts_ready = true
                     break
                 end
-                process_running(kp.process) || break
+                process_running(detached.process) || break
                 sleep(0.5)
             end
             listed = hosts_ready ? DistSSHRun._read_kit_hosts(out) : String[]
@@ -1591,7 +1591,7 @@ end
                     workers_ready = true
                     break
                 end
-                process_running(kp.process) || break
+                process_running(detached.process) || break
                 sleep(0.5)
             end
             pids = _drive_worker_pids()
@@ -1607,13 +1607,13 @@ end
             logger = Test.TestLogger()
             result = with_logger(logger) do
                 withenv(_e2e_base_env()...) do
-                    DistSSHRun.terminate!(kp; grace = 15)
+                    DistSSHRun.cancel!(detached; grace = 15)
                 end
             end
             @test !any(r -> occursin("did not reach", string(r.message)), logger.logs)
             @test result isa DistSSHRun.DistSSHJobResult
             @test result.kind === :drive
-            @test !process_running(kp.process)
+            @test !process_running(detached.process)
 
             gone = false
             leftover = pids
@@ -1919,9 +1919,9 @@ end
                 )
                 _assert_ssh_e2e_ok(suite, "negation_ship_tree", proc, out; project = app, kit = :setup)
                 for host in hosts
-                    p, ssh_out = _ssh_e2e_ssh(host, "test -n \"\$(ls -d $(neg_root)/runs/*/src/data/keep.txt 2>/dev/null)\"")
+                    p, ssh_out = _ssh_e2e_ssh(host, "test -n \"\$(ls -d $(neg_root)/ships/*/src/data/keep.txt 2>/dev/null)\"")
                     _assert_proc_ok(p, ssh_out; label = "negation keep.txt $(host)")
-                    p, ssh_out = _ssh_e2e_ssh(host, "test -z \"\$(ls -d $(neg_root)/runs/*/src/data/a.dat 2>/dev/null)\"")
+                    p, ssh_out = _ssh_e2e_ssh(host, "test -z \"\$(ls -d $(neg_root)/ships/*/src/data/a.dat 2>/dev/null)\"")
                     _assert_proc_ok(p, ssh_out; label = "negation a.dat absent $(host)")
                 end
             end
@@ -2002,7 +2002,7 @@ end
                 _assert_ssh_e2e_ok(suite, "shipdep_instantiate", proc, out; project = app, kit = :setup)
                 for host in hosts
                     remote = """
-                    leaf=\$(ls -1d $(dep_root)/runs/*/src/app | tail -n 1)
+                    leaf=\$(ls -1d $(dep_root)/ships/*/src/app | tail -n 1)
                     test -f "\$leaf/../Bar/src/Bar.jl"
                     \$HOME/.juliaup/bin/julia --startup-file=no --project="\$leaf" "\$leaf/_distsshrun_external/use_bar.jl"
                     """
@@ -2039,14 +2039,14 @@ end
             )
             _assert_ssh_e2e_ok(suite, "detached_outside_ship", proc, out; project = proj, kit = :setup)
             p_src, src_out = _ssh_e2e_ssh(
-                hosts[1], "ls -1d $(outside_root)/runs/*/src 2>/dev/null | tail -n 1"
+                hosts[1], "ls -1d $(outside_root)/ships/*/src 2>/dev/null | tail -n 1"
             )
             _assert_proc_ok(p_src, src_out; label = "outside ship src leaf")
             snap_id = basename(dirname(strip(src_out)))
             @test !isempty(snap_id)
             proc, out = _run_kit_setup(;
                 setup_args = [
-                    "instantiate", "--deploy-root", outside_root, "--run-id", snap_id,
+                    "instantiate", "--deploy-root", outside_root, "--ship-id", snap_id,
                     setup_hosts...,
                 ],
                 project_root = proj,
@@ -2055,7 +2055,7 @@ end
             _assert_ssh_e2e_ok(
                 suite, "detached_outside_instantiate", proc, out; project = proj, kit = :setup
             )
-            kp = withenv(outside_env...) do
+            detached = withenv(outside_env...) do
                 DistSSHRun.execute!(
                     :go,
                     outside,
@@ -2063,11 +2063,11 @@ end
                     project = proj,
                     remote = outside_root,
                     detached = true,
-                    run_id = snap_id,
+                    ship_id = snap_id,
                     quiet = true
                 )
             end
-            result = wait(kp)
+            result = wait(detached)
             _assert_ssh_e2e_api_ok(
                 suite,
                 "detached_outside_script",
@@ -2078,7 +2078,7 @@ end
             @test result.exit_code == 0
             p, ssh_out = _ssh_e2e_ssh(
                 hosts[1],
-                "test -f $(outside_root)/runs/$(snap_id)/src/_distsshrun_external/outside_marker.jl"
+                "test -f $(outside_root)/ships/$(snap_id)/src/_distsshrun_external/outside_marker.jl"
             )
             _assert_proc_ok(p, ssh_out; label = "outside script in snapshot")
         end

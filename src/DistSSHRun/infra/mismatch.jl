@@ -515,7 +515,7 @@ function assert_controller_environment_for_verify!(project::AbstractString)
 end
 public assert_controller_environment_for_verify!
 
-"""Controller gates for `--run-id` runs (skip local Manifest / shipped-tree compare)."""
+"""Controller gates for `--ship-id` runs (skip local Manifest / shipped-tree compare)."""
 function assert_controller_environment_for_shipped_run!(project::AbstractString)
     canonical_local_path(project)
     assert_controller_default_sysimage!()
@@ -525,55 +525,55 @@ end
 public assert_controller_environment_for_shipped_run!
 
 function _missing_deploy_record_for_run_error(
-        run_id::AbstractString,
+        ship_id::AbstractString,
         project::AbstractString = "",
     )::String
-    rid = let s = strip(String(run_id))
-        isempty(s) ? "(unknown)" : validate_run_id(s)
+    rid = let s = strip(String(ship_id))
+        isempty(s) ? "(unknown)" : validate_ship_id(s)
     end
     lines = String[
-        "what: deploy record for run_id=$(rid) is not available",
-        "why: --run-id verifies worker Manifest/Project digests against the ship deploy record",
-        "fix: run setup ship-tree and instantiate on workers, then drive --run-id $(rid); remote hosts must be listed so deploy.toml is read (local last-ship.toml is not used for verification)",
+        "what: deploy record for ship_id=$(rid) is not available",
+        "why: --ship-id verifies worker Manifest/Project digests against the ship deploy record",
+        "fix: run setup ship-tree and instantiate on workers, then drive --ship-id $(rid); remote hosts must be listed so deploy.toml is read (local last-ship.toml is not used for verification)",
     ]
     proj = isempty(strip(project)) ? "" : canonical_local_path(project)
     !isempty(proj) && push!(lines, "where: controller project=$(proj)")
     return join(lines, "\n")
 end
 
-function _missing_ship_manifest_digest_error(run_id::AbstractString)::String
-    rid = validate_run_id(run_id)
+function _missing_ship_manifest_digest_error(ship_id::AbstractString)::String
+    rid = validate_ship_id(ship_id)
     return join(
         [
-            "what: deploy record for run_id=$(rid) has no manifest_hash",
-            "why: --run-id requires the Manifest SHA-256 recorded at ship time",
-            "fix: re-run setup ship-tree for this project and use the new run id",
+            "what: deploy record for ship_id=$(rid) has no manifest_hash",
+            "why: --ship-id requires the Manifest SHA-256 recorded at ship time",
+            "fix: re-run setup ship-tree for this project and use the new ship id",
         ],
         "\n",
     )
 end
 
-function _missing_ship_project_digest_error(run_id::AbstractString)::String
-    rid = validate_run_id(run_id)
+function _missing_ship_project_digest_error(ship_id::AbstractString)::String
+    rid = validate_ship_id(ship_id)
     return join(
         [
-            "what: deploy record for run_id=$(rid) has no project_hash",
-            "why: --run-id verifies Project.toml bytes against the ship deploy record",
-            "fix: re-run setup ship-tree for this project and use the new run id",
+            "what: deploy record for ship_id=$(rid) has no project_hash",
+            "why: --ship-id verifies Project.toml bytes against the ship deploy record",
+            "fix: re-run setup ship-tree for this project and use the new ship id",
         ],
         "\n",
     )
 end
 
 function _deploy_record_for_run_verify(
-        run_id::AbstractString,
+        ship_id::AbstractString,
         project::AbstractString,
     )::Dict{String, Any}
-    rid = validate_run_id(run_id)
+    rid = validate_ship_id(ship_id)
     rec = active_deploy_record()
     if rec isa AbstractDict
-        got = get(rec, "run_id", nothing)
-        if got isa AbstractString && validate_run_id(String(got)) == rid
+        got = get(rec, "ship_id", nothing)
+        if got isa AbstractString && validate_ship_id(String(got)) == rid
             return Dict{String, Any}(rec)
         end
     end
@@ -645,24 +645,24 @@ function _worker_digest_heterogeneity_lines(
 end
 
 """
-Verify worker environments for `--run-id`: homogeneous Manifest/Project digests
+Verify worker environments for `--ship-id`: homogeneous Manifest/Project digests
 and a match to the active ship deploy record (no controller Manifest compare).
 """
 function verify_workers_match_shipped_run!(
         project::AbstractString;
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
     )
     waive_env = unsafe_skip_env_digests_active()
     proj = canonical_local_path(project)
-    rid = if run_id isa AbstractString && !isempty(strip(run_id))
-        validate_run_id(run_id)
+    rid = if ship_id isa AbstractString && !isempty(strip(ship_id))
+        validate_ship_id(ship_id)
     else
         sel = active_source_selection()
         sel === nothing && throw(ErrorException(_missing_deploy_record_for_run_error("", proj)))
-        rid_sel = sel.run_id
+        rid_sel = sel.ship_id
         rid_sel isa AbstractString ||
             throw(ErrorException(_missing_deploy_record_for_run_error("", proj)))
-        validate_run_id(rid_sel)
+        validate_ship_id(rid_sel)
     end
     rec = _deploy_record_for_run_verify(rid, proj)
     want_man, want_proj = _deploy_record_env_digests(rec)
@@ -1063,7 +1063,7 @@ end
 
 function _remote_project_for_go(host::AbstractString, remote_root::AbstractString, project::AbstractString)::String
     rr = String(strip(remote_root))
-    # `go!` passes the remote work root (`runs/<id>/src`); use it for `--project=`.
+    # `go!` passes the remote work root (`ships/<id>/src`); use it for `--project=`.
     !isempty(rr) && return rr
     proj = canonical_local_path(project)
     resolved = resolve_host_path_abs(String(host), proj, proj)

@@ -1218,24 +1218,24 @@ using Pkg
         @test getfield(positional, 3) === false
         @test getfield(positional, 4) isa Vector{DistSSHRun.SetupWarning}
         @test DistSSHRun.result_content_tree_hash(positional) === nothing
-        @test DistSSHRun.result_remote_run_id(positional) === nothing
+        @test DistSSHRun.result_ship_id(positional) === nothing
         @test DistSSHRun.result_content_tree_hash(keyword) === nothing
-        @test DistSSHRun.result_remote_run_id(keyword) === nothing
+        @test DistSSHRun.result_ship_id(keyword) === nothing
         shipped = DistSSHRun.SyncResult(
             false, DistSSHRun.HostResult[];
             ok = true,
             content_tree_hash = "abc",
-            run_id = "20260101T000000Z-abcdef"
+            ship_id = "20260101T000000Z-abcdef"
         )
         @test DistSSHRun.result_content_tree_hash(shipped) == "abc"
-        @test DistSSHRun.result_remote_run_id(shipped) == "20260101T000000Z-abcdef"
+        @test DistSSHRun.result_ship_id(shipped) == "20260101T000000Z-abcdef"
         blank = DistSSHRun.SyncResult(
             false, DistSSHRun.HostResult[];
             ok = true,
             content_tree_hash = "",
-            run_id = ""
+            ship_id = ""
         )
         @test DistSSHRun.result_content_tree_hash(blank) === nothing
-        @test DistSSHRun.result_remote_run_id(blank) === nothing
+        @test DistSSHRun.result_ship_id(blank) === nothing
     end
 end

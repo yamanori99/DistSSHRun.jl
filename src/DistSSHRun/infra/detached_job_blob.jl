@@ -236,8 +236,8 @@ function read_detached_job_blob(path::AbstractString)
         output_dir = _blob_optional_string(get(raw, "output_dir", nothing)),
         log_dir = _blob_optional_string(get(raw, "log_dir", nothing)),
         julia = _blob_optional_string(get(raw, "julia", nothing)),
-        run_id = let rid = _blob_optional_string(get(raw, "run_id", nothing))
-            rid === nothing ? nothing : validate_run_id(rid)
+        ship_id = let rid = _blob_optional_string(get(raw, "ship_id", nothing))
+            rid === nothing ? nothing : validate_ship_id(rid)
         end,
         quiet = _blob_bool(get(raw, "quiet", false), "quiet"),
         verbosity = _blob_optional_string(get(raw, "verbosity", nothing)),
@@ -342,7 +342,7 @@ function write_detached_job_blob!(
         output_dir = nothing,
         log_dir = nothing,
         julia = nothing,
-        run_id = nothing,
+        ship_id = nothing,
         quiet::Bool = false,
         verbosity = nothing,
         best_effort::Bool = false,
@@ -380,7 +380,7 @@ function write_detached_job_blob!(
             (:output_dir, output_dir),
             (:log_dir, log_dir),
             (:julia, julia),
-            (:run_id, run_id),
+            (:ship_id, ship_id),
             (:package, package),
             (:job_id, job_id),
         )
@@ -432,7 +432,7 @@ function execute_kwargs_from_job_blob(blob)
         :unsafe_skip_env_digests => blob.unsafe_skip_env_digests,
     )
     blob.verbosity !== nothing && (kw[:verbosity] = Symbol(blob.verbosity))
-    blob.run_id !== nothing && (kw[:run_id] = blob.run_id)
+    blob.ship_id !== nothing && (kw[:ship_id] = blob.ship_id)
     blob.log_dir !== nothing && (kw[:log_dir] = blob.log_dir)
     blob.enable_log == false && (kw[:enable_log] = false)
     blob.package !== nothing && (kw[:package] = blob.package)
@@ -528,7 +528,7 @@ function drive_parsed_from_detached_job_blob(
         unsafe_all_to_all = blob.unsafe_all_to_all,
         print_config = false,
         dry_run = false,
-        run_id = blob.run_id,
+        ship_id = blob.ship_id,
         deploy_root = blob.remote,
         isolated = false,
         unsafe_master_silence_exit = blob.unsafe_master_silence_exit,
@@ -567,7 +567,7 @@ function go_parsed_from_detached_job_blob(
         julia = blob.julia,
         repeat = blob.repeat,
         run_opts = run_opts,
-        run_id = blob.run_id,
+        ship_id = blob.ship_id,
         deploy_root = blob.remote,
     )
 end

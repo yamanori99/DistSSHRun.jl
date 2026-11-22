@@ -51,7 +51,7 @@ if !isdefined(@__MODULE__, :doctor_main)
         if !opts.deploy
             DistSSHRun.print_err("Error: "; bold = true, io = stderr)
             DistSSHRun.println_fatal(
-                "doctor needs --deploy; use: $(DistSSHRun.cli_m()) doctor --deploy [--run-id ID] HOSTS";
+                "doctor needs --deploy; use: $(DistSSHRun.cli_m()) doctor --deploy [--ship-id ID] HOSTS";
                 io = stderr,
             )
             DistSSHRun.println_fatal("", io = stderr)
@@ -74,7 +74,7 @@ if !isdefined(@__MODULE__, :doctor_main)
                 DistSSHRun._project_work_root(
                     opts.hosts, project;
                     cli_override = opts.deploy_root,
-                    run_id = opts.run_id,
+                    ship_id = opts.ship_id,
                 )
             else
                 remote_path

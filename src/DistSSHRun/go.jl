@@ -12,7 +12,7 @@ end
 `run_dir` is this run's `DISTSSH_RUN_DIR` when one is active.
 Read it with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
 `run.toml` from it. [`result_content_tree_hash`](@ref) and
-[`result_remote_run_id`](@ref) read `provenance.selection` in that file.
+[`result_ship_id`](@ref) read `provenance.selection` in that file.
 Omitted `run_dir` uses [`kit_run_dir`](@ref), which
 is `nothing` outside a run.
 
@@ -380,7 +380,7 @@ end
     remote_script_path(work_root, project, script) -> String
 
 Remote path of `script` after a ship. `work_root` is the remote project
-directory (`runs/<id>/src` plus the project directory inside the tar).
+directory (`ships/<id>/src` plus the project directory inside the tar).
 
 A script inside `project` keeps its relative path under `work_root`. A script
 outside it is `work_root/_distsshrun_external/<basename>`, the same place
@@ -976,13 +976,13 @@ means "skip collect" and is orthogonal to `output_dir`.
 Default `sync` is `false` (no pre-run sync; remotes are checked first — setup
 is assumed done). The `go` CLI does not take `--ship-tree` or `--git-sync`;
 prepare with `setup ship-tree` or `setup git-sync`, then `setup instantiate`
-when needed, then `go --run-id ID`. Passing `sync=:git_sync` or
-`sync=:ship_tree` on [`go!`](@ref) is an `ArgumentError`. `run_id`
-(CLI `--run-id`) selects `runs/<ID>/src` when `sync` is omitted or `false`.
-A script outside the project is allowed with `run_id` when that ship used
+when needed, then `go --ship-id ID`. Passing `sync=:git_sync` or
+`sync=:ship_tree` on [`go!`](@ref) is an `ArgumentError`. `ship_id`
+(CLI `--ship-id`) selects `ships/<ID>/src` when `sync` is omitted or `false`.
+A script outside the project is allowed with `ship_id` when that ship used
 `extra_files=[script]`. The remote command is
 [`remote_script_path`](@ref): `_distsshrun_external/<basename>` under the
-selected project directory. `run_id` also skips the in-tree
+selected project directory. `ship_id` also skips the in-tree
 `[sources]` check: a sibling path dependency was already shipped.
 `go!` has no git-parity gate; use [`drive!`](@ref) with
 `skip_hash_check=false` (CLI: `drive --require-git`) when you need that.
@@ -1028,7 +1028,7 @@ function go!(
         unsafe_skip_env_digests = missing,
         unsafe_expose_port = missing,
         unsafe_all_to_all = missing,
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         sync::Union{Symbol, Bool, Nothing} = nothing,
         allow_external_symlinks::Bool = false,
         allow_mismatch = nothing,
@@ -1046,7 +1046,7 @@ function go!(
         _reject_run_transfer_cli!(hint_surface === :cli ? "go" : "go", "--allow-external-symlinks")
     remote_argv = _remote_script_argv(script)
     script_path = remote_argv ? String(script) : canonical_local_path(script)
-    snap_arg = run_id === nothing ? nothing : validate_run_id(run_id)
+    snap_arg = ship_id === nothing ? nothing : validate_ship_id(ship_id)
     proj = canonical_local_path(project)
     if !isfile(script_path) && !(remote_argv && snap_arg !== nothing)
         throw(
@@ -1068,7 +1068,7 @@ function go!(
         try
             _reset_run_provenance!(proj)
             _clear_active_selection!()
-            _clear_active_deploy_record_unless_run_id!(snap_arg)
+            _clear_active_deploy_record_unless_ship_id!(snap_arg)
             warn_project_sshflags(proj)
             _ensure_kit_run_dir!(:go, script_path; project = proj)
             cfg = resolve_run_job_config(;
@@ -1225,7 +1225,7 @@ function _go_run!(
                 "go!",
                 proj,
                 script_path;
-                run_id = snap_arg,
+                ship_id = snap_arg,
                 remote_argv = remote_argv,
             )
             _write_kit_hosts_file(child_hosts, batch_dir, nothing)
@@ -1258,7 +1258,7 @@ function _go_run!(
                 sess_rr
             else
                 rr = _project_work_root(
-                    child_hosts, proj; cli_override = remote, run_id = snap_arg,
+                    child_hosts, proj; cli_override = remote, ship_id = snap_arg,
                 )
                 doctor_launch_assert_hosts!(child_hosts, rr; local_project = proj)
                 rr

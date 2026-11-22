@@ -17,17 +17,17 @@ const _SETUP_BANG_MODES = (
 )
 
 """
-    check_setup_options!(mode; extra_files=String[], run_id=nothing)
+    check_setup_options!(mode; extra_files=String[], ship_id=nothing)
 
 Reject setup options the mode does not accept. `extra_files` is only valid
-for `:ship_tree`. This version accepts one path. `run_id` is only valid
+for `:ship_tree`. This version accepts one path. `ship_id` is only valid
 for `:instantiate` and `:runtest`. The `setup` CLI collects flags
 and calls this; it does not apply those rules itself.
 """
 function check_setup_options!(
         mode::Symbol;
         extra_files::Vector{String} = String[],
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         job_id::Union{Nothing, AbstractString} = nothing,
         allow_dirty::Bool = false,
     )
@@ -39,11 +39,11 @@ function check_setup_options!(
     end
     length(extra_files) > 1 &&
         throw(ArgumentError("more than one extra file is not yet supported"))
-    if run_id !== nothing &&
+    if ship_id !== nothing &&
             mode !== :instantiate && mode !== :runtest
         throw(
             ArgumentError(
-                "setup! run_id= only applies to :instantiate or :runtest",
+                "setup! ship_id= only applies to :instantiate or :runtest",
             ),
         )
     end
@@ -63,7 +63,7 @@ Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup …`.
 | `mode` | CLI | Notes |
 | --- | --- | --- |
 | `:delete` | `delete` | Destructive. Requires `confirm_path`. `session.cli_session.yes` does not delete. Refuses a present unowned Ship `run.toml` |
-| `:ship_tree` | `ship-tree` | Walk the project and each directory's `.gitignore` (case-sensitive). No git binary. Relative path dependencies outside the project ship under a common ancestor. A gitignored project or Manifest file is omitted with one warning. `!LocalPreferences.toml` ships that file. Declared inputs do not. `extra_files` is one external file at `_distsshrun_external/<basename>` (a second file errors). Creates a missing remote root when safe (`~/…` under home, or absolute with an existing parent). Tar into `runs/<run_id>/src/`, empty `out/`, DistSSHRun stamp. Does not instantiate |
+| `:ship_tree` | `ship-tree` | Walk the project and each directory's `.gitignore` (case-sensitive). No git binary. Relative path dependencies outside the project ship under a common ancestor. A gitignored project or Manifest file is omitted with one warning. `!LocalPreferences.toml` ships that file. Declared inputs do not. `extra_files` is one external file at `_distsshrun_external/<basename>` (a second file errors). Creates a missing remote root when safe (`~/…` under home, or absolute with an existing parent). Tar into `ships/<ship_id>/src/`, empty `out/`, DistSSHRun stamp. Does not instantiate |
 | `:git_clone` | `git-clone` | Requires `repo=`; clone runs **on the remote** |
 | `:git_sync` | `git-sync` | Requires a clone at `session.remote` (`:git_clone` first on a new target). Push the local branch to origin, then detach each remote at that commit. A dirty tree is refused unless `allow_dirty=true` (CLI `--skip-git-guard`; deploy record `dirty=true`) |
 | `:git_pull` | `git-pull` | Detach each remote at the local commit. Does not push to origin and does not run `git pull`. A dirty tree is refused |
@@ -99,7 +99,7 @@ function setup!(
         julia::AbstractString = "auto",
         older_days::Union{Nothing, Integer} = nothing,
         id::Union{Nothing, AbstractString} = nothing,
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         job_id::Union{Nothing, AbstractString} = nothing,
         confirm_path = nothing,
         allow_external_symlinks::Bool = false,
@@ -109,11 +109,11 @@ function setup!(
     check_setup_options!(
         mode;
         extra_files = extra_files,
-        run_id = run_id,
+        ship_id = ship_id,
         job_id = job_id,
         allow_dirty = allow_dirty,
     )
-    snap = run_id === nothing ? nothing : validate_run_id(run_id)
+    snap = ship_id === nothing ? nothing : validate_ship_id(ship_id)
     _setup_bang_preflight!(session, mode; repo = repo)
     hosts = _setup_bang_host_list(session)
     if isempty(hosts)
@@ -142,7 +142,7 @@ function setup!(
                         julia = julia,
                         older_days = older_days,
                         id = id,
-                        run_id = snap,
+                        ship_id = snap,
                         job_id = job_id,
                         bound_plan = bound_plan,
                         allow_external_symlinks = allow_external_symlinks,
@@ -665,7 +665,7 @@ function _setup_one!(
         julia::AbstractString = "auto",
         older_days::Union{Nothing, Integer} = nothing,
         id::Union{Nothing, AbstractString} = nothing,
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         job_id::Union{Nothing, AbstractString} = nothing,
         bound_plan::Union{Nothing, Dict{String, String}} = nothing,
         allow_external_symlinks::Bool = false,
@@ -737,7 +737,7 @@ function _setup_one!(
         end
         return result
     elseif mode === :instantiate
-        return instantiate!(session; julia = julia_path, run_id = run_id)
+        return instantiate!(session; julia = julia_path, ship_id = ship_id)
     elseif mode === :juliaup || mode === :juliaup_update
         targets = _setup_juliaup_targets(hosts)
         ssh_hosts = setup_juliaup_ssh_hosts(targets)
@@ -753,7 +753,7 @@ function _setup_one!(
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
         work_path = _project_work_root(
             hosts, session.project;
-            cli_override = session.remote, run_id = run_id,
+            cli_override = session.remote, ship_id = ship_id,
         )
         raw = runtest_remotes(
             hosts, julia_path, work_path, session.project;

@@ -15,21 +15,21 @@ using Base.Threads
     )
     parsed = DistSSHRun._parse_deploy_record_body(body)
     @test parsed !== nothing
-    @test something(parsed)["run_id"] == "20260101T000000Z-aaaaaa"
+    @test something(parsed)["ship_id"] == "20260101T000000Z-aaaaaa"
     both = sprint(
         TOML.print,
         Dict(
             "writer" => DistSSHRun.run_record_writer(),
             "deploy_id" => "20260102T000000Z-bbbbbb",
             "mode" => "ship-tree",
-            "run_id" => "20260102T000000Z-bbbbbb",
+            "ship_id" => "20260102T000000Z-bbbbbb",
             "snapshot_id" => "20260101T000000Z-aaaaaa",
             "content_tree_hash" => "b"^40
         )
     )
     parsed2 = DistSSHRun._parse_deploy_record_body(both)
     @test parsed2 !== nothing
-    @test something(parsed2)["run_id"] == "20260102T000000Z-bbbbbb"
+    @test something(parsed2)["ship_id"] == "20260102T000000Z-bbbbbb"
 end
 
 @testset "deploy record build and parse" begin
@@ -79,12 +79,12 @@ end
         "writer" => DistSSHRun.run_record_writer(),
         "mode" => "ship-tree",
         "deploy_id" => "20260101T000000Z-aaaaaa",
-        "run_id" => "20260101T000000Z-aaaaaa"
+        "ship_id" => "20260101T000000Z-aaaaaa"
     )
     slice = DistSSHRun._deploy_record_for_provenance(rec)
     @test slice !== nothing
     @test slice["mode"] == "ship-tree"
-    @test slice["run_id"] == "20260101T000000Z-aaaaaa"
+    @test slice["ship_id"] == "20260101T000000Z-aaaaaa"
 end
 
 @testset "deploy record scp upload argv is local then remote" begin
@@ -373,18 +373,18 @@ end
     end
 end
 
-@testset "active deploy record preserved for explicit run_id" begin
+@testset "active deploy record preserved for explicit ship_id" begin
     rid = "20260101T000000Z-aaaaaa"
     other = "20260102T000000Z-bbbbbb"
-    rec = Dict{String, Any}("run_id" => rid, "mode" => "ship-tree", "manifest_hash" => "a"^64)
+    rec = Dict{String, Any}("ship_id" => rid, "mode" => "ship-tree", "manifest_hash" => "a"^64)
     try
         DistSSHRun._set_active_deploy_record!(rec)
-        DistSSHRun._clear_active_deploy_record_unless_run_id!(rid)
+        DistSSHRun._clear_active_deploy_record_unless_ship_id!(rid)
         @test DistSSHRun.active_deploy_record() !== nothing
-        DistSSHRun._clear_active_deploy_record_unless_run_id!(other)
+        DistSSHRun._clear_active_deploy_record_unless_ship_id!(other)
         @test DistSSHRun.active_deploy_record() === nothing
         DistSSHRun._set_active_deploy_record!(rec)
-        DistSSHRun._clear_active_deploy_record_unless_run_id!(nothing)
+        DistSSHRun._clear_active_deploy_record_unless_ship_id!(nothing)
         @test DistSSHRun.active_deploy_record() === nothing
     finally
         DistSSHRun._clear_active_deploy_record!()

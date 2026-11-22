@@ -109,7 +109,7 @@ const _RUN_OPTION_TABLE_KEYS = Set{Symbol}(
         :isolated,
         :default_workers,
         :explicit_package,
-        :run_id,
+        :ship_id,
         :deploy_root,
         :julia,
     )

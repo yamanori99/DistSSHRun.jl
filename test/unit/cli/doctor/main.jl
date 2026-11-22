@@ -39,12 +39,19 @@ using Test
         @test code == 2
         @test occursin("doctor needs --deploy", shown)
         @test occursin("doctor --deploy", shown)
-        @test occursin("--run-id ID", shown)
+        @test occursin("--ship-id ID", shown)
     end
 
     let (code, out, err) = _doctor_capture(["--not-a-flag", "host1"])
         shown = out * err
         @test code == 2
         @test occursin("unknown doctor option", shown)
+    end
+
+    let (code, out, err) = _doctor_capture(["--deploy", "--run-id", "20260101T000000Z-aaaaaa", "host1"])
+        shown = out * err
+        @test code == 2 || code == 1
+        @test occursin("--ship-id", shown)
+        @test !occursin("unknown doctor option", shown)
     end
 end
