@@ -48,7 +48,7 @@ for attempt in 1 2 3 4 5 6; do
     if git "${net[@]}" -C "$dest" push origin HEAD:bench-data; then
         exit 0
     fi
-  git "${net[@]}" -C "$dest" pull --rebase origin bench-data || { git -C "$dest" rebase --abort || true; exit 1; }
+    git "${net[@]}" -C "$dest" pull --rebase origin bench-data || { git -C "$dest" rebase --abort || true; exit 1; }
     [ "$attempt" -lt 6 ] && sleep "$attempt"
 done
 git "${net[@]}" -C "$dest" push origin HEAD:bench-data
