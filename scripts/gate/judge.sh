@@ -171,7 +171,7 @@ judge_when_detect ssh-e2e "$(e2e_run_should_run && echo true || echo false)" "${
 judge_when_detect queue-ssh-e2e "$(queue_e2e_should_run && echo true || echo false)" "${queue_off}"
 
 # continue-on-error: failure does not fail gate when the job ran
-for id in aqua-1-14-pre aqua-nightly jetls-1-14-pre ssh-e2e-1-14-pre; do
+for id in aqua-1-14-pre aqua-nightly jetls-1-14-pre ssh-e2e-1-14-pre downstream; do
   r="$(result_of "${id}")"
   [[ "${r}" == skipped ]] && continue
   [[ "${r}" == success ]] && continue
