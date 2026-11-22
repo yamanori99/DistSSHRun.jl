@@ -64,42 +64,43 @@ function cluster(
             return _drive_frame(; cli = false) do
                 return _with_kit_inproc_run!(:drive) do
                     return _with_drive_process!(session.project) do
-                        apply_session_env!(session)
-                        return _with_session_remote_env!(session) do
-                            apply_shared_cli_flags!(session.cli_session)
-                            head_workers, hosts = _cluster_placement(session, plan)
-                            proj_dir = resolve_pkg_project_dir(canonical_local_path(session.project))
-                            project_root = canonical_local_path(session.project)
-                            DistSSHRun._reset_run_provenance!(project_root)
-                            planned_ssh = String[h[1] for h in hosts]
-                            bind_map = hosts_file_bind_overrides(
-                                session.cli_session;
-                                planned_hosts = planned_ssh,
-                                command = :drive,
-                            )
-                            drive_atexit_cleanup = nothing
-                            try
-                                successful_hosts, report = add_drive_workers!(
-                                    hosts,
-                                    head_workers,
-                                    nothing,
-                                    nothing,
-                                    proj_dir,
-                                    nothing,
-                                    project_root;
-                                    bind_overrides = bind_map,
+                        return _with_session_env!(session) do
+                            return _with_session_remote_env!(session) do
+                                apply_shared_cli_flags!(session.cli_session)
+                                head_workers, hosts = _cluster_placement(session, plan)
+                                proj_dir = resolve_pkg_project_dir(canonical_local_path(session.project))
+                                project_root = canonical_local_path(session.project)
+                                DistSSHRun._reset_run_provenance!(project_root)
+                                planned_ssh = String[h[1] for h in hosts]
+                                bind_map = hosts_file_bind_overrides(
+                                    session.cli_session;
+                                    planned_hosts = planned_ssh,
+                                    command = :drive,
                                 )
-                                drive_atexit_cleanup = register_worker_cleanup!(successful_hosts)
-                                DistSSHRun.capture_worker_provenance!()
-                                enforce_launch_contract!(report; best_effort)
-                                wait_for_worker_connections!(; ssh = !isempty(hosts))
-                                launched = sort!(collect(_drive_owned_worker_ids()))
-                                handle = Cluster(report, launched)
-                                return _drive_cancellable() do
-                                    return f(handle)
+                                drive_atexit_cleanup = nothing
+                                try
+                                    successful_hosts, report = add_drive_workers!(
+                                        hosts,
+                                        head_workers,
+                                        nothing,
+                                        nothing,
+                                        proj_dir,
+                                        nothing,
+                                        project_root;
+                                        bind_overrides = bind_map,
+                                    )
+                                    drive_atexit_cleanup = register_worker_cleanup!(successful_hosts)
+                                    DistSSHRun.capture_worker_provenance!()
+                                    enforce_launch_contract!(report; best_effort)
+                                    wait_for_worker_connections!(; ssh = !isempty(hosts))
+                                    launched = sort!(collect(_drive_owned_worker_ids()))
+                                    handle = Cluster(report, launched)
+                                    return _drive_cancellable() do
+                                        return f(handle)
+                                    end
+                                finally
+                                    _teardown_drive_workers_after_run!(drive_atexit_cleanup)
                                 end
-                            finally
-                                _teardown_drive_workers_after_run!(drive_atexit_cleanup)
                             end
                         end
                     end
