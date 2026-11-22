@@ -374,10 +374,12 @@ function _output_lock_hold_shell_helpers()::String
           _hpid=\$(sed -n 's/^pid=//p' "\$_lf")
           _hstart=\$(sed -n 's/^start=//p' "\$_lf")
           _hhost=\$(sed -n 's/^host=//p' "\$_lf")
-          if [ "\$_hpid" = "\$\$" ] && [ "\$_hstart" = "\$_hex" ] && [ "\$_hhost" = "\$_me" ]; then
+          _hwriter=\$(sed -n 's/^writer=//p' "\$_lf")
+          if [ "\$_hpid" = "\$\$" ] && [ "\$_hstart" = "\$_hex" ] && [ "\$_hhost" = "\$_me" ] && [ "\$_hwriter" = "\$_writer" ]; then
             return 0
           fi
           if _distssh_one_blocks "\$_lf"; then
+            printf 'output lock held by pid %s on %s\\n' "\$_hpid" "\$_hhost" >&2
             exit 1
           fi
           _obs=\$(cat "\$_lf") || exit 1

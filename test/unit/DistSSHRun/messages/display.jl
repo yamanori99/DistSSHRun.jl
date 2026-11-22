@@ -804,7 +804,7 @@ using Test
                 dir_q = DistSSHRun.posix_quote(tmp)
                 first = run(
                     pipeline(
-                        `bash -c $(helpers * "_distssh_hold_lock $dir_q '' && sleep 30")`;
+                        `bash -c $(helpers * "_distssh_hold_lock $dir_q '' && exec sleep 30")`;
                         stderr = devnull,
                     );
                     wait = false,
@@ -826,7 +826,7 @@ using Test
                     @test second.exitcode != 0
                 finally
                     process_running(first) && kill(first)
-                    process_running(first) && wait(first)
+                    wait(first)
                 end
             end
             _with_tempdir() do tmp

@@ -431,7 +431,7 @@ function _run_drive_parsed_specialized!(
         DistSSHRun._clear_active_deploy_record_unless_ship_id!(snap_for_script)
         # Inside `_drive_frame`: this `finally` restores after `rmprocs`.
         return _with_drive_process!(proj_dir) do
-            local release_output_dir_lock
+            release_output_dir_lock = () -> nothing
             code = Cint(1)
             hosts_acc = resolved_hosts === nothing ?
                 Ref{Vector{HostRunResult}}(HostRunResult[]) :
