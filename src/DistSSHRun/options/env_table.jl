@@ -10,7 +10,7 @@ struct EnvRow
 end
 
 function user_env_table()::Vector{EnvRow}
-    return EnvRow[
+    rows = EnvRow[
         EnvRow("DISTSSH_QUIET", "bool", "unset", "--quiet", "hide terminal detail"),
         EnvRow("DISTSSH_PROGRESS", "bool", "unset", "--progress", "live status"),
         EnvRow("DISTSSH_VERBOSE", "bool", "unset", "--verbose", "full detail"),
@@ -46,18 +46,33 @@ function user_env_table()::Vector{EnvRow}
         EnvRow("DISTSSH_SHIP_WARN_TOTAL_BYTES", "int", "unset", "—", "warn when the shipped total exceeds this"),
         EnvRow("DISTSSH_PROGRESS_BG", "string", "unset", "—", "progress accent: light or dark"),
         EnvRow("DISTSSH_BLAS_THREADS", "int >= 1", "unset", "—", "OpenBLAS/OMP threads on workers"),
-        EnvRow("DISTSSH_SKIP_GLOBAL_WORKER_PKILL", "bool", "false", "—", "skip drive leftover tagged remote pkill"),
-        EnvRow("DISTSSH_WAIT_SCALE", "float > 0", "1", "—", "scales child_reply, go_job, and drive_job waits"),
-        EnvRow("DISTSSH_WAIT_CHILD_REPLY", "float >= 0", "caller default", "—", "named wait override"),
-        EnvRow("DISTSSH_WAIT_GO_JOB", "float >= 0", "caller default", "—", "named wait override"),
-        EnvRow("DISTSSH_WAIT_DRIVE_JOB", "float >= 0", "caller default", "—", "named wait override"),
-        EnvRow("DISTSSH_WAIT_STOP_GRACE", "float >= 0", "caller default", "—", "named wait override"),
-        EnvRow("DISTSSH_WAIT_SIGINT_GRACE", "float >= 0", "caller default", "—", "named wait override"),
-        EnvRow("DISTSSH_WAIT_E2E_STOP", "float >= 0", "caller default", "—", "named wait override"),
-        EnvRow("DISTSSH_WAIT_SSH_CONNECT", "float >= 0", "caller default", "—", "named wait override"),
-        EnvRow("DISTSSH_WAIT_SSH_AUTH", "float >= 0", "caller default", "—", "named wait override"),
-        EnvRow("DISTSSH_WAIT_PEER_SILENT", "float >= 0", "caller default", "—", "named wait override"),
     ]
+    push!(
+        rows,
+        EnvRow(
+            "DISTSSH_SKIP_GLOBAL_WORKER_PKILL",
+            "bool",
+            "false",
+            "—",
+            "skip leftover tagged remote workers after drive",
+        ),
+    )
+    append!(
+        rows,
+        EnvRow[
+            EnvRow("DISTSSH_WAIT_SCALE", "float > 0", "1", "—", "scales child_reply, go_job, and drive_job waits"),
+            EnvRow("DISTSSH_WAIT_CHILD_REPLY", "float >= 0", "caller default", "—", "named wait override"),
+            EnvRow("DISTSSH_WAIT_GO_JOB", "float >= 0", "caller default", "—", "named wait override"),
+            EnvRow("DISTSSH_WAIT_DRIVE_JOB", "float >= 0", "caller default", "—", "named wait override"),
+            EnvRow("DISTSSH_WAIT_STOP_GRACE", "float >= 0", "caller default", "—", "named wait override"),
+            EnvRow("DISTSSH_WAIT_SIGINT_GRACE", "float >= 0", "caller default", "—", "named wait override"),
+            EnvRow("DISTSSH_WAIT_E2E_STOP", "float >= 0", "caller default", "—", "named wait override"),
+            EnvRow("DISTSSH_WAIT_SSH_CONNECT", "float >= 0", "caller default", "—", "named wait override"),
+            EnvRow("DISTSSH_WAIT_SSH_AUTH", "float >= 0", "caller default", "—", "named wait override"),
+            EnvRow("DISTSSH_WAIT_PEER_SILENT", "float >= 0", "caller default", "—", "named wait override"),
+        ]
+    )
+    return rows
 end
 
 function user_env_names()::Set{String}

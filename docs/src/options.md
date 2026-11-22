@@ -66,7 +66,7 @@ A numeric or boolean value that does not parse is an error that names the variab
 | `DISTSSH_SHIP_WARN_TOTAL_BYTES` | int | `unset` | — | warn when the shipped total exceeds this |
 | `DISTSSH_PROGRESS_BG` | string | `unset` | — | progress accent: light or dark |
 | `DISTSSH_BLAS_THREADS` | int >= 1 | `unset` | — | OpenBLAS/OMP threads on workers |
-| `DISTSSH_SKIP_GLOBAL_WORKER_PKILL` | bool | `false` | — | skip drive leftover tagged remote pkill |
+| `DISTSSH_SKIP_GLOBAL_WORKER_PKILL` | bool | `false` | — | skip leftover tagged remote workers after drive |
 | `DISTSSH_WAIT_SCALE` | float > 0 | `1` | — | scales child_reply, go_job, and drive_job waits |
 | `DISTSSH_WAIT_CHILD_REPLY` | float >= 0 | `caller default` | — | named wait override |
 | `DISTSSH_WAIT_GO_JOB` | float >= 0 | `caller default` | — | named wait override |

@@ -173,7 +173,7 @@ function ssh_auth_timeout_seconds()::Float64
     return max(auth, connect + 1.0)
 end
 
-"""OpenSSH flags for parallel short remote phases (`kill`, tagged `pkill`).
+"""OpenSSH flags for parallel short remote phases (`kill`, tagged leftover jobs).
 
 Forced `-o` tokens are placed before forwarded user opts so they win over
 `DISTSSH_SSH_OPTS` (OpenSSH uses the first value per option name).
