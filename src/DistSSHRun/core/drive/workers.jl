@@ -115,10 +115,12 @@ function add_drive_workers!(
             local_line = DistSSHRun.format_kit_head_placement(head_workers, "workers")
             write_both("  $local_line: ")
             DistSSHRun._drive_host_span!(DistSSHRun.PARENT_HOST_NAME, "workers", :running)
+            head_ranks = DistSSHRun.reserve_worker_ranks!(head_workers)
             try
                 before = Set(workers())
                 DistSSHRun._add_local_drive_workers!(
                     head_workers, proj_dir, local_julia;
+                    ranks = head_ranks,
                     verify_project = !snapshot_run,
                 )
                 _register_drive_workers!(before, proj_dir, script_path)
@@ -186,6 +188,7 @@ function add_drive_workers!(
             host_ok = false
             try
                 host_workers = something(host_workers_spec, default_workers, 1)
+                host_ranks = DistSSHRun.reserve_worker_ranks!(host_workers)
 
                 repo_ra = canonical_local_path(project_root)
                 remote_proj = resolve_host_path_abs(host_name, proj_dir, repo_ra)
@@ -305,7 +308,8 @@ function add_drive_workers!(
                         host_julia,
                         remote_proj,
                         sshflags_cmd,
-                        host_name,
+                        host_name;
+                        ranks = host_ranks,
                     )
                     added = sort!(Int[w for w in workers() if w ∉ before])
                     # `SSHManager.launch` can swallow a failed machine; `addprocs` then
