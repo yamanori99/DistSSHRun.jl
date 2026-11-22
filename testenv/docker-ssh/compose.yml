@@ -1,4 +1,4 @@
-# Linux SSH children for DistSSHKit CI / local Docker E2E (`child:NAME[:N]`).
+# Linux SSH workers for DistSSHKit CI / local Docker E2E (plain hosts child-1, child-2).
 services:
   child-1:
     build:

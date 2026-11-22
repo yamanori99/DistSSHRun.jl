@@ -8,6 +8,67 @@ const _DETACHED_PLACEMENT_ENV_KEYS = (
     "DISTSSH_HOSTS_FILE",
 )
 
+const _DETACHED_JOB_SHARED_ENV_KEYS = (
+    "DISTSSH_QUIET",
+    "DISTSSH_PROGRESS",
+    "DISTSSH_VERBOSE",
+    "DISTSSH_YES",
+    "DISTSSH_JOBS",
+    "DISTSSH_HEAD_WORKERS",
+    "DISTSSH_SKIP_GLOBAL_WORKER_PKILL",
+    "JULIA_DISTRIBUTED_EXE",
+    "DISTSSH_REQUIRE_ALL_HOSTS",
+    "DISTSSH_BEST_EFFORT",
+    "DISTSSH_JOB_BLOB",
+)
+
+const _JOB_BLOB_BOOTSTRAP_YES = ("-y", "--yes")
+
+function _detached_job_default_env_keys()::Vector{String}
+    keys = Set{String}()
+    for k in _DETACHED_PLACEMENT_ENV_KEYS
+        push!(keys, k)
+    end
+    for k in _DETACHED_JOB_SHARED_ENV_KEYS
+        push!(keys, k)
+    end
+    for row in run_option_table()
+        row.env === nothing && continue
+        push!(keys, String(row.env))
+    end
+    return sort!(collect(keys))
+end
+
+"""Usage error when bootstrap argv is not only `-y` / `--yes` plus `--job-blob PATH`."""
+function assert_detached_job_blob_bootstrap_argv!(args::AbstractVector{<:AbstractString})
+    args_vec = String[String(x) for x in args]
+    for i in eachindex(args_vec)
+        args_vec[i] == "--job-blob" || continue
+        i >= length(args_vec) &&
+            throw(ArgumentError("--job-blob requires a path"))
+        trailing = args_vec[(i + 2):end]
+        isempty(trailing) && break
+        extra = join(trailing, " ")
+        throw(
+            ArgumentError(
+                "unexpected argv after --job-blob PATH: $(extra); "
+                    * "detached bootstrap is -y/--yes and --job-blob PATH only",
+            ),
+        )
+    end
+    _, rest = peel_job_blob_bootstrap(copy(args_vec))
+    for arg in rest
+        arg in _JOB_BLOB_BOOTSTRAP_YES && continue
+        throw(
+            ArgumentError(
+                "unexpected argv with --job-blob: $(arg); "
+                    * "detached bootstrap is -y/--yes and --job-blob PATH only",
+            ),
+        )
+    end
+    return nothing
+end
+
 """Absolute path to the job blob under `run_dir`."""
 function detached_job_blob_path(run_dir::AbstractString)::String
     return joinpath(canonical_local_path(String(run_dir)), DETACHED_JOB_BLOB_FILENAME)
@@ -53,6 +114,65 @@ function _blob_optional_string(raw)::Union{Nothing, String}
     s = strip(String(raw))
     isempty(s) && return nothing
     return s
+end
+
+function _blob_optional_float(raw, name::AbstractString)::Union{Nothing, Float64}
+    raw === nothing && return nothing
+    if raw isa Real
+        v = Float64(raw)
+        v > 0 || throw(ArgumentError("job blob: $(name) must be positive"))
+        return v
+    end
+    s = strip(String(raw))
+    isempty(s) && return nothing
+    parsed = tryparse(Float64, s)
+    parsed === nothing && throw(ArgumentError("job blob: $(name) must be a number"))
+    parsed > 0 || throw(ArgumentError("job blob: $(name) must be positive"))
+    return parsed
+end
+
+const _DETACHED_BLOB_HEARTBEAT_DEADLINE = "distributed_heartbeat_deadline_sec"
+const _DETACHED_BLOB_HEARTBEAT_INTERVAL = "distributed_heartbeat_interval_sec"
+const _DETACHED_HEARTBEAT_DEADLINE_ENV = "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC"
+const _DETACHED_HEARTBEAT_INTERVAL_ENV = "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC"
+
+"""Job-default option fields to store in the blob from the parent `ProcessEnv` at write time."""
+function detached_job_blob_fields_from_env(env::ProcessEnv = snapshot_process_env())
+    fields = Dict{Symbol, Any}()
+    for row in run_option_table()
+        row.env === nothing && continue
+        if row.default isa AbstractString
+            raw = strip(get(env, String(row.env), ""))
+            isempty(raw) && continue
+            String(row.default) != raw && (fields[row.key] = raw)
+            continue
+        end
+        flag = _bool_env(String(row.env); env = env)
+        flag === true && (fields[row.key] = true)
+    end
+    dl = _blob_optional_float(get(env, _DETACHED_HEARTBEAT_DEADLINE_ENV, nothing), "heartbeat_deadline")
+    dl !== nothing && (fields[Symbol(_DETACHED_BLOB_HEARTBEAT_DEADLINE)] = dl)
+    iv = _blob_optional_float(get(env, _DETACHED_HEARTBEAT_INTERVAL_ENV, nothing), "heartbeat_interval")
+    iv !== nothing && (fields[Symbol(_DETACHED_BLOB_HEARTBEAT_INTERVAL)] = iv)
+    return fields
+end
+
+"""`ProcessEnv` for a detached child after scrub: heartbeat timing from the blob only."""
+function detached_job_blob_child_process_env(
+        base::ProcessEnv,
+        blob,
+    )
+    data = copy(base.data)
+    if blob.distributed_heartbeat_deadline_sec !== nothing
+        data[_DETACHED_HEARTBEAT_DEADLINE_ENV] = string(blob.distributed_heartbeat_deadline_sec)
+    end
+    if blob.distributed_heartbeat_interval_sec !== nothing
+        data[_DETACHED_HEARTBEAT_INTERVAL_ENV] = string(blob.distributed_heartbeat_interval_sec)
+    end
+    if blob.topology !== nothing
+        data["DISTSSH_TOPOLOGY"] = blob.topology
+    end
+    return ProcessEnv(data)
 end
 
 function _validate_detached_job_blob_dict(raw::AbstractDict)
@@ -148,14 +268,31 @@ function read_detached_job_blob(path::AbstractString)
             get(raw, "allow_external_symlinks", false),
             "allow_external_symlinks",
         ),
+        unsafe_master_silence_exit = _blob_bool(
+            get(raw, "unsafe_master_silence_exit", false),
+            "unsafe_master_silence_exit",
+        ),
+        unsafe_expose_port = _blob_bool(get(raw, "unsafe_expose_port", false), "unsafe_expose_port"),
+        unsafe_all_to_all = _blob_bool(get(raw, "unsafe_all_to_all", false), "unsafe_all_to_all"),
+        topology = _blob_optional_string(get(raw, "topology", nothing)),
+        distributed_heartbeat_deadline_sec = _blob_optional_float(
+            get(raw, _DETACHED_BLOB_HEARTBEAT_DEADLINE, nothing),
+            "distributed_heartbeat_deadline_sec",
+        ),
+        distributed_heartbeat_interval_sec = _blob_optional_float(
+            get(raw, _DETACHED_BLOB_HEARTBEAT_INTERVAL, nothing),
+            "distributed_heartbeat_interval_sec",
+        ),
     )
 end
 
-"""Remove placement tokens from `ENV` after the blob is loaded."""
+"""Remove job-default keys from `ENV` after the blob is loaded (placement and option env)."""
 function scrub_detached_placement_env!()
-    for k in _DETACHED_PLACEMENT_ENV_KEYS
+    for k in _detached_job_default_env_keys()
         delete!(ENV, k)
     end
+    delete!(ENV, _DETACHED_HEARTBEAT_DEADLINE_ENV)
+    delete!(ENV, _DETACHED_HEARTBEAT_INTERVAL_ENV)
     return nothing
 end
 
@@ -163,6 +300,8 @@ function _write_job_blob_pairs(io::IO, pairs::Vector{Pair{String, Any}})
     for (k, v) in pairs
         if v isa Bool
             println(io, "$k = ", v ? "true" : "false")
+        elseif v isa AbstractFloat
+            println(io, "$k = ", v)
         elseif v isa AbstractString
             println(io, "$k = ", repr(v))
         elseif v isa Integer
@@ -218,6 +357,12 @@ function write_detached_job_blob!(
         allow_external_symlinks::Bool = false,
         head_workers = nothing,
         head_slots = nothing,
+        unsafe_master_silence_exit::Bool = false,
+        unsafe_expose_port::Bool = false,
+        unsafe_all_to_all::Bool = false,
+        topology = nothing,
+        distributed_heartbeat_deadline_sec = nothing,
+        distributed_heartbeat_interval_sec = nothing,
     )::String
     _require_execute_kind!(kind)
     path = detached_job_blob_path(run_dir)
@@ -255,9 +400,18 @@ function write_detached_job_blob!(
             (:worker_include, worker_include),
             (:unsafe_skip_env_digests, unsafe_skip_env_digests),
             (:allow_external_symlinks, allow_external_symlinks),
+            (:unsafe_master_silence_exit, unsafe_master_silence_exit),
+            (:unsafe_expose_port, unsafe_expose_port),
+            (:unsafe_all_to_all, unsafe_all_to_all),
         )
         push!(pairs, String(k) => v)
     end
+    topology_s = topology === nothing ? nothing : strip(String(topology))
+    topology_s !== nothing && !isempty(topology_s) && push!(pairs, "topology" => topology_s)
+    distributed_heartbeat_deadline_sec !== nothing &&
+        push!(pairs, _DETACHED_BLOB_HEARTBEAT_DEADLINE => Float64(distributed_heartbeat_deadline_sec))
+    distributed_heartbeat_interval_sec !== nothing &&
+        push!(pairs, _DETACHED_BLOB_HEARTBEAT_INTERVAL => Float64(distributed_heartbeat_interval_sec))
     open(path, "w") do io
         _write_job_blob_pairs(io, pairs)
     end
@@ -330,7 +484,10 @@ end
 function drive_parsed_from_detached_job_blob(
         blob;
         hint_surface::Symbol = :cli,
-        process_env::ProcessEnv = snapshot_process_env(),
+        process_env::ProcessEnv = detached_job_blob_child_process_env(
+            snapshot_process_env(),
+            blob,
+        ),
     )
     head_workers = something(blob.head_workers, 0)
     hosts = _blob_machine_hosts(blob.tokens)
@@ -367,20 +524,23 @@ function drive_parsed_from_detached_job_blob(
         cli_session = cli_session,
         hint_surface = hint_surface,
         unsafe_skip_env_digests = blob.unsafe_skip_env_digests,
-        unsafe_expose_port = false,
-        unsafe_all_to_all = false,
+        unsafe_expose_port = blob.unsafe_expose_port,
+        unsafe_all_to_all = blob.unsafe_all_to_all,
         print_config = false,
         dry_run = false,
         run_id = blob.run_id,
         deploy_root = blob.remote,
         isolated = false,
-        unsafe_master_silence_exit = missing,
+        unsafe_master_silence_exit = blob.unsafe_master_silence_exit,
         job_blob = true,
     )
 end
 
 """`parse_go_args`-shaped NamedTuple from a detached job blob."""
-function go_parsed_from_detached_job_blob(blob; process_env::ProcessEnv = snapshot_process_env())
+function go_parsed_from_detached_job_blob(
+        blob;
+        process_env::ProcessEnv = detached_job_blob_child_process_env(snapshot_process_env(), blob),
+    )
     blob.kind === :go || throw(ArgumentError("job blob kind is $(blob.kind); expected go"))
     cli_session = CliSharedFlags(
         quiet = blob.quiet,
@@ -394,6 +554,8 @@ function go_parsed_from_detached_job_blob(blob; process_env::ProcessEnv = snapsh
     )
     run_opts = RunOptionCliState()
     run_opts.unsafe_skip_env_digests = blob.unsafe_skip_env_digests
+    run_opts.unsafe_expose_port = blob.unsafe_expose_port
+    run_opts.unsafe_all_to_all = blob.unsafe_all_to_all
     return _go_parsed(
         help = false,
         show_version = false,
@@ -411,6 +573,9 @@ function go_parsed_from_detached_job_blob(blob; process_env::ProcessEnv = snapsh
 end
 
 public DETACHED_JOB_BLOB_ENV, DETACHED_JOB_BLOB_FILENAME
-public detached_job_blob_path, drive_parsed_from_detached_job_blob, execute_kwargs_from_job_blob
-public go_parsed_from_detached_job_blob, peel_job_blob_bootstrap, read_detached_job_blob
-public scrub_detached_placement_env!, write_detached_job_blob!
+public assert_detached_job_blob_bootstrap_argv!, detached_job_blob_child_process_env
+public detached_job_blob_fields_from_env, detached_job_blob_path
+public drive_parsed_from_detached_job_blob, execute_kwargs_from_job_blob
+public go_parsed_from_detached_job_blob, peel_job_blob_bootstrap
+public read_detached_job_blob, scrub_detached_placement_env!
+public write_detached_job_blob!

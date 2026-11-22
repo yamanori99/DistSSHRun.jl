@@ -28,7 +28,8 @@ unique anchor (for example `removed-cli-flag` for `DSSH-E001`). Typed errors pri
 
 ## DSSH-E020 — Invalid placement token
 
-**When:** A worker/placement token does not match `parent:N` / `child:NAME:N` grammar.
+**When:** A worker/placement token does not match `N*[user@]host[:port]` grammar
+(for example a removed `parent:N` / `child:NAME:N` token, or a bare integer).
 
 ## DSSH-E030 — Topology or bind rejected
 

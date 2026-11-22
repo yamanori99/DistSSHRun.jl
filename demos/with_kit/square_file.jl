@@ -1,8 +1,8 @@
 #!/usr/bin/env julia
 # DistSSHRun driver: pmap p→p² and write CSV (pair with square_echo.jl).
 #
-#   julia --project=. -m DistSSHRun drive --local-workers 2 distsshkit_demos/with_kit/square_file.jl
-#   julia --project=. -m DistSSHRun drive --local-workers 2 distsshkit_demos/with_kit/square_file.jl --n 4
+#   julia --project=. -m DistSSHRun drive --head-workers 2 distsshkit_demos/with_kit/square_file.jl
+#   julia --project=. -m DistSSHRun drive --head-workers 2 distsshkit_demos/with_kit/square_file.jl --n 4
 
 using Distributed
 import TOML
@@ -43,7 +43,7 @@ function main()
     n = 8
     if !isempty(ARGS)
         length(ARGS) == 2 && ARGS[1] == "--n" ||
-            error("pass --n N (a bare number looks like parent:N)")
+            error("pass --n N (a bare integer is not a machine token)")
         n = parse(Int, ARGS[2])
     end
     results = pmap(p -> p^2, 1:n)

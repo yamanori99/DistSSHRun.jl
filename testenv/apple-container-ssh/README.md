@@ -53,7 +53,7 @@ SSH aliases after `up.sh`:
 # source (not ./) so DistSSHRun SSH env is loaded into this shell:
 source ./scripts/up.sh
 julia --project=../.. -m DistSSHRun \
-  up status parent child:child-1 child:child-2 --verbose
+  up status child-1 child-2 --verbose
 # One-shot without sourcing the shell:
 # ../docker-ssh/scripts/with-env.sh julia --project=../.. -m DistSSHRun …
 # Or plain ssh:

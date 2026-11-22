@@ -92,3 +92,109 @@ end
         @test !parsed.best_effort
     end
 end
+
+function _detached_blob_path(d::AbstractString, kind::Symbol)::String
+    run_dir = joinpath(d, "run")
+    mkpath(run_dir)
+    return DistSSHRun.write_detached_job_blob!(
+        run_dir,
+        kind,
+        "job.jl",
+        kind === :drive ? ["1*h1"] : ["1*h1"],
+        String[],
+        d;
+        head_workers = kind === :drive ? 1 : nothing,
+        head_slots = kind === :go ? 1 : nothing,
+    )
+end
+
+@testset "detached job blob bootstrap argv" begin
+    mktempdir() do d
+        path = _detached_blob_path(d, :drive)
+        bootstrap = String["-y", "--job-blob", path]
+        @test isfile(path)
+        @test DistSSHRun.parse_drive_args(bootstrap).script_path == "job.jl"
+        @test_throws ArgumentError DistSSHRun.parse_drive_args(
+            [bootstrap..., "--best-effort"],
+        )
+        @test_throws ArgumentError DistSSHRun.parse_drive_args(
+            String["--job-blob", path, "--quiet"],
+        )
+        go_path = _detached_blob_path(d, :go)
+        go_bootstrap = String["-y", "--job-blob", go_path]
+        @test_throws ArgumentError DistSSHRun.parse_go_args([go_bootstrap..., "1*h1"])
+        @test DistSSHRun.parse_go_args(go_bootstrap).script_path == "job.jl"
+    end
+end
+
+@testset "detached job blob captures parent env into blob" begin
+    mktempdir() do d
+        run_dir = joinpath(d, "run")
+        path = withenv(
+            "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1",
+            "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "9",
+            "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "2",
+            "DISTSSH_TOPOLOGY" => "master_worker",
+        ) do
+            fields = DistSSHRun.detached_job_blob_fields_from_env()
+            @test fields[:unsafe_master_silence_exit]
+            @test fields[:topology] == "master_worker"
+            @test fields[:distributed_heartbeat_deadline_sec] == 9.0
+            @test fields[:distributed_heartbeat_interval_sec] == 2.0
+            blob_path = DistSSHRun.write_detached_job_blob!(
+                run_dir,
+                :drive,
+                "job.jl",
+                ["1*h1"],
+                String[],
+                d;
+                head_workers = 1,
+                unsafe_master_silence_exit = fields[:unsafe_master_silence_exit],
+                distributed_heartbeat_deadline_sec = fields[:distributed_heartbeat_deadline_sec],
+                distributed_heartbeat_interval_sec = fields[:distributed_heartbeat_interval_sec],
+                topology = fields[:topology],
+            )
+            blob = DistSSHRun.read_detached_job_blob(blob_path)
+            @test blob.unsafe_master_silence_exit
+            @test blob.topology == "master_worker"
+            @test blob.distributed_heartbeat_deadline_sec == 9.0
+            return blob_path
+        end
+        withenv(
+            "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1",
+            "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "5",
+        ) do
+            parsed = DistSSHRun.parse_drive_args(String["-y", "--job-blob", path])
+            pol = DistSSHRun.resolve_drive_heartbeat_policy(
+                env = parsed.cli_session.process_env,
+                self_exit = parsed.unsafe_master_silence_exit,
+            )
+            @test pol.self_exit
+            @test pol.deadline == 9.0
+        end
+    end
+end
+
+@testset "detached job blob ignores job-default env" begin
+    mktempdir() do d
+        path = _detached_blob_path(d, :drive)
+        withenv("DISTSSH_TOPOLOGY" => "master_worker") do
+            parsed = DistSSHRun.parse_drive_args(String["-y", "--job-blob", path])
+            cfg = DistSSHRun.resolve_run_job_config_from_parsed(parsed; command = :drive)
+            @test cfg.topology.value == "auto"
+            @test cfg.topology.source == DistSSHRun.FromDefault
+        end
+    end
+    mktempdir() do d
+        path = _detached_blob_path(d, :go)
+        withenv(
+            "DISTSSH_TOPOLOGY" => "master_worker",
+            "DISTSSH_UNSAFE_EXPOSE_PORT" => "1",
+        ) do
+            parsed = DistSSHRun.parse_go_args(String["-y", "--job-blob", path])
+            cfg = DistSSHRun.resolve_run_job_config_from_parsed(parsed; command = :go)
+            @test cfg.topology.value == "auto"
+            @test !cfg.unsafe_expose_port.value
+        end
+    end
+end

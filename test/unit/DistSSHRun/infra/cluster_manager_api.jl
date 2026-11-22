@@ -17,6 +17,8 @@ const _CLUSTER_MANAGER_EXPORTS = (
     :job_item_seed,
     :worker_pmap,
     :WorkerPlan,
+    :Cluster,
+    :cluster,
 )
 
 const _CLUSTER_MANAGER_PUBLIC_UNEXPORTED = (
@@ -78,7 +80,7 @@ const _RUN_OPTION_TABLE_KEYS = Set{Symbol}(
         @test !Base.isexported(DistSSHRun, sym)
         @test Base.ispublic(DistSSHRun, sym)
     end
-    @test :cluster ∉ names(DistSSHRun)
+    @test fieldnames(DistSSHRun.Cluster) === (:report, :workers)
 
     @test fieldnames(DistSSHRun.WorkerPlan) === (:head_workers, :child_workers)
     @test fieldnames(DistSSHRun.HostLaunchFailure) ===

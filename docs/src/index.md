@@ -4,8 +4,9 @@ DistSSHRun is one run on shared machines over SSH: `setup`, `go`,
 `drive`, `hostinfo`, `pool`, `demo`, and `progress`.
 Supported on **macOS, Linux, and WSL2 Ubuntu** (not native Windows).
 
-The command is `julia -m DistSSHRun`. Exit streams and codes follow Rust
-[clap](https://docs.rs/clap) [`Command::arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Command.html#method.arg_required_else_help);
+The command is `julia -m DistSSHRun`. Exit streams and codes follow
+[clap](https://docs.rs/clap) [`Command::arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Command.html#method.arg_required_else_help)
+(bare invocation with no operands → full help on stderr, exit 2);
 see [CLI conventions](cli.md).
 
 `pkg> app add DistSSHRun` still installs `distsshrun`. That command is
@@ -130,7 +131,7 @@ with that same local script. The remote command is
 selected project). The `go` / `drive` CLI does not take `--ship-tree`: run
 `setup ship-tree`, then `setup instantiate`, then `go` / `drive` with
 `--run-id ID`.
-Later `setup instantiate` / `setup check` / `go` / `drive` select a
+Later `setup instantiate` / `doctor --deploy` / `go` / `drive` select a
 shipped run with `--run-id ID` (or `run_id=` on `setup!` / `go!` / `drive!`),
 else the local `.distssh/last-ship.toml` written after a
 successful ship, else a git checkout that has `Project.toml` at the deploy
@@ -149,7 +150,7 @@ or legacy leaves are not selectable. Collect recovery with
 `DISTSSH_RUN_DIR` uses that execution's `provenance.selection` instead of a
 newer last-ship record. A recorded `content_tree_hash` there must match
 the selected remote stamp. A local last-ship record without a matching
-40-digit hash is not used. `setup check` still prints SSH diagnostics
+40-digit hash is not used. `doctor --deploy` still prints SSH diagnostics
 when selection cannot probe, then fails closed if the run id is invalid. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
 `pack_ship_tree`, `pack_shipment`, and `ship_project_to_dest` send the same
 verified tar as worker ship to a caller-chosen remote directory (DistSSHQueue
@@ -212,7 +213,7 @@ opens paths literally, so use `check_input_manifest` for those trees.
 `hash = false` records only stat fields in `run.toml` and does not write
 a manifest. A later ship into the same run directory replaces the row
 for the same input name and host. Standalone `setup ship-tree` waits
-for hashing before it returns. `go` / `drive` / `drive` do not copy on run;
+for hashing before it returns. `go` / `drive` do not copy on run;
 hashing for a ship finishes under `setup ship-tree` before selection.
 `outputs` is reserved and not written. There is no
 `run.private.toml`; public records keep relative paths and aliases only.
@@ -241,19 +242,19 @@ is rejected. See `julia -m DistSSHRun help setup`.
 
 ## Commands
 
-`setup check` fails when the worker Julia patch or prerelease differs
+`doctor --deploy` fails when the worker Julia patch or prerelease differs
 from this process. A build suffix alone still passes.
 `--ignore-julia-version` turns that skew into a warning. `go` and
 `drive` compare the full VERSION string and the Julia commit. `up`
 runs `juliaup update` even when the channel name already matches.
 
 ```bash
-julia -m DistSSHRun setup check host1
+julia -m DistSSHRun doctor --deploy host1
 julia -m DistSSHRun go SCRIPT.jl
-julia -m DistSSHRun drive --head-workers 2 parent:2 SCRIPT.jl
 julia -m DistSSHRun drive --head-workers 2 SCRIPT.jl
+julia -m DistSSHRun drive --head-workers 2 --hosts '2*host1' SCRIPT.jl
 julia -m DistSSHRun go --head-slots 2 SCRIPT.jl
-julia -m DistSSHRun hostinfo parent
+julia -m DistSSHRun hostinfo
 julia -m DistSSHRun pool
 ```
 

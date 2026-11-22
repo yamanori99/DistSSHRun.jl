@@ -2,7 +2,7 @@
 # Run a command with docker-ssh / apple-container DistSSHRun SSH env.
 # Does not export into the parent shell (source + exec in this process only).
 #
-#   ./scripts/with-env.sh julia --project=. -m DistSSHRun up status parent child:child-1
+#   ./scripts/with-env.sh julia --project=. -m DistSSHRun up status child-1 child-2
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
