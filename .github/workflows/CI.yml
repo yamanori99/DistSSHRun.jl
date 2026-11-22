@@ -74,7 +74,7 @@ jobs:
   # `DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)` is continue-on-error.
   # One detect job; markdown-only / allowlisted PRs skip heavy jobs (UI: skipping).
   # Required check names include the Julia version and the architecture.
-  # Codecov (flags run/base/up/ship/heartbeat/e2e): main push Pkg.test; E2E on main + weekly + version-cut.
+  # Codecov (flags run/base/up/ship/heartbeat/e2e): main push Pkg.test; E2E on main + weekly.
   # cache-scratchspaces: false — registry_updates.toml in scratchspaces can
   # poison Pkg.Registry.update on 1.13 if restored corrupt.
   # Aqua / JETLS / Runic share this workflow so the Test badge is the PR gate.
@@ -174,9 +174,7 @@ jobs:
           else
             echo "e2e=false" >> "$GITHUB_OUTPUT"
           fi
-          if [ "$CUT" = "true" ]; then
-            echo "coverage=true" >> "$GITHUB_OUTPUT"
-          elif [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ] && [ "$HEAVY" != "false" ]; then
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ] && [ "$HEAVY" != "false" ]; then
             echo "coverage=true" >> "$GITHUB_OUTPUT"
           else
             echo "coverage=false" >> "$GITHUB_OUTPUT"
@@ -1366,7 +1364,7 @@ jobs:
     permissions:
       contents: read
       actions: write # buildx type=gha cache for the worker image
-      id-token: write # Codecov OIDC on main push, version-cut PR, and weekly E2E coverage
+      id-token: write # Codecov OIDC on main push and weekly E2E coverage
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1488,3 +1486,84 @@ jobs:
           if [[ -d "$DISTSSHQUEUE_CHECKOUT" ]]; then
             (cd "$DISTSSHQUEUE_CHECKOUT" && ./testenv/docker-ssh/scripts/down.sh) || true
           fi
+
+  # Main push only: Downstream Kit/Queue and queue-ssh-e2e stay out (known noise).
+  # continue-on-error jobs (1.14-pre, nightly, PkgEval) are omitted.
+  notify:
+    needs:
+      - detect
+      - runic
+      - jetls
+      - aqua
+      - test-unit
+      - test-integration
+      - test-coverage
+      - test-macos-unit
+      - test-macos-integration
+      - test-wsl
+      - ship-test-ubuntu
+      - ship-test-macos
+      - ship-test-wsl
+      - heartbeat-test-ubuntu
+      - heartbeat-test-macos
+      - heartbeat-test-wsl
+      - up-test-ubuntu
+      - up-test-macos
+      - up-test-wsl
+      - base-test-ubuntu
+      - base-test-macos
+      - base-test-wsl
+      - up-ssh-e2e
+      - base-ssh-e2e
+      - ship-ssh-e2e
+      - heartbeat-ssh-e2e
+      - ssh-e2e
+      - registry-install
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && !cancelled()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    name: notify
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Open or close tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: Test main failed
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BODY_PREFIX: "Not a PR check. Downstream Kit/Queue failures are tracked separately.
+
+          "
+          MONITOR_RESULTS: |
+            detect:${{ needs.detect.result }}
+            runic:${{ needs.runic.result }}
+            jetls:${{ needs.jetls.result }}
+            aqua:${{ needs.aqua.result }}
+            test-unit:${{ needs.test-unit.result }}
+            test-integration:${{ needs.test-integration.result }}
+            test-coverage:${{ needs.test-coverage.result }}
+            test-macos-unit:${{ needs.test-macos-unit.result }}
+            test-macos-integration:${{ needs.test-macos-integration.result }}
+            test-wsl:${{ needs.test-wsl.result }}
+            ship-test-ubuntu:${{ needs.ship-test-ubuntu.result }}
+            ship-test-macos:${{ needs.ship-test-macos.result }}
+            ship-test-wsl:${{ needs.ship-test-wsl.result }}
+            heartbeat-test-ubuntu:${{ needs.heartbeat-test-ubuntu.result }}
+            heartbeat-test-macos:${{ needs.heartbeat-test-macos.result }}
+            heartbeat-test-wsl:${{ needs.heartbeat-test-wsl.result }}
+            up-test-ubuntu:${{ needs.up-test-ubuntu.result }}
+            up-test-macos:${{ needs.up-test-macos.result }}
+            up-test-wsl:${{ needs.up-test-wsl.result }}
+            base-test-ubuntu:${{ needs.base-test-ubuntu.result }}
+            base-test-macos:${{ needs.base-test-macos.result }}
+            base-test-wsl:${{ needs.base-test-wsl.result }}
+            up-ssh-e2e:${{ needs.up-ssh-e2e.result }}
+            base-ssh-e2e:${{ needs.base-ssh-e2e.result }}
+            ship-ssh-e2e:${{ needs.ship-ssh-e2e.result }}
+            heartbeat-ssh-e2e:${{ needs.heartbeat-ssh-e2e.result }}
+            ssh-e2e:${{ needs.ssh-e2e.result }}
+            registry-install:${{ needs.registry-install.result }}
+        run: bash .github/ci-alert-notify.sh

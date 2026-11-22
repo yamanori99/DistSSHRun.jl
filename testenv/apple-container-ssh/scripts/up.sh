@@ -63,7 +63,7 @@ for arg in "$@"; do
       echo "  Needs macOS 26+ Apple silicon and the container CLI."
       echo "  --system-ssh  (macOS only) prepend a temp dir with symlinks to /usr/bin/ssh"
       echo "                and /usr/bin/scp on PATH for this script and --e2e Julia."
-      echo "  DISTSSH_CODE_COVERAGE=1  e2e with --code-coverage=user"
+      echo "  DISTSSH_CODE_COVERAGE=1  e2e with scoped --code-coverage=@src (kit trees)"
       exit 0
       ;;
     *)
@@ -291,7 +291,8 @@ if [[ "$RUN_E2E" -eq 1 ]]; then
   '
   julia_e2e=(julia --project=. --color=yes)
   if [[ "${DISTSSH_CODE_COVERAGE:-}" == "1" ]]; then
-    julia_e2e+=(--code-coverage=user)
+    mapfile -d '' _cov_flags < <("${DOCKER_ROOT}/../scripts/e2e-coverage-flags.sh" "${KIT_ROOT}")
+    julia_e2e+=("${_cov_flags[@]}")
   fi
   e2e_status=0
   "${julia_e2e[@]}" test/e2e.jl || e2e_status=$?
