@@ -6,6 +6,8 @@ using Dates
 # Concurrent local `go!` is integration/go/overlap.jl.
 
 @testset "go" begin
+    saved_proj = get(ENV, "DISTRIBUTED_PROJECT_ROOT", nothing)
+    saved_done = get(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE", nothing)
     @testset "_go_plan_slots" begin
         let s = DistSSHRun._go_plan_slots(String[])
             @test length(s) == 1
@@ -997,5 +999,15 @@ using Dates
             DistSSHRun._clear_active_deploy_record!()
             rm(batch; recursive = true, force = true)
         end
+    end
+    if saved_proj === nothing
+        delete!(ENV, "DISTRIBUTED_PROJECT_ROOT")
+    else
+        ENV["DISTRIBUTED_PROJECT_ROOT"] = saved_proj
+    end
+    if saved_done === nothing
+        delete!(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
+    else
+        ENV["DISTSSH_CLI_SUBCOMMAND_DONE"] = saved_done
     end
 end

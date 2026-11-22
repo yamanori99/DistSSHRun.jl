@@ -309,36 +309,69 @@ function _scan_tree(srcdir::AbstractString)::Vector{Tuple{String, Int, Symbol, S
     return hits
 end
 
-"""Failures for `srcdir` (`src/` of Queue or Kit). Empty means the tree is allowed."""
+function _allow_snapshot_from_text(text::AbstractString)
+    m = match(r"DOWNSTREAM_PUBLIC_ALLOW_MAX = ([0-9]+)", text)
+    prev_max = m === nothing ? nothing : Base.parse(Int, m.captures[1])
+    prev_keys = Set{Tuple{Symbol, Symbol}}(
+        (Symbol(m.captures[1]), Symbol(m.captures[2])) for m in eachmatch(
+                r"\(:([A-Za-z0-9_]+), :([A-Za-z0-9_]+)\)",
+                text,
+            )
+    )
+    return prev_max, prev_keys
+end
+
+function _origin_main_downstream_allow()
+    text = read(`git show origin/main:.github/downstream_public.jl`, String)
+    return _allow_snapshot_from_text(text)
+end
+
+"""Failures for `srcdir` (`src/` of Queue or Kit). Empty means the tree is allowed.
+
+`lint=true` (CI checker only) reads `origin/main`, verifies new allowlist entries with
+`gh`, and fails if either tool is unavailable. Unit tests call this with `lint=false`
+(the default) so lookups are deterministic and offline.
+"""
 function downstream_public_failures(
         srcdir::AbstractString;
         allow::Dict{Tuple{Symbol, Symbol}, Int} = DOWNSTREAM_PUBLIC_ALLOW,
+        lint::Bool = false,
+        validate_allowlist_size::Bool = true,
+        prev_keys::Union{Nothing, Set{Tuple{Symbol, Symbol}}} = nothing,
+        prev_max::Union{Nothing, Int} = nothing,
     )::Vector{String}
     fails = String[]
     nallow = length(allow)
-    if nallow != DOWNSTREAM_PUBLIC_ALLOW_MAX
-        push!(fails, "allowlist count $(nallow) != $(DOWNSTREAM_PUBLIC_ALLOW_MAX)")
+    if validate_allowlist_size
+        if nallow != DOWNSTREAM_PUBLIC_ALLOW_MAX
+            push!(fails, "allowlist count $(nallow) != $(DOWNSTREAM_PUBLIC_ALLOW_MAX)")
+        end
+        if nallow > DOWNSTREAM_PUBLIC_ALLOW_MAX
+            push!(fails, "allowlist longer than $(DOWNSTREAM_PUBLIC_ALLOW_MAX)")
+        end
     end
-    if nallow > DOWNSTREAM_PUBLIC_ALLOW_MAX
-        push!(fails, "allowlist longer than $(DOWNSTREAM_PUBLIC_ALLOW_MAX)")
-    end
-    prev_max = try
-        text = read(`git show origin/main:.github/downstream_public.jl`, String)
-        m = match(r"DOWNSTREAM_PUBLIC_ALLOW_MAX = ([0-9]+)", text)
-        m === nothing ? nothing : Base.parse(Int, m.captures[1])
-    catch
-        nothing
-    end
-    if prev_max !== nothing && DOWNSTREAM_PUBLIC_ALLOW_MAX > prev_max
-        push!(fails, "allowlist max $(DOWNSTREAM_PUBLIC_ALLOW_MAX) > origin/main $(prev_max)")
-    end
-    prev_keys = try
-        text = read(`git show origin/main:.github/downstream_public.jl`, String)
-        Set{Tuple{Symbol, Symbol}}(
-            (Symbol(m.captures[1]), Symbol(m.captures[2])) for m in eachmatch(r"\(:([A-Za-z0-9_]+), :([A-Za-z0-9_]+)\)", text)
-        )
-    catch
-        Set{Tuple{Symbol, Symbol}}()
+    verify_new_allow_issues = false
+    if lint
+        if prev_keys === nothing || prev_max === nothing
+            try
+                om_max, om_keys = _origin_main_downstream_allow()
+                prev_max = something(prev_max, om_max)
+                prev_keys = something(prev_keys, om_keys)
+                verify_new_allow_issues = true
+            catch err
+                push!(
+                    fails,
+                    "downstream_public: cannot read origin/main:.github/downstream_public.jl ($(err))",
+                )
+            end
+        else
+            verify_new_allow_issues = true
+        end
+        if prev_max !== nothing && DOWNSTREAM_PUBLIC_ALLOW_MAX > prev_max
+            push!(fails, "allowlist max $(DOWNSTREAM_PUBLIC_ALLOW_MAX) > origin/main $(prev_max)")
+        end
+    else
+        prev_keys = something(prev_keys, Set(keys(allow)))
     end
     seen = Set{Tuple{String, Int, Symbol, Symbol}}()
     for (file, line, owner, name) in _scan_tree(srcdir)
@@ -354,15 +387,21 @@ function downstream_public_failures(
         label = _binding_label(owner, name)
         push!(fails, "$(file):$(line): $(label) is not public")
     end
-    for ((owner, name), issue) in allow
-        (owner, name) in prev_keys && continue
-        st = try
-            strip(read(`gh issue view $(issue) --json state --jq .state`, String))
-        catch
-            ""
-        end
-        if st != "OPEN"
-            push!(fails, "allowlist: $(_binding_label(owner, name)) #$(issue) is not an open issue")
+    if verify_new_allow_issues
+        for ((owner, name), issue) in allow
+            (owner, name) in prev_keys && continue
+            st = try
+                strip(read(`gh issue view $(issue) --json state --jq .state`, String))
+            catch err
+                push!(
+                    fails,
+                    "allowlist: cannot verify $(_binding_label(owner, name)) #$(issue) ($(err))",
+                )
+                continue
+            end
+            if st != "OPEN"
+                push!(fails, "allowlist: $(_binding_label(owner, name)) #$(issue) is not an open issue")
+            end
         end
     end
     for ((owner, name), issue) in allow
@@ -383,7 +422,7 @@ function downstream_public_main(args::Vector{String})::Cint
         println(stderr, "downstream_public: not a directory: $(src)")
         return Cint(2)
     end
-    fails = downstream_public_failures(src)
+    fails = downstream_public_failures(src; lint = true)
     if isempty(fails)
         n = length(DOWNSTREAM_PUBLIC_ALLOW)
         println("downstream public names: ok ($(n) allowlisted)")

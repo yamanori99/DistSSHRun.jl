@@ -73,7 +73,7 @@ include(joinpath(@__DIR__, "..", "..", "..", ".github", "downstream_public.jl"))
         allow = Dict{Tuple{Symbol, Symbol}, Int}(
             (:DistSSHRun, :print_cli_error) => 201
         )
-        fails = downstream_public_failures(src; allow = allow)
+        fails = downstream_public_failures(src; allow = allow, validate_allowlist_size = false)
         @test fails == ["allowlist: DistSSHRun.print_cli_error is public; remove the #201 entry"]
     end
 end
