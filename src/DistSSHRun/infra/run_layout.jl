@@ -25,7 +25,7 @@ function validate_ship_id(ship_id::AbstractString)::String
             "ship_id must be a single path component matching YYYYMMDDTHHMMSSZ-xxxxxx, got $(repr(s))",
         ),
     )
-    occursin(_SHIP_ID_PATTERN, s) || throw(
+    match(_SHIP_ID_PATTERN, s) === nothing && throw(
         ArgumentError(
             "ship_id must match YYYYMMDDTHHMMSSZ-xxxxxx (6 hex), got $(repr(s))",
         ),

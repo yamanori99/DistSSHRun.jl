@@ -2442,7 +2442,7 @@ a lower bound. On Julia 1.13 a second Ctrl-C forces the driver out of that
 cleanup. On Julia 1.13, a driver waiting in `pmap` ignores SIGINT, so this
 wait runs out and SIGTERM stops it. With the defaults that is 30 seconds
 plus `grace` (10) plus one second after SIGKILL, about 41 seconds, and
-then the tagged `pkill` below. A
+then the tagged worker reap below. A
 process-group SIGINT, as from a terminal Ctrl-C, also misses that path on
 Julia 1.13: the driver exits 1 and does not send `kill -INT`. Measured on
 macOS. On builds without `Base.CANCEL_TOKEN` (e.g. 1.13 and 1.14.0-beta1 through
@@ -2452,18 +2452,18 @@ A `go` child is `julia -m` with
 exit-on-sigint, so SIGINT runs `atexit` and does not enter `catch` or
 `finally`. Then SIGTERM, wait up to `grace` seconds (`0` sends SIGTERM
 and does not wait), then SIGKILL if the process is still alive. Then
-`pkill` only processes tagged with this run's `job_id` (from `kit.job`),
+reap only processes tagged with this run's `job_id` (from `kit.job`),
 never `julia.*--worker`. Without `job_id`, only the child is signaled.
-That `pkill` is one SSH command per host, in parallel, deduplicated, with
+That reap is one SSH command per host, in parallel, deduplicated, with
 its own 15 second bound (SSH connect plus margin). It does not spend
 `interrupt_grace`. Worst case for those two stages is `interrupt_grace`
-plus that bound. `pkill` exit 1 means nothing matched and is success.
+plus that bound. Exit 1 on the remote reap means nothing matched and is success.
 Hosts that cannot be reached are named in one warning, and this still
-returns. The remote pattern is `[d]istsshkit-job:…`, so `pkill -f` does
-not match the `sh -c` line that contains the command.
+returns. The remote tag hides itself from the `sh -c` command line that
+contains the reap.
 
 For `:go`, local head slots that outlive the detached child (Julia 1.14) are
-signaled with `pkill -f` on each slot's `go-handshake.jl` path under this
+signaled on each slot's `go-handshake.jl` path under this
 run's kit directories (`run_dir`, `output_dir`, `log_dir`). This reaper waits
 until each targeted slot pid is gone from the process table (reaping a zombie
 when this process is its parent, then SIGKILL by exact pid). A survivor
