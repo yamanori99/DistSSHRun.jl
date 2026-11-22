@@ -31,6 +31,28 @@ function _wait_tagged_go_handshake_rows(; timeout::Real = 60.0)
     return rows
 end
 
+function _proc_stat_diag(pid::Integer)::String
+    if Sys.islinux()
+        diag = DistSSHRun._linux_proc_stat_diag(pid)
+        diag !== nothing && return diag
+    end
+    return "kit_pid_alive=$(DistSSHRun.kit_pid_alive(pid))"
+end
+
+function _wait_kit_pids_gone!(pids; timeout::Real = 5.0)
+    deadline = time() + Float64(timeout)
+    while time() < deadline
+        alive = [p for p in pids if DistSSHRun.kit_pid_alive(p)]
+        isempty(alive) && return
+        sleep(0.1)
+    end
+    alive = [p for p in pids if DistSSHRun.kit_pid_alive(p)]
+    for p in alive
+        println(stderr, "/proc/$p/stat: ", _proc_stat_diag(p))
+    end
+    @test isempty(alive)
+end
+
 # Oracle: dispatcher only (plus detached `:go`, which is out-of-process).
 # `execute!(:drive, …)` includes a driver into `Main` and lives in
 # `integration/drive/execute.jl` (after `api.jl`, which is the first
@@ -1372,7 +1394,7 @@ end
             @test killed isa DistSSHRun.DistSSHJobResult
             gone = DistSSHRun.DistSSHBase.wait_gone(_tagged_go_handshake_rows; timeout = 5.0)
             @test isempty(gone)
-            @test all(!DistSSHRun.kit_pid_alive, pids)
+            _wait_kit_pids_gone!(pids; timeout = 5.0)
         end
     end
 
@@ -1412,7 +1434,7 @@ end
                         _tagged_go_handshake_rows; timeout = 5.0,
                     )
                     @test isempty(gone)
-                    @test all(!DistSSHRun.kit_pid_alive, pids)
+                    _wait_kit_pids_gone!(pids; timeout = 5.0)
                 end
             end
         end
