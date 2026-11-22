@@ -55,7 +55,9 @@ testenv="${DETECT_TESTENV:-false}"
 queue_e2e="${DETECT_QUEUE_E2E:-false}"
 coverage="${DETECT_COVERAGE:-false}"
 event="${DETECT_EVENT:-pull_request}"
+fix_title="${DETECT_FIX_TITLE:-false}"
 wsl_off="WSL jobs do not run on pull_request"
+fix_title_off="title does not start with fix"
 pkgeval_off="PkgEval does not run on pull_request"
 nightly_off="nightly job does not run on pull_request"
 
@@ -80,6 +82,11 @@ if [[ "${scripts}" == true ]]; then
   judge diff_lint_self_test ""
 else
   judge diff_lint_self_test "${docs_scripts_off}"
+fi
+if [[ "${fix_title}" == true ]]; then
+  judge fix_tests_on_base ""
+else
+  judge fix_tests_on_base "${fix_title_off}"
 fi
 
 if [[ "${heavy}" == true ]]; then

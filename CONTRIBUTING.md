@@ -404,6 +404,7 @@ Required to merge (ruleset `main` uses these names). **nightly** jobs, and **1.1
 - `Downstream (DistSSHQueue@main, 1.13)`
 - `Downstream (DistSSHKit@main, 1.13)`
 - `PR label`
+- `fix tests fail on merge-base src`
 
 | When | Workflow | What |
 | --- | --- | --- |
