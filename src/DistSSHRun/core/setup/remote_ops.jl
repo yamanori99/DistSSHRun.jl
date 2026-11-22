@@ -63,17 +63,17 @@ end
 function _remote_run_toml_owned_check_sh()::String
     w_ere = _run_toml_writer_awk_ere()
     return """
-            _dsk_find_stamps() {
-              _dsk_find_root=\$1
-              _dsk_find_ship=\$2
+            _distssh_find_stamps() {
+              _distssh_find_root=\$1
+              _distssh_find_ship=\$2
               shift 2
-              if [ "\$_dsk_find_ship" = 1 ]; then
-                find "\$_dsk_find_root" -mindepth 2 -maxdepth 2 -name run.toml "\$@"
+              if [ "\$_distssh_find_ship" = 1 ]; then
+                find "\$_distssh_find_root" -mindepth 2 -maxdepth 2 -name run.toml "\$@"
               else
-                find "\$_dsk_find_root" -name run.toml "\$@"
+                find "\$_distssh_find_root" -name run.toml "\$@"
               fi
             }
-            _dsk_first_unowned_stamp() {
+            _distssh_first_unowned_stamp() {
               _root=\$1
               _ship=0
               _scan="\$_root"
@@ -223,7 +223,7 @@ function _remote_run_toml_owned_check_sh()::String
               # `{}` is last so BSD find accepts it. The child exits 0 when the
               # stamp is bad; find's status stays the scan, and the mark file
               # records the path. A non-regular run.toml is not opened.
-              if ! _dsk_find_stamps "\$_scan" "\$_ship" -exec sh "\$_chk" "\$_mark" "\$_awkf" {} \\; 2>/dev/null; then
+              if ! _distssh_find_stamps "\$_scan" "\$_ship" -exec sh "\$_chk" "\$_mark" "\$_awkf" {} \\; 2>/dev/null; then
                 if [ ! -s "\$_mark" ]; then
                   if ! printf '%s\\n' "\$_root" > "\$_mark"; then
                     printf '%s\\n' "\$_root"
@@ -237,10 +237,10 @@ function _remote_run_toml_owned_check_sh()::String
               fi
               rm -f "\$_mark" "\$_awkf" "\$_chk"
             }
-            _dsk_assert_run_leaves_owned() {
+            _distssh_assert_run_leaves_owned() {
               _root=\$1
               for _layout in ships runs; do
-                _bad=\$(_dsk_first_unowned_stamp "\$_root" "\$_layout")
+                _bad=\$(_distssh_first_unowned_stamp "\$_root" "\$_layout")
                 if [ -n "\$_bad" ]; then
                   printf 'refusing to delete unowned run leaf %s\\n' "\$(dirname "\$_bad")" >&2
                   return 1
@@ -291,7 +291,7 @@ function _remote_delete_shell(
         # the confirmed target or a descendant of it.
         if [ "\$_distssh_deploy" = "\$_distssh_target" ] ||
             [ "\$_distssh_deploy" != "\${_distssh_deploy#"\$_distssh_target"/}" ]; then
-          _dsk_assert_run_leaves_owned "\$_distssh_deploy" || exit 1
+          _distssh_assert_run_leaves_owned "\$_distssh_deploy" || exit 1
         fi
       fi
     fi

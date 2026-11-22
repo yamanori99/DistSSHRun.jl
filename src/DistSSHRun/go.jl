@@ -669,8 +669,13 @@ function _go_remote_slot_shell_inner(
     write_loader = "cat > $loader_q << 'DISTSSH_INTERNAL_PROVENANCE_SLOT'\n$(_GO_SLOT_LOADER_SRC)\nDISTSSH_INTERNAL_PROVENANCE_SLOT\n"
     write_hs = "cat > $hs_q << 'DISTSSH_INTERNAL_GO_HS'\n$(_GO_HANDSHAKE_LOADER_SRC)\nDISTSSH_INTERNAL_GO_HS\n"
     prov_load = " -L $loader_q -L $hs_q"
+    job_for_lock = job_id === nothing ? "" : job_id
+    hold_lock = output_lock_hold_shell("\"\$(dirname $slot_q)\"", job_for_lock)
     return string(
+        _output_lock_hold_shell_helpers(),
         "cd $rr && mkdir -p $slot_q && mkdir -p $kit_q && ",
+        hold_lock,
+        " && ",
         "export DISTSSH_OUTPUT_DIR=$slot_q && ",
         seed_export,
         job_export,
@@ -1194,7 +1199,7 @@ function _go_run!(
         _go_batch_output_dir(proj, script_path)
     end
     mkpath(batch_dir)
-    release_lock = kit_output_dir_lock!(batch_dir)
+    release_lock = output_dir_lock!(batch_dir; id = resolved_kit_job_id())
     _go_write_batch_manifest!(batch_dir, script_path, slots)
     _set_kit_progress_sidecar!(batch_dir)
     go_env_session = DistSSHSession(

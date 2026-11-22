@@ -18,7 +18,7 @@ if [ -L "$q" ]; then
     exit 2
   }
 fi
-_dsk_hex() {
+_distssh_hex() {
   _line=
   if command -v sha256sum >/dev/null 2>&1; then
     _line=$(sha256sum "$1") || return 1
@@ -29,7 +29,7 @@ _dsk_hex() {
   printf '%s' "$_hex" | awk 'length($0)==64 && $0 ~ /^[0-9a-fA-F]+$/ { found=1 } END { exit found ? 0 : 1 }' || return 1
   printf '%s\n' "$_hex"
 }
-_dsk_stat() {
+_distssh_stat() {
   stat -c '%s %Y' "$1" 2>/dev/null && return 0
   stat -f '%z %m' "$1"
 }
@@ -54,7 +54,7 @@ if [ -d "$q" ]; then
     while IFS= read -r _f; do
       [ -n "$_f" ] || continue
       [ -L "$_f" ] && continue
-      _st=$(_dsk_stat "$_f") || exit 1
+      _st=$(_distssh_stat "$_f") || exit 1
       _size=$(printf '%s\n' "$_st" | awk '{ print $1; exit }')
       [ -n "$_size" ] || exit 1
       _total=$((_total + _size))
@@ -77,10 +77,10 @@ if [ -d "$q" ]; then
         }
         printf 'link\t%s\t%s\n' "$_target" "$_rel"
       else
-        _st=$(_dsk_stat "$_f") || exit 1
+        _st=$(_distssh_stat "$_f") || exit 1
         _size=$(printf '%s\n' "$_st" | awk '{ print $1; exit }')
         [ -n "$_size" ] || exit 1
-        _hex=$(_dsk_hex "$_f") || exit 1
+        _hex=$(_distssh_hex "$_f") || exit 1
         _done=$((_done + _size))
         printf 'file\t%s\t%s\t%s\n' "$_size" "$_hex" "$_rel"
         printf 'PROG %s %s\n' "$_done" "$_total" >&2
@@ -93,7 +93,7 @@ if [ -d "$q" ]; then
     while IFS= read -r _f; do
       [ -n "$_f" ] || continue
       _rel=${_f#./}
-      _st=$(_dsk_stat "$_f") || exit 1
+      _st=$(_distssh_stat "$_f") || exit 1
       _size=$(printf '%s\n' "$_st" | awk '{ print $1; exit }')
       _mtime=$(printf '%s\n' "$_st" | awk '{ print $2; exit }')
       [ -n "$_size" ] && [ -n "$_mtime" ] || exit 1
@@ -117,28 +117,28 @@ if [ -d "$q" ]; then
       fi
       if [ "$_mtime" -gt "$_newest" ]; then _newest=$_mtime; fi
     done < "$_sorted"
-    _sum=$(_dsk_hex "$_rows") || exit 1
+    _sum=$(_distssh_hex "$_rows") || exit 1
     printf 'files=%s bytes=%s newest=%s digest=%s\n' "$_files" "$_bytes" "$_newest" "$_sum"
   fi
 elif [ -f "$q" ]; then
   if [ "$do_hash" = 1 ] && [ -L "$q" ]; then
     printf 'link\t%s\t.\n' "$_target"
   elif [ "$do_hash" = 1 ]; then
-    _st=$(_dsk_stat "$q") || exit 1
+    _st=$(_distssh_stat "$q") || exit 1
     _size=$(printf '%s\n' "$_st" | awk '{ print $1; exit }')
     [ -n "$_size" ] || exit 1
-    _sum=$(_dsk_hex "$q") || exit 1
+    _sum=$(_distssh_hex "$q") || exit 1
     printf 'PROG %s %s\n' "$_size" "$_size" >&2
     printf 'file\t%s\t%s\t.\n' "$_size" "$_sum"
   else
-    _st=$(_dsk_stat "$q") || exit 1
+    _st=$(_distssh_stat "$q") || exit 1
     _size=$(printf '%s\n' "$_st" | awk '{ print $1; exit }')
     _mtime=$(printf '%s\n' "$_st" | awk '{ print $2; exit }')
     [ -n "$_size" ] && [ -n "$_mtime" ] || exit 1
     _one=$(mktemp)
     trap 'rm -f "$_one"' EXIT
     printf '.\tfile\t%s\t%s\n' "$_size" "$_mtime" > "$_one"
-    _sum=$(_dsk_hex "$_one") || exit 1
+    _sum=$(_distssh_hex "$_one") || exit 1
     printf 'files=1 bytes=%s newest=%s digest=%s\n' "$_size" "$_mtime" "$_sum"
   fi
 else

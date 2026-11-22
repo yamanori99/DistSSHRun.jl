@@ -8,7 +8,7 @@ function prune_kit_leaf_dirs!(
         skip_setup::Union{Nothing, AbstractString} = nothing,
     )::Int
     isdir(root) || return 0
-    idn = id === nothing ? nothing : String(id)
+    idn = id === nothing ? nothing : _parse_kit_job_id(String(id))
     skip = skip_setup === nothing ? nothing : realpath(String(skip_setup))
     victims = String[]
     for (dir, _, _) in walkdir(String(root); onerror = Returns(nothing))
@@ -51,12 +51,19 @@ function prune_kit_leaf_dirs!(
         isdir(p) || continue
         _assert_kit_tree_stamps_owned!(p)
     end
+    refused = String[]
     n = 0
     for p in victims
         isdir(p) || continue
+        reason = _output_lock_prune_block(p)
+        if reason !== nothing
+            push!(refused, reason)
+            continue
+        end
         rm(p; recursive = true, force = true)
         n += 1
     end
+    isempty(refused) || throw(ArgumentError(join(unique(refused), "\n")))
     return n
 end
 
@@ -80,7 +87,9 @@ end
 
 function _prune_id_ok(name::AbstractString, id::Union{Nothing, String})::Bool
     id === nothing && return true
-    return occursin(id, String(name))
+    job = _leaf_job_id(name)
+    job === nothing && return false
+    return job == id
 end
 
 function _prune_age_ok(path::AbstractString, older_days::Union{Nothing, Integer})::Bool
@@ -182,6 +191,7 @@ function _prune_remote_shell(
     return """
     # DISTSSH_INTERNAL_PRUNE_LEAVES
     $(_remote_run_toml_owned_check_sh())
+    $(_output_lock_shell_helpers())
     root=$pq
     older=$older_q
     id=$idq
@@ -203,30 +213,36 @@ function _prune_remote_shell(
         exit 1
       fi
     fi
-    _dsk_consider() {
+    _distssh_consider() {
       _child=\$1
       # The victims file is line-oriented. A newline in a go/ or runs/ leaf
       # is not covered by the .distsshkit walk. The collect loop is a
       # pipeline subshell, so record the refusal and return.
       if printf "%s" "\$_child" | awk "NR>1 { e = 1 } END { exit e ? 0 : 1 }"; then
-        printf x > "\$_dsk_nl"
+        printf x > "\$_distssh_nl"
         return 0
       fi
       base=\$(basename "\$_child")
       if [ -n "\$id" ]; then
-        case "\$base" in *"\$id"*) ;; *) return 0 ;; esac
+        _job=\$(printf '%s\\n' "\$base" | sed -n 's/.*_[0-9]\\{8\\}T[0-9]\\{6\\}Z_//p')
+        [ -n "\$_job" ] || return 0
+        [ "\$_job" = "\$id" ] || return 0
       fi
       if [ -n "\$older" ] && [ "\$older" != 0 ]; then
         # find -mtime +N is > N days; local prune is >= DAYS.
         [ -n "\$(find "\$_child" -maxdepth 0 -mtime +"\$((older - 1))" 2>/dev/null)" ] || return 0
       fi
-      printf '%s\\n' "\$_child" >> "\$_dsk_victims"
+      if _distssh_tree_blocks "\$_child"; then
+        printf '%s\\n' "\$_child" >> "\$_distssh_refused"
+        return 0
+      fi
+      printf '%s\\n' "\$_child" >> "\$_distssh_victims"
     }
     # The walk below reads find output by line. A newline in a parent of
     # `.distsshkit` splits that path, and the prefix can be pruned.
     # `{}` is last so BSD find accepts it. The child reports a newline hit
     # on stdout, so a failed disk write cannot hide the hit.
-    if ! _dsk_nlhits=\$(find "\$root" \\( -type d -name .distssh -o -type d -name .distsshkit \\) -exec sh -c '
+    if ! _distssh_nlhits=\$(find "\$root" \\( -type d -name .distssh -o -type d -name .distsshkit \\) -exec sh -c '
       if printf "%s" "\$1" | awk "NR>1 { e = 1 } END { exit e ? 0 : 1 }"; then
         printf x
       fi
@@ -235,16 +251,21 @@ function _prune_remote_shell(
       printf 'refusing to prune: could not scan state directories\\n' >&2
       exit 1
     fi
-    if [ -n "\$_dsk_nlhits" ]; then
+    if [ -n "\$_distssh_nlhits" ]; then
       printf 'refusing to prune a path that contains a newline\\n' >&2
       exit 1
     fi
-    _dsk_victims=\$(mktemp) || {
+    _distssh_victims=\$(mktemp) || {
       printf 'refusing to prune: could not scan state directories\\n' >&2
       exit 1
     }
-    _dsk_nl=\$(mktemp) || {
-      rm -f "\$_dsk_victims"
+    _distssh_refused=\$(mktemp) || {
+      rm -f "\$_distssh_victims"
+      printf 'refusing to prune: could not scan state directories\\n' >&2
+      exit 1
+    }
+    _distssh_nl=\$(mktemp) || {
+      rm -f "\$_distssh_victims" "\$_distssh_refused"
       printf 'refusing to prune: could not scan state directories\\n' >&2
       exit 1
     }
@@ -253,7 +274,7 @@ function _prune_remote_shell(
       if [ -d "\$go" ]; then
         for child in "\$go"/*; do
           [ -d "\$child" ] || continue
-          _dsk_consider "\$child"
+          _distssh_consider "\$child"
         done
       fi
       runs="\$kit/runs"
@@ -262,7 +283,7 @@ function _prune_remote_shell(
           [ -d "\$kinddir" ] || continue
           for child in "\$kinddir"/*; do
             [ -d "\$child" ] || continue
-            _dsk_consider "\$child"
+            _distssh_consider "\$child"
           done
         done
       fi
@@ -270,35 +291,43 @@ function _prune_remote_shell(
         for kind in drive setup; do
           p="\$kit/\$kind"
           [ -d "\$p" ] || continue
-          _dsk_consider "\$p"
+          _distssh_consider "\$p"
         done
       fi
     done
-    if [ -s "\$_dsk_nl" ]; then
-      rm -f "\$_dsk_victims" "\$_dsk_nl"
+    if [ -s "\$_distssh_nl" ]; then
+      rm -f "\$_distssh_victims" "\$_distssh_refused" "\$_distssh_nl"
       printf 'refusing to prune a path that contains a newline\\n' >&2
       exit 1
     fi
-    rm -f "\$_dsk_nl"
+    rm -f "\$_distssh_nl"
     # Local prune inspects every victim before rm. The collect loop is a
     # pipeline subshell, so the list file is the hand-off. Do not rm the
     # list while a loop still reads it.
-    _dsk_owned=1
+    _distssh_owned=1
     while IFS= read -r _child; do
-      _bad=\$(_dsk_first_unowned_stamp "\$_child")
+      _bad=\$(_distssh_first_unowned_stamp "\$_child")
       if [ -n "\$_bad" ]; then
         printf 'refusing to prune unowned run leaf %s\\n' "\$(dirname "\$_bad")" >&2
-        _dsk_owned=0
+        _distssh_owned=0
         break
       fi
-    done < "\$_dsk_victims"
-    if [ "\$_dsk_owned" != 1 ]; then
-      rm -f "\$_dsk_victims"
+    done < "\$_distssh_victims"
+    if [ "\$_distssh_owned" != 1 ]; then
+      rm -f "\$_distssh_victims" "\$_distssh_refused"
       exit 1
     fi
     while IFS= read -r _child; do
       rm -rf "\$_child"
-    done < "\$_dsk_victims"
-    rm -f "\$_dsk_victims"
+    done < "\$_distssh_victims"
+    rm -f "\$_distssh_victims"
+    if [ -s "\$_distssh_refused" ]; then
+      while IFS= read -r _child; do
+        printf 'refusing to prune live lock %s\\n' "\$_child" >&2
+      done < "\$_distssh_refused"
+      rm -f "\$_distssh_refused"
+      exit 1
+    fi
+    rm -f "\$_distssh_refused"
     """
 end

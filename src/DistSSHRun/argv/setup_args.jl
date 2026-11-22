@@ -149,7 +149,7 @@ function show_requirements(; io::IO = stdout)
         "  --hosts-file PATH    one token per line (:N stripped)",
         "  --version, -v        print version and exit",
         "  --older-than DAYS    with prune: mtime at least DAYS old",
-        "  --id TOKEN           with prune: go / runs leaf name contains TOKEN",
+        "  --id TOKEN           with prune: exact job id on a go or runs leaf",
     )
     print_help_blank(io)
     print_help_lines(io, "  $(KIT_TIME_HELP)")
@@ -361,6 +361,7 @@ function parse_setup_args(args::Vector{String}; env::ProcessEnv = snapshot_proce
         elseif arg == "--id"
             prune_id = String(strip(cli_take_value!(c, arg)))
             isempty(prune_id) && throw(ArgumentError("--id needs a non-empty token"))
+            _parse_kit_job_id(prune_id)
         elseif arg == "--julia"
             julia_path = cli_take_value!(c, arg)
         elseif arg == "--repo"

@@ -363,8 +363,8 @@ end
     @testset "delete shell refuses an unowned run leaf stamp" begin
         script = DistSSHRun._remote_delete_shell("/tmp/app")
         @test occursin("refusing to delete unowned run leaf", script)
-        @test occursin("_dsk_assert_run_leaves_owned", script)
-        @test occursin("_dsk_first_unowned_stamp", script)
+        @test occursin("_distssh_assert_run_leaves_owned", script)
+        @test occursin("_distssh_first_unowned_stamp", script)
         @test occursin("DistSSHRun ", script)
         owned_sh = DistSSHRun._remote_run_toml_owned_check_sh()
         @test occursin(DistSSHRun._run_toml_writer_awk_ere(), owned_sh)
@@ -984,11 +984,52 @@ end
     @testset "delete shell ignores a project run.toml under the shipped src tree" begin
         delete_sh = DistSSHRun._remote_delete_shell("/tmp/app")
         @test occursin("-mindepth 2 -maxdepth 2", delete_sh)
-        @test occursin("""_dsk_first_unowned_stamp "\$_root" "\$_layout\"""", delete_sh)
+        @test occursin("""_distssh_first_unowned_stamp "\$_root" "\$_layout\"""", delete_sh)
         @test occursin("for _layout in ships runs", delete_sh)
         prune_sh = DistSSHRun._prune_remote_shell("/tmp/app")
-        @test occursin("""_bad=\$(_dsk_first_unowned_stamp "\$_child")""", prune_sh)
-        @test !occursin("""_dsk_first_unowned_stamp "\$_child" ships""", prune_sh)
+        @test occursin("""_bad=\$(_distssh_first_unowned_stamp "\$_child")""", prune_sh)
+        @test !occursin("""_distssh_first_unowned_stamp "\$_child" ships""", prune_sh)
+        # The setup SSH double matches `mkdir -p` before DISTSSH_PRUNE_LEAVES and exits 0.
+        @test !occursin("mkdir -p", prune_sh)
+        mktempdir() do d
+            root = joinpath(d, "app")
+            hit = joinpath(root, ".distssh", "go", "job_20200101T000000Z_exp1")
+            miss = joinpath(root, ".distssh", "go", "job_20200101T000000Z_exp10")
+            year = joinpath(root, ".distssh", "go", "job_20260101T000000Z")
+            mkpath(hit)
+            mkpath(miss)
+            mkpath(year)
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root; id = "exp1"))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode == 0
+            @test !isdir(hit)
+            @test isdir(miss)
+            @test isdir(year)
+            release = DistSSHRun.output_dir_lock!(miss)
+            err = IOBuffer()
+            proc2 = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc2.exitcode != 0
+            @test occursin("live lock", String(take!(err)))
+            @test isdir(miss)
+            release()
+        end
         mktempdir() do d
             root = joinpath(d, "app")
             leaf = joinpath(root, "ships", "20260101T000000Z-abcd")

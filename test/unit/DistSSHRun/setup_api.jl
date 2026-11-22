@@ -79,13 +79,17 @@ using Test
     @testset "prune leaves" begin
         _with_tempdir() do proj
             go_old = joinpath(proj, ".distssh", "go", "job_20200101T000000Z")
-            go_keep = joinpath(proj, "scripts", ".distssh", "go", "job_keep_id")
+            go_keep = joinpath(proj, "scripts", ".distssh", "go", "job_20200101T000000Z_keep_id")
+            go_exp10 = joinpath(proj, ".distssh", "go", "job_20200101T000000Z_exp10")
+            go_exp1b = joinpath(proj, ".distssh", "go", "job_20260101T000000Z_exp1-b")
             drive = joinpath(proj, "scripts", ".distssh", "drive")
             mkpath(go_old)
             mkpath(go_keep)
+            mkpath(go_exp10)
+            mkpath(go_exp1b)
             mkpath(drive)
             write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
-            run_keep = joinpath(proj, "scripts", ".distssh", "runs", "go", "job_keep_id")
+            run_keep = joinpath(proj, "scripts", ".distssh", "runs", "go", "job_20200101T000000Z_keep_id")
             run_old = joinpath(proj, ".distssh", "runs", "drive", "job_20200101T000000Z")
             mkpath(run_keep)
             mkpath(run_old)
@@ -93,7 +97,12 @@ using Test
             @test n == 2
             @test isdir(go_old)
             @test !isdir(go_keep)
+            @test isdir(go_exp10)
+            @test isdir(go_exp1b)
             @test isdir(drive)
+            n_year = DistSSHRun.prune_kit_leaf_dirs!(proj; id = "2026")
+            @test n_year == 0
+            @test isdir(go_exp1b)
             @test isdir(run_old)
             @test !isdir(run_keep)
             fake = joinpath(proj, ".distssh", "go", "job_fake")
@@ -199,6 +208,30 @@ using Test
             @test !isdir(run_old)
             @test !isdir(fake)
             @test isfile(joinpath(proj, "Project.toml"))
+        end
+
+        _with_tempdir() do proj
+            live = joinpath(proj, ".distssh", "go", "job_20200101T000000Z_exp1")
+            dead = joinpath(proj, ".distssh", "go", "job_20200101T000000Z_exp10")
+            mkpath(live)
+            mkpath(dead)
+            release = DistSSHRun.output_dir_lock!(live; id = "exp1")
+            n_dead = DistSSHRun.prune_kit_leaf_dirs!(proj; id = "exp10")
+            @test n_dead == 1
+            @test !isdir(dead)
+            @test isdir(live)
+            err = try
+                DistSSHRun.prune_kit_leaf_dirs!(proj)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("live lock", err.msg)
+            @test isdir(live)
+            release()
+            @test DistSSHRun.prune_kit_leaf_dirs!(proj) >= 1
+            @test !isdir(live)
         end
 
         _with_fake_remotes() do state_dir

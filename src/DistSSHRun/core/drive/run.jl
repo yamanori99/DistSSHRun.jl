@@ -441,7 +441,7 @@ function _run_drive_parsed_specialized!(
             end
             # Drivers may set `DISTSSH_OUTPUT_DIR` in `init_output_dir!` (demos: `output/`).
             # If still unset, kit allocates `{script}/.distssh/drive/<stem>_<UTC>/`.
-            # Lock after that so `.kit.lock` is not the kind root when the driver
+            # Lock after that so `.distssh.lock` is not the kind root when the driver
             # chose `output/` (or `--output-dir` / a unique batch dir).
             hooks_before = _drive_script_hook_bindings(script_args)
             _reject_second_drive_main_include!(_drive_reuse_main_opt_in(parsed))
@@ -459,7 +459,7 @@ function _run_drive_parsed_specialized!(
                 allow_parent_sidecars = old_run isa AbstractString && !isempty(strip(old_run)),
             )
             ENV["DISTSSH_OUTPUT_DIR"] = out_ready
-            release_output_dir_lock = DistSSHRun.kit_output_dir_lock!(out_ready)
+            release_output_dir_lock = DistSSHRun.output_dir_lock!(out_ready; id = DistSSHRun.resolved_kit_job_id())
             try
                 code = _run_drive_parsed_locked!(
                     parsed, output_dir, script_path, script_dir, proj_dir, script_args,

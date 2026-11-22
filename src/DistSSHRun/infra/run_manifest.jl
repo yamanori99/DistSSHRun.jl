@@ -98,27 +98,58 @@ function allocate_run_dir(
     throw(last)
 end
 
+const _RUN_DIR_LOCKS = Dict{String, NamedTuple{(:release, :depth), Tuple{Function, Int}}}()
+
+function _hold_run_dir_lock!(dir::AbstractString, job_id::Union{Nothing, AbstractString})
+    key = canonical_local_path(dir)
+    held = get(_RUN_DIR_LOCKS, key, nothing)
+    if held === nothing
+        rel = output_dir_lock!(key; id = job_id)
+        _RUN_DIR_LOCKS[key] = (; release = rel, depth = 1)
+    else
+        _RUN_DIR_LOCKS[key] = (; release = held.release, depth = held.depth + 1)
+    end
+    return nothing
+end
+
+function _drop_run_dir_lock!(dir::AbstractString)
+    key = canonical_local_path(dir)
+    held = get(_RUN_DIR_LOCKS, key, nothing)
+    held === nothing && return nothing
+    if held.depth <= 1
+        delete!(_RUN_DIR_LOCKS, key)
+        held.release()
+    else
+        _RUN_DIR_LOCKS[key] = (; release = held.release, depth = held.depth - 1)
+    end
+    return nothing
+end
+
 function _ensure_kit_run_dir!(
         kind::Symbol,
         script::AbstractString;
         project::AbstractString = pwd(),
         job_id::Union{Nothing, AbstractString} = nothing,
     )::String
-    existing = kit_run_dir()
-    if existing !== nothing
-        mkpath(existing)
-        return existing
-    end
     jid = job_id
     if jid === nothing
         jid = resolved_kit_job_id()
     end
+    existing = kit_run_dir()
+    if existing !== nothing
+        mkpath(existing)
+        _hold_run_dir_lock!(existing, jid)
+        return existing
+    end
     dir = allocate_run_dir(kind, script; project = project, job_id = jid)
     ENV[DISTSSH_RUN_DIR_ENV] = dir
+    _hold_run_dir_lock!(dir, jid)
     return dir
 end
 
 function _restore_kit_run_dir_env!(old)::Nothing
+    current = kit_run_dir()
+    current === nothing || _drop_run_dir_lock!(current)
     if old === nothing || (old isa AbstractString && isempty(strip(String(old))))
         delete!(ENV, DISTSSH_RUN_DIR_ENV)
     else

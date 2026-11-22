@@ -183,6 +183,7 @@ using .DistSSHUp: julia_version_mismatch_kind, juliaup_add_host!, juliaup_align_
     juliaup_update_host!
 
 include("DistSSHRun/messages/display.jl")
+include("DistSSHRun/infra/output_lock.jl")
 include("DistSSHRun/messages/errors.jl")
 include("DistSSHRun/messages/placement.jl")
 include("DistSSHRun/options/process_env.jl")
