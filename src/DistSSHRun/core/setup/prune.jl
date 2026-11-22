@@ -77,11 +77,7 @@ function prune_kit_leaf_dirs!(
             rm(p; recursive = true, force = true)
             n += 1
         finally
-            try
-                release()
-            catch e
-                e isa InterruptException && rethrow()
-            end
+            release()
         end
     end
     isempty(refused) || throw(ArgumentError(join(unique(refused), "\n")))
