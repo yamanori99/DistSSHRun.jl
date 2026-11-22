@@ -1161,7 +1161,8 @@ function self_test_body_main()
     prose = "## Summary\n\nThe fix was made with care.\n\nGenerative tool: SomeTool\n"
     isempty(pr_body_hints(prose, "")) || die("self-test: pr body made with prose")
     lower_env = "## Summary\n\n## Testing\n\nRan on ubuntu 24.04 with julia 1.13.\n"
-    isempty(pr_body_hints(lower_env, "")) || die("self-test: pr body lowercase env")
+    any(x -> occursin("add the OS", x) || startswith(x, "add env"), pr_body_hints(lower_env, "")) &&
+        die("self-test: pr body lowercase env")
     noenv = "## Summary\n\n## Testing\n\n`./scripts/check.sh` passed.\n"
     env_hints = pr_body_hints(noenv, "Linux x86_64, Julia 1.13.4")
     any(x -> x == "add env to ## Testing (Linux x86_64, Julia 1.13.4)", env_hints) ||
@@ -1169,7 +1170,8 @@ function self_test_body_main()
     any(x -> startswith(x, "add the OS to ## Testing"), pr_body_hints(noenv, "")) ||
         die("self-test: pr body testing env hint no example")
     with_env = "## Summary\n\n## Testing\n\nEnvironment: Darwin arm64, Julia 1.13.4.\n\nRan check.\n"
-    isempty(pr_body_hints(with_env, "")) || die("self-test: pr body testing env ok")
+    any(x -> occursin("add the OS", x) || startswith(x, "add env"), pr_body_hints(with_env, "")) &&
+        die("self-test: pr body testing env ok")
     isempty(pr_body_hints("## Summary\n\nNo testing section.\n", "")) || die("self-test: pr body no testing section")
     stale = pr_body_hints("Any wording is fine.\n", "", "2026-11-20T21:00:00+09:00", "2026-11-20T11:00:00Z")
     any(==("update the PR body (a commit is newer than the last edit)"), stale) ||
@@ -1496,12 +1498,23 @@ function self_test_body_main()
     shaped = "## Testing\n\nmacOS arm64, Julia 1.13.4.\n\n`julia --version`\n\n```text\njulia version 1.13.4\n```\n"
     isempty(testing_format_errors(section_named_text(shaped, "Testing"))) ||
         die("self-test: testing format good $(testing_format_errors(section_named_text(shaped, "Testing")))")
+    span_cmd = "## Testing\n\nmacOS arm64, Julia 1.13.4.\n\n`julia --version`\n\n```text\njulia version 1.13.4\n```\n"
+    any(x -> occursin("easier to copy", x), testing_shape_hints(section_named_text(span_cmd, "Testing"))) ||
+        die("self-test: testing shape span hint $(testing_shape_hints(section_named_text(span_cmd, "Testing")))")
+    bash_cmd = "## Testing\n\nmacOS arm64, Julia 1.13.4.\n\n```bash\njulia --version\n```\n\n```text\njulia version 1.13.4\n```\n"
+    isempty(testing_shape_hints(section_named_text(bash_cmd, "Testing"))) ||
+        die("self-test: testing shape bash $(testing_shape_hints(section_named_text(bash_cmd, "Testing")))")
+    julia_cmd = "## Testing\n\nmacOS arm64, Julia 1.13.4.\n\n```julia\nusing Pkg; Pkg.test()\n```\n\n```text\n     Testing DistSSHRun tests passed\n```\n"
+    isempty(testing_shape_hints(section_named_text(julia_cmd, "Testing"))) ||
+        die("self-test: testing shape julia $(testing_shape_hints(section_named_text(julia_cmd, "Testing")))")
     stale_head = "## Summary\n\nx\n\n## Testing\n\nLinux x86_64, Julia 1.13.4.\n\n`true`\n\n```text\nok\n```\n\n## Risk\n\n## Revert\n"
     isempty(pr_body_errors(stale_head, ["README.md"])) ||
         die("self-test: testing format pr pass")
-    no_fence = "## Summary\n\nx\n\n## Testing\n\nLinux x86_64, Julia 1.13.4.\n\n`true`\n\n## Risk\n\n## Revert\n"
-    any(x -> occursin("text output", x), pr_body_errors(no_fence, ["README.md"])) ||
-        die("self-test: testing missing fence")
+    no_fence = "## Summary\n\nx\n\n## Testing\n\nLinux x86_64, Julia 1.13.4.\n\n```bash\ntrue\n```\n\n## Risk\n\n## Revert\n"
+    any(x -> occursin("text output", x), pr_body_errors(no_fence, ["README.md"])) &&
+        die("self-test: testing missing fence is not a failure")
+    any(x -> occursin("text fence", x), pr_body_hints(no_fence, "")) ||
+        die("self-test: testing missing fence hint $(pr_body_hints(no_fence, ""))")
     pending_fail = "## Risk\n\nStill pending on main.\n"
     any(endswith(e, "pending") for e in excuse_word_errors(section_named_text(pending_fail, "Risk"))) ||
         die("self-test: pending evidence")
@@ -1513,8 +1526,10 @@ function self_test_body_main()
     testing_has_env_line("Linux x86_64, Julia 1.13.4.") ||
         die("self-test: sentence period env line")
     cmd_fence_only = "## Testing\n\nLinux x86_64, Julia 1.13.4.\n\n```text\n`only in fence`\n```\n"
-    any(x -> occursin("command", x), testing_format_errors(section_named_text(cmd_fence_only, "Testing"))) ||
-        die("self-test: cmd in fence only")
+    isempty(testing_format_errors(section_named_text(cmd_fence_only, "Testing"))) ||
+        die("self-test: cmd in fence only is not a failure")
+    any(x -> occursin("fenced command", x), testing_shape_hints(section_named_text(cmd_fence_only, "Testing"))) ||
+        die("self-test: cmd in fence only hint")
     hdr_in_fence = "## Summary\n\n```markdown\n## Testing\n```\n\n## Risk\n"
     testing_section_present(hdr_in_fence) && die("self-test: testing heading in fence")
     banned_hit("# until later") == "until" || die("self-test: until phrase $(repr(banned_hit("# until later")))")
@@ -1813,6 +1828,39 @@ function has_inline_command_outside_fences(text::AbstractString)
     return false
 end
 
+function fenced_blocks(text::AbstractString)
+    lines = collect(eachsplit(text, '\n'; keepempty = true))
+    blocks = Tuple{String, String}[]
+    i = 1
+    while i <= length(lines)
+        s = strip(lines[i])
+        if startswith(s, "```")
+            lang = String(strip(s[4:end]))
+            body = String[]
+            i += 1
+            while i <= length(lines) && !startswith(strip(lines[i]), "```")
+                push!(body, lines[i])
+                i += 1
+            end
+            push!(blocks, (lang, join(body, '\n')))
+        end
+        i += 1
+    end
+    return blocks
+end
+
+function has_testing_command_fence(text::AbstractString)
+    for (lang, body) in fenced_blocks(text)
+        lang == "text" && continue
+        for line in eachsplit(body, '\n'; keepempty = true)
+            s = strip(line)
+            (isempty(s) || startswith(s, "#")) && continue
+            return true
+        end
+    end
+    return false
+end
+
 function section_heading_outside_fences(body::AbstractString, hdr::AbstractString)
     h = strip(hdr)
     for (_, line) in unfenced_lines(body)
@@ -1832,7 +1880,6 @@ function testing_format_errors(text::AbstractString)
         push!(errs, "Testing uses a markdown table")
         return errs
     end
-    lines = collect(eachsplit(text, '\n'; keepempty = true))
     env_lines = Int[]
     for (i, line) in unfenced_lines(text)
         if testing_has_env_line(line) && !isempty(strip(line))
@@ -1849,15 +1896,6 @@ function testing_format_errors(text::AbstractString)
         end
         push!(errs, "$line: Testing environment line (OS/arch, Julia, trailing period)")
         return errs
-    end
-    for (idx, env_i) in enumerate(env_lines)
-        stop = idx < length(env_lines) ? env_lines[idx + 1] - 1 : length(lines)
-        segment = join(lines[env_i:stop], '\n')
-        if !has_inline_command_outside_fences(segment)
-            push!(errs, "$env_i: Testing command in a code span")
-        elseif !occursin(r"(?m)^```text\s*$", segment)
-            push!(errs, "$env_i: Testing ```text output fence")
-        end
     end
     return unique(errs)
 end
@@ -1953,6 +1991,22 @@ function commit_newer_than_edit(committed::AbstractString, edited::AbstractStrin
     return c > e
 end
 
+function testing_shape_hints(text::AbstractString)
+    hints = String[]
+    has_cmd = has_testing_command_fence(text)
+    has_span = has_inline_command_outside_fences(text)
+    has_text = occursin(r"(?m)^```text\s*$", text)
+    if !has_cmd && !has_span
+        push!(hints, "Testing command: a fenced command from the repository root is easiest to copy")
+    elseif !has_cmd
+        push!(hints, "Testing command: a fenced command is easier to copy than a code span")
+    end
+    if !has_text
+        push!(hints, "Testing output: copy the last lines of that run into a text fence")
+    end
+    return hints
+end
+
 function pr_body_hints(
         body::AbstractString,
         env_example::AbstractString,
@@ -1976,6 +2030,7 @@ function pr_body_hints(
                 push!(hints, "add env to ## Testing ($ex)")
             end
         end
+        append!(hints, testing_shape_hints(txt))
     end
     return hints
 end
