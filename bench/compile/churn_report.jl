@@ -19,6 +19,7 @@ function render_churn_markdown(report, chart_prefix::AbstractString)::String
         "",
         "Lines are non-blank `*.jl` under `src/` and `lib/*/src/`, grouped by package and area.",
         "Columns use git history through `$(report.head_sha[1:7])` as of $(report.head_date) (JST).",
+        "Areas list only directories that hold at least one `*.jl` directly and show any 7d or 30d added/deleted lines.",
         "",
         "**(root files)** lists `.jl` files sitting directly in a package `src/` directory, not in a subfolder.",
         "",

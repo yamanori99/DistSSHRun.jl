@@ -3,7 +3,7 @@ module ChurnCompute
 
 using Dates
 
-export AreaRow, ChurnReport, RemovedPathRow, area_label, compute_churn, jst_today
+export AreaRow, ChurnReport, RemovedPathRow, area_label, area_row_included, compute_churn, jst_today
 
 const JST_OFFSET = Hour(9)
 const REPO_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
@@ -125,6 +125,11 @@ function area_label(package::String, pkg_rel::AbstractString)::String
         return "(root files)"
     end
     return endswith(d, "/") ? d : string(d, "/")
+end
+
+"""Keep rows with churn in the 7d or 30d window; omit placeholder parent dirs with no direct `.jl` files."""
+function area_row_included(row::AreaRow)::Bool
+    return row.added_7 + row.deleted_7 + row.added_30 + row.deleted_30 > 0
 end
 
 function count_code_lines(path::AbstractString)::Int
@@ -349,6 +354,12 @@ function compute_churn(repo::AbstractString = REPO_ROOT; now::DateTime = Dates.n
     area_rows = AreaRow[]
     weekly_by_area = Dict{String, Vector{Pair{Date, Int}}}()
     for ((pkg, area), paths) in sort(collect(area_files); by = x -> (x[1][1], x[1][2]))
+        src_root = joinpath(repo, package_src_dir(pkg))
+        paths = filter(paths) do p
+            pkg_rel = relpath(joinpath(repo, p), src_root)
+            return area_label(pkg, pkg_rel) == area
+        end
+        isempty(paths) && continue
         sort!(paths)
         loc = sum(count_code_lines(joinpath(repo, p)) for p in paths)
         a7 = sum(get(add7, p, 0) for p in paths)
@@ -379,7 +390,9 @@ function compute_churn(repo::AbstractString = REPO_ROOT; now::DateTime = Dates.n
             end
         end
         stale_pct = stale_d == 0 ? 100.0 : 100.0 * stale_n / stale_d
-        push!(area_rows, AreaRow(pkg, area, length(paths), loc, a7, d7, a30, d30, stale_pct, last, root_list))
+        row = AreaRow(pkg, area, length(paths), loc, a7, d7, a30, d30, stale_pct, last, root_list)
+        area_row_included(row) || continue
+        push!(area_rows, row)
         area_key = "$pkg/$area"
         wmap = Dict{Date, Int}()
         for p in paths
