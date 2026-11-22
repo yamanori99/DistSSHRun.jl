@@ -28,6 +28,9 @@ makedocs(;
         "Placement" => "placement.md",
         "Common errors" => "common_errors.md",
         "API" => "api.md",
+        "Developer" => [
+            "Source churn" => "source_churn.md",
+        ],
     ],
     checkdocs = :public,
     linkcheck = get(ENV, "DOCUMENTER_LINKCHECK", "") == "1",

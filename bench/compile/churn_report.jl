@@ -13,25 +13,37 @@ function fmt_date(d)::String
     return string(d)
 end
 
-function render_churn_markdown(report, chart_prefix::AbstractString)::String
-    lines = String[
-        "## Source churn",
-        "",
-        "Lines are non-blank `*.jl` under `src/` and `lib/*/src/`, grouped by package and area.",
-        "Columns use git history through `$(report.head_sha[1:7])` as of $(report.head_date) (JST).",
-        "Areas list only directories that hold at least one `*.jl` directly and show any 7d or 30d added/deleted lines.",
-        "",
-        "**(root files)** lists `.jl` files sitting directly in a package `src/` directory, not in a subfolder.",
-        "",
-        "![30-day churn summary]($chart_prefix/churn-summary.png)",
-        "",
-        "![Weekly churn]($chart_prefix/churn-weekly.png)",
-        "",
-        "![Net churn heatmap]($chart_prefix/churn-heatmap.png)",
-        "",
-        "Interactive charts (hover for values): [summary]($chart_prefix/churn-summary.html) · [weekly]($chart_prefix/churn-weekly.html) · [heatmap]($chart_prefix/churn-heatmap.html).",
-        "",
-    ]
+const CHURN_GENERATED_BEGIN = "<!-- CHURN_GENERATED_BEGIN -->"
+const CHURN_GENERATED_END = "<!-- CHURN_GENERATED_END -->"
+
+function render_churn_markdown(
+        report,
+        chart_prefix::AbstractString;
+        include_heading::Bool = true,
+    )::String
+    lines = String[]
+    if include_heading
+        push!(lines, "## Source churn", "")
+    end
+    append!(
+        lines,
+        [
+            "Lines are non-blank `*.jl` under `src/` and `lib/*/src/`, grouped by package and area.",
+            "Columns use git history through `$(report.head_sha[1:7])` as of $(report.head_date) (JST).",
+            "Areas list only directories that hold at least one `*.jl` directly and show any 7d or 30d added/deleted lines.",
+            "",
+            "**(root files)** lists `.jl` files sitting directly in a package `src/` directory, not in a subfolder.",
+            "",
+            "![30-day churn summary]($chart_prefix/churn-summary.png)",
+            "",
+            "![Weekly churn]($chart_prefix/churn-weekly.png)",
+            "",
+            "![Net churn heatmap]($chart_prefix/churn-heatmap.png)",
+            "",
+            "Interactive charts (hover for values): [summary]($chart_prefix/churn-summary.html) · [weekly]($chart_prefix/churn-weekly.html) · [heatmap]($chart_prefix/churn-heatmap.html).",
+            "",
+        ],
+    )
     pkgs = unique(r.package for r in report.areas)
     for pkg in sort(collect(pkgs))
         pkg_rows = filter(r -> r.package == pkg, report.areas)
@@ -71,32 +83,21 @@ function render_churn_markdown(report, chart_prefix::AbstractString)::String
     return join(lines, "\n")
 end
 
-function splice_churn_section(readme_path::AbstractString, section::AbstractString)
-    heading = "## Source churn"
-    isfile(readme_path) || return write(readme_path, section)
-    text = read(readme_path, String)
-    if startswith(text, heading)
-        body_start = findfirst('\n', text)
-        body_start === nothing && return write(readme_path, section)
-        body = text[(body_start + 1):end]
-        stop = findfirst("\n## ", body)
-        tail = stop === nothing ? "" : body[first(stop):end]
-        write(readme_path, section * tail)
-        return nothing
-    end
-    marker = "\n" * heading * "\n"
-    idx = findfirst(marker, text)
-    if idx === nothing
-        sep = endswith(text, "\n") ? "\n" : "\n\n"
-        write(readme_path, text * sep * section)
-        return nothing
-    end
-    start_pos = first(idx)
-    head = text[begin:start_pos]
-    rest = text[(start_pos + length(marker)):end]
-    stop = findfirst("\n## ", rest)
-    tail = stop === nothing ? "" : rest[first(stop):end]
-    write(readme_path, head * section * tail)
+function splice_churn_generated(docs_path::AbstractString, section::AbstractString)
+    isfile(docs_path) || error("missing docs page: $docs_path")
+    text = read(docs_path, String)
+    b = findfirst(CHURN_GENERATED_BEGIN, text)
+    b === nothing && error("missing $CHURN_GENERATED_BEGIN in $docs_path")
+    e = findfirst(CHURN_GENERATED_END, text)
+    e === nothing && error("missing $CHURN_GENERATED_END in $docs_path")
+    first(e) < last(b) && error("churn markers out of order in $docs_path")
+    head = text[begin:(first(b) - 1)]
+    tail = text[(last(e) + 1):end]
+    body = strip(section)
+    write(
+        docs_path,
+        head * CHURN_GENERATED_BEGIN * "\n\n" * body * "\n\n" * CHURN_GENERATED_END * tail,
+    )
     return nothing
 end
 

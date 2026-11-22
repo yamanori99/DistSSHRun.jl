@@ -11,6 +11,7 @@ on:
       - bench/compile/charts.jl
       - bench/compile/churn_*.jl
       - bench/compile/Project.toml
+      - docs/src/source_churn.md
       - .github/compile-bench-render.sh
       - .github/workflows/compile-bench-render.yml
   pull_request:
@@ -19,6 +20,7 @@ on:
       - bench/compile/charts.jl
       - bench/compile/churn_*.jl
       - bench/compile/Project.toml
+      - docs/src/source_churn.md
       - .github/compile-bench-render.sh
       - .github/workflows/compile-bench-render.yml
   workflow_dispatch:
@@ -108,21 +110,37 @@ jobs:
             git "${net[@]}" "${auth[@]}" clone --branch bench-data --single-branch "$url" "$dest"
           fi
           git -C "$dest" config http.extraheader "AUTHORIZATION: basic ${basic}"
+          chart_base="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/bench-data/churn/charts"
           julia --startup-file=no --project=bench/compile bench/compile/churn_render.jl \
-            --out-dir "$dest/churn" --append-readme "$dest/README.md"
+            --out-dir "$dest/churn" \
+            --append-docs "$GITHUB_WORKSPACE/docs/src/source_churn.md" \
+            --docs-chart-base "$chart_base"
           git -C "$dest" config user.name "github-actions[bot]"
           git -C "$dest" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C "$dest" add README.md churn/
-          if git -C "$dest" diff --cached --quiet; then
+          git -C "$dest" add churn/
+          if ! git -C "$dest" diff --cached --quiet; then
+            git -C "$dest" commit -m "Render source churn."
+            for attempt in 1 2 3 4 5 6; do
+              if git "${net[@]}" -C "$dest" push origin HEAD:bench-data; then
+                break
+              fi
+              git "${net[@]}" -C "$dest" pull --rebase origin bench-data || { git -C "$dest" rebase --abort || true; exit 1; }
+              [ "$attempt" -lt 6 ] && sleep "$attempt"
+            done
+            git "${net[@]}" -C "$dest" push origin HEAD:bench-data || true
+          else
             echo "bench-data churn unchanged"
-            exit 0
           fi
-          git -C "$dest" commit -m "Render source churn."
-          for attempt in 1 2 3 4 5 6; do
-            if git "${net[@]}" -C "$dest" push origin HEAD:bench-data; then
-              exit 0
-            fi
-            git "${net[@]}" -C "$dest" pull --rebase origin bench-data || { git -C "$dest" rebase --abort || true; exit 1; }
-            [ "$attempt" -lt 6 ] && sleep "$attempt"
-          done
-          git "${net[@]}" -C "$dest" push origin HEAD:bench-data
+          git -C "$GITHUB_WORKSPACE" config user.name "github-actions[bot]"
+          git -C "$GITHUB_WORKSPACE" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$GITHUB_WORKSPACE" add docs/src/source_churn.md
+          if ! git -C "$GITHUB_WORKSPACE" diff --cached --quiet; then
+            git -C "$GITHUB_WORKSPACE" commit -m "Update source churn docs."
+            for attempt in 1 2 3 4 5 6; do
+              if git "${net[@]}" -C "$GITHUB_WORKSPACE" push origin "HEAD:main"; then
+                break
+              fi
+              git "${net[@]}" -C "$GITHUB_WORKSPACE" pull --rebase origin main || { git -C "$GITHUB_WORKSPACE" rebase --abort || true; exit 1; }
+              [ "$attempt" -lt 6 ] && sleep "$attempt"
+            done
+          fi

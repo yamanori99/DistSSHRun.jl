@@ -169,16 +169,20 @@ end
         end
     end
 
-    @testset "splice churn section at readme start" begin
+    @testset "splice churn generated into docs page" begin
         dir = mktempdir()
         try
-            readme = joinpath(dir, "README.md")
-            write(readme, "## Source churn\n\nold table\n\n## Compile bench\n\ntail\n")
-            splice_churn_section(readme, "## Source churn\n\nnew table\n\n")
-            text = read(readme, String)
+            doc = joinpath(dir, "source_churn.md")
+            write(
+                doc,
+                "# Source churn\n\nintro\n\n$(CHURN_GENERATED_BEGIN)\nold\n$(CHURN_GENERATED_END)\n",
+            )
+            splice_churn_generated(doc, "new table\n\n![summary](https://example.test/churn-summary.png)")
+            text = read(doc, String)
             @test occursin("new table", text)
-            @test !occursin("old table", text)
-            @test occursin("## Compile bench", text)
+            @test !occursin("\nold\n", text)
+            @test occursin("https://example.test/churn-summary.png", text)
+            @test occursin("# Source churn", text)
         finally
             rm(dir; force = true, recursive = true)
         end
