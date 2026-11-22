@@ -192,12 +192,11 @@ function git_diff(root::AbstractString)
     try
         return read(`git -C $root diff -U0 --no-color $range`, String)
     catch
-        fallback =
-            if git_rev_parse(root, "origin/main") && git_rev_parse(root, "HEAD")
-                "origin/main...HEAD"
-            else
-                "HEAD"
-            end
+        fallback = if git_rev_parse(root, "origin/main") && git_rev_parse(root, "HEAD")
+            "origin/main...HEAD"
+        else
+            "HEAD"
+        end
         range == fallback && rethrow()
         return read(`git -C $root diff -U0 --no-color $fallback`, String)
     end
@@ -990,7 +989,7 @@ function self_test_body()
 end
 
 function self_test_body_inner()
-    withenv("GATE_DIFF_RANGE" => "", "GATE_DIFF_BASE" => "", "GATE_DIFF_HEAD" => "") do
+    return withenv("GATE_DIFF_RANGE" => "", "GATE_DIFF_BASE" => "", "GATE_DIFF_HEAD" => "") do
         self_test_body_main()
     end
 end
