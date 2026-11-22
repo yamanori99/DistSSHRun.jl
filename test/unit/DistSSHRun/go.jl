@@ -276,7 +276,7 @@ using Dates
                     "DISTSSH_TEST_SSH_HOST_ROOTS" => roots,
                     "DISTSSH_TEST_ACTIVE_PROJECT" => repo,
                     "DISTSSH_TEST_CONTROLLER_LOAD_PATH" => ctl_lp,
-                    "JULIA_DEPOT_PATH" => get(ENV, "JULIA_DEPOT_PATH", "")
+                    "JULIA_DEPOT_PATH" => get(ENV, "JULIA_DEPOT_PATH", nothing)
                 ) do
                     task = @async DistSSHRun._go_run_remote_slot!(
                         host,

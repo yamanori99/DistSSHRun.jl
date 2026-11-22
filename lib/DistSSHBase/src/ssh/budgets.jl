@@ -30,15 +30,13 @@ end
 function _wait_env_number(key::AbstractString)::Union{Nothing, Float64}
     haskey(ENV, String(key)) || return nothing
     raw = String(get(ENV, String(key), ""))
-    isempty(strip(raw)) && return nothing
-    return parse_env_float(key, raw; default = nothing, nonnegative = true)
+    return parse_env_float(key, raw; nonnegative = true)
 end
 
 function _wait_scale()::Float64
     haskey(ENV, _WAIT_SCALE_ENV) || return 1.0
     raw = String(get(ENV, _WAIT_SCALE_ENV, ""))
-    isempty(strip(raw)) && return 1.0
-    return parse_env_float(_WAIT_SCALE_ENV, raw; default = 1.0, positive = true)
+    return parse_env_float(_WAIT_SCALE_ENV, raw; positive = true)
 end
 
 """

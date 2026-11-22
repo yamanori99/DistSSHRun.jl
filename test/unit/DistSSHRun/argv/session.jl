@@ -186,6 +186,9 @@ end
         withenv("DISTSSH_JOBS" => "nope") do
             @test_throws ArgumentError DistSSHRun.kit_host_jobs(DistSSHRun.snapshot_process_env())
         end
+        withenv("DISTSSH_JOBS" => "") do
+            @test_throws ArgumentError DistSSHRun.kit_host_jobs(DistSSHRun.snapshot_process_env())
+        end
         seen = Int[]
         DistSSHRun.map_host_jobs(["a", "b"]) do i, host
             push!(seen, i)

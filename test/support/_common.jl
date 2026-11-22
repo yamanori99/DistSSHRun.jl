@@ -67,7 +67,8 @@ if !isdefined(@__MODULE__, :_test_root)
         )::Cmd
         proj = _cli_m_project(String(project))
         argv = String[String(a) for a in args]
-        return `$(_julia_cmd_for(julia)) --startup-file=no --project=$proj -m DistSSHRun $argv`
+        load = joinpath(@__DIR__, "install_injected_ssh.jl")
+        return `$(_julia_cmd_for(julia)) --startup-file=no --project=$proj -L $load -m DistSSHRun $argv`
     end
 
     # Temp go/drive/size/setup hosts file: comment, bare host, `4*host-b`.

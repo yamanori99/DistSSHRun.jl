@@ -5,7 +5,7 @@ function show_go_usage(; io::IO = stdout)
     print_help_chrome(cli_heading("go"); io = io)
     print_help_lines(
         io,
-        "Standalone script. One full run per slot; slots start together.",
+        "Standalone script. One full run per slot; concurrent slot SSH is DISTSSH_JOBS (default 1).",
         "Remotes: setup ship-tree or setup git-clone, then setup instantiate.",
         "Then go --ship-id ID (or last-ship.toml / git checkout).",
     )

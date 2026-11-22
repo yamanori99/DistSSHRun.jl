@@ -79,6 +79,7 @@ function stored_path(
     isabspath(r) && return canonical_local_path(r)
     proj = canonical_local_path(project)
     out = if output === nothing
+        throw_if_legacy_env!(ENV)
         strip(get(ENV, "DISTSSH_OUTPUT_DIR", ""))
     else
         strip(String(output))

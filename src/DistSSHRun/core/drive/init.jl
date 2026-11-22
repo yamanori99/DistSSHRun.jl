@@ -222,12 +222,15 @@ function init_drive_workers!(
         responses = Int[]
         failed_workers = Int[]
 
-        _ping_retries = DistSSHBase.parse_env_int(
-            "DISTSSH_PING_RETRIES",
-            get(ENV, "DISTSSH_PING_RETRIES", "");
-            default = 6,
-            minimum = 1,
-        )
+        _ping_retries = if haskey(ENV, "DISTSSH_PING_RETRIES")
+            DistSSHBase.parse_env_int(
+                "DISTSSH_PING_RETRIES",
+                String(ENV["DISTSSH_PING_RETRIES"]);
+                minimum = 1,
+            )
+        else
+            6
+        end
         for w in worker_ids
             w in workers() || continue
             local r_ok

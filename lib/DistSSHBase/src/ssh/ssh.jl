@@ -258,8 +258,8 @@ end
 
 """First SSH probe on a host: bounded by [`ssh_auth_timeout_seconds`](@ref)."""
 function _run_ssh_auth_bounded(cmd)::Base.Process
-    proc = run(cmd; wait = false)
     seconds = ssh_auth_timeout_seconds()
+    proc = run(cmd; wait = false)
     if timedwait(() -> process_exited(proc), Float64(seconds); pollint = 0.05) !== :ok
         _ssh_kill_local!(proc)
         throw(_ssh_auth_timeout_error(seconds))
@@ -1255,6 +1255,7 @@ function _remote_tree_root(
             return s
         end
     end
+    throw_if_legacy_env!(ENV)
     env = strip(get(ENV, "DISTSSH_REMOTE_PROJECT_ROOT", ""))
     if !isempty(env)
         _reject_control_path(env)

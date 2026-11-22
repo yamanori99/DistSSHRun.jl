@@ -66,6 +66,32 @@ using DistSSHRun
             @test occursin("DISTRIBUTED_SSH_OPTS", err.msg)
             @test occursin("DISTSSH_SSH_OPTS", err.msg)
         end
+        withenv("DISTRIBUTED_OUTPUT_DIR" => "/tmp/old-out") do
+            @test_throws ArgumentError DistSSHRun.DistSSHBase.stored_path("a.bin")
+            @test_throws ArgumentError DistSSHRun.resolve_distributed_output_dir!(
+                String[],
+                mktempdir(),
+            )
+        end
+        withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/srv/staged") do
+            @test_throws ArgumentError DistSSHRun.DistSSHBase.remote_deploy_root(pwd())
+        end
+        old_src = string("DISTSSH_", "SOURCE_COMMIT")
+        withenv(old_src => "abc") do
+            @test_throws ArgumentError DistSSHRun._source_from_env()
+        end
+        @test DistSSHRun._reject_obsolete_pipeline_size_env(
+            DistSSHRun.ProcessEnv(Dict{String, String}()),
+        ) === nothing
+        @test_throws ArgumentError DistSSHRun._reject_obsolete_pipeline_size_env(
+            DistSSHRun.ProcessEnv(Dict(string("DISTSSH_", "SIZE_PROBE") => "1")),
+        )
+        @test_throws ArgumentError DistSSHRun._reject_obsolete_pipeline_size_env(
+            DistSSHRun.ProcessEnv(Dict(string("DISTSSH_", "SIZE_PROBE") => "")),
+        )
+        withenv("DISTRIBUTED_INIT_DELAY_SEC" => "1") do
+            @test_throws ArgumentError DistSSHRun._drive_init_delay_sec(; ssh = false)
+        end
     end
 
     @testset "unparsable table numerics and bools throw" begin
@@ -88,6 +114,11 @@ using DistSSHRun
             )
         end
         withenv("DISTSSH_SKIP_COLLECT" => "maybe") do
+            @test_throws ArgumentError DistSSHRun.DistSSHBase.env_flag(
+                "DISTSSH_SKIP_COLLECT", ENV; default = false,
+            )
+        end
+        withenv("DISTSSH_SKIP_COLLECT" => "") do
             @test_throws ArgumentError DistSSHRun.DistSSHBase.env_flag(
                 "DISTSSH_SKIP_COLLECT", ENV; default = false,
             )

@@ -118,6 +118,7 @@ function generated_env_options_markdown()::String
     println(io, "and is not an option. Test doubles are injected from `test/` and are not read as options.")
     println(io, "An old Distributed-prefix name is an error that names the DistSSH replacement.")
     println(io, "A numeric or boolean value that does not parse is an error that names the variable.")
+    println(io, "Unset uses the default. A present blank value is an error.")
     println(io)
     println(io, "| Name | Type | Default | CLI | Meaning |")
     println(io, "|------|------|---------|-----|---------|")

@@ -18,6 +18,7 @@ function resolve_distributed_output_dir!(
         script_args::Vector{String},
         default_dir::AbstractString,
     )::String
+    DistSSHBase.throw_if_legacy_env!(ENV)
     existing = strip(get(ENV, "DISTSSH_OUTPUT_DIR", ""))
     if !isempty(existing)
         dir = canonical_local_path(existing)
@@ -206,13 +207,15 @@ function worker_pmap(f, collection; batch_size = nothing)
     end
     pmap_kwargs = batch_size === nothing ? () : (; batch_size = batch_size)
     return pmap(work; pmap_kwargs...) do (item, x, item_seed)
-        raw = strip(get(ENV, "DISTSSH_WORKER_RANK", ""))
-        rank = DistSSHBase.parse_env_int(
-            "DISTSSH_WORKER_RANK",
-            raw;
-            default = 0,
-            minimum = 0,
-        )
+        rank = if haskey(ENV, "DISTSSH_WORKER_RANK")
+            DistSSHBase.parse_env_int(
+                "DISTSSH_WORKER_RANK",
+                String(ENV["DISTSSH_WORKER_RANK"]);
+                minimum = 0,
+            )
+        else
+            0
+        end
         if myid() == 1
             _note_item!(call, item, rank)
         else

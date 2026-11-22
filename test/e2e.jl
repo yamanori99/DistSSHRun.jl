@@ -941,7 +941,7 @@ end
                 Dict(
                     "DISTSSH_QUIET" => "0",
                     "DISTSSH_YES" => "1",
-                    "DISTSSH_INIT_DELAY_SEC" => "0"
+                    "DISTSSH_INIT_DELAY_SEC" => "0.01"
                 )
             )
             delete!(tty_extra, "DISTSSH_PROGRESS")
@@ -1429,7 +1429,7 @@ end
                     "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1",
                     "DISTSSH_HEARTBEAT_INTERVAL_SEC" => "1",
                     "DISTSSH_HEARTBEAT_DEADLINE_SEC" => "5",
-                    "DISTSSH_INIT_DELAY_SEC" => "0"
+                    "DISTSSH_INIT_DELAY_SEC" => "0.01"
                 )
             )
             detached = withenv(hb_env...) do

@@ -38,6 +38,9 @@ end
             Dict("DISTSSH_HEARTBEAT_INTERVAL_SEC" => "2"),
         ) == 2.0
         @test_throws ArgumentError DistSSHHeartbeat._heartbeat_interval(
+            Dict("DISTSSH_HEARTBEAT_INTERVAL_SEC" => ""),
+        )
+        @test_throws ArgumentError DistSSHHeartbeat._heartbeat_interval(
             Dict("DISTSSH_HEARTBEAT_INTERVAL_SEC" => "nope"),
         )
         @test_throws ArgumentError DistSSHHeartbeat._heartbeat_interval(
@@ -55,6 +58,9 @@ end
         )
         @test_throws ArgumentError DistSSHHeartbeat._heartbeat_deadline_explicit(
             Dict("DISTSSH_HEARTBEAT_DEADLINE_SEC" => "nope"),
+        )
+        @test_throws ArgumentError DistSSHHeartbeat._heartbeat_deadline_explicit(
+            Dict("DISTSSH_HEARTBEAT_DEADLINE_SEC" => ""),
         )
         cfg = DistSSHHeartbeat._heartbeat_config(Dict{String, String}(); deadline = 12.0)
         @test cfg.interval == 30.0

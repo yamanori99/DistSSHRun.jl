@@ -138,7 +138,8 @@ if !isdefined(@__MODULE__, :_run_kit_drive)
             `$base --startup-file=no --project=$host_project $drive $tokens`
         else
             proj = _cli_m_project(kit_root)
-            `$base --startup-file=no --project=$proj -m DistSSHRun drive $tokens`
+            load = joinpath(@__DIR__, "install_injected_ssh.jl")
+            `$base --startup-file=no --project=$proj -L $load -m DistSSHRun drive $tokens`
         end
         # Same child env as `_kit_drive_cmd`: `@` + `@stdlib`, depot inherited,
         # `JULIA_PROJECT` removed. `addenv` would keep this process's load path.

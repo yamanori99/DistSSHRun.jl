@@ -28,6 +28,7 @@ User-facing names. A parent-to-child hand-off uses `DISTSSH_INTERNAL_*`
 and is not an option. Test doubles are injected from `test/` and are not read as options.
 An old Distributed-prefix name is an error that names the DistSSH replacement.
 A numeric or boolean value that does not parse is an error that names the variable.
+Unset uses the default. A present blank value is an error.
 
 | Name | Type | Default | CLI | Meaning |
 |------|------|---------|-----|---------|

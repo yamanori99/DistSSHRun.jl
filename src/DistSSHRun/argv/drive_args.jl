@@ -404,12 +404,10 @@ function parse_drive_args(args::Vector{String}; env::ProcessEnv = snapshot_proce
         lw = cli_session.head_workers::Int
         head_workers = _drive_set_head_workers!(head_workers, lw, "--head-workers")
     else
-        hw_raw = strip(get(env, "DISTSSH_HEAD_WORKERS", ""))
-        if !isempty(hw_raw)
+        if haskey(env, "DISTSSH_HEAD_WORKERS")
             env_lw = DistSSHBase.parse_env_int(
                 "DISTSSH_HEAD_WORKERS",
-                hw_raw;
-                default = 0,
+                String(get(env, "DISTSSH_HEAD_WORKERS", ""));
                 minimum = 0,
             )
             head_workers = _drive_set_head_workers!(head_workers, env_lw, "DISTSSH_HEAD_WORKERS")

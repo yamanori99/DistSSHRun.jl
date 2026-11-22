@@ -17,6 +17,8 @@ function main()
         n = parse(Int, ARGS[2])
     end
 
+    haskey(ENV, "DISTRIBUTED_OUTPUT_DIR") &&
+        error("DISTRIBUTED_OUTPUT_DIR was renamed to DISTSSH_OUTPUT_DIR")
     env = strip(get(ENV, "DISTSSH_OUTPUT_DIR", ""))
     outdir = if !isempty(env)
         env

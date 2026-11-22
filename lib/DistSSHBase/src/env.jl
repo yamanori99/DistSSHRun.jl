@@ -37,11 +37,10 @@ function parse_env_bool(name::AbstractString, raw::AbstractString)::Bool
     )
 end
 
-"""Parse `name` from `env` as a bool. Missing or empty uses `default`."""
+"""Parse `name` from `env` as a bool. Missing uses `default`; a present blank errors."""
 function env_flag(name::AbstractString, env; default::Bool)::Bool
     haskey(env, String(name)) || return default
-    raw = strip(String(get(env, String(name), "")))
-    isempty(raw) && return default
+    raw = String(get(env, String(name), ""))
     return parse_env_bool(name, raw)
 end
 
@@ -57,11 +56,9 @@ end
 function parse_env_int(
         name::AbstractString,
         raw::AbstractString;
-        default::Int,
         minimum::Int = 1,
     )::Int
     s = strip(String(raw))
-    isempty(s) && return default
     n = tryparse(Int, s)
     (n === nothing || n < minimum) && throw(
         ArgumentError("$(name) must be an integer >= $(minimum), got $(repr(String(raw)))"),
@@ -72,12 +69,10 @@ end
 function parse_env_float(
         name::AbstractString,
         raw::AbstractString;
-        default::Union{Nothing, Float64},
         positive::Bool = false,
         nonnegative::Bool = false,
-    )::Union{Nothing, Float64}
+    )::Float64
     s = strip(String(raw))
-    isempty(s) && return default
     v = tryparse(Float64, s)
     (v === nothing || !isfinite(v)) && throw(
         ArgumentError("$(name) must be a finite number, got $(repr(String(raw)))"),

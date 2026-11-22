@@ -1272,13 +1272,12 @@ end
 
 """SSH workers sleep `DISTSSH_INIT_DELAY_SEC` (default 5). Local-only is 0."""
 function _drive_init_delay_sec(; ssh::Bool)::Float64
-    ssh || return 0.0
     DistSSHBase.throw_if_legacy_env!(ENV)
-    raw = get(ENV, "DISTSSH_INIT_DELAY_SEC", "")
+    ssh || return 0.0
+    haskey(ENV, "DISTSSH_INIT_DELAY_SEC") || return 5.0
     v = DistSSHBase.parse_env_float(
         "DISTSSH_INIT_DELAY_SEC",
-        raw;
-        default = 5.0,
+        String(ENV["DISTSSH_INIT_DELAY_SEC"]);
         positive = true,
     )
     return Float64(v)
@@ -1937,6 +1936,7 @@ function _ensure_drive_output_env!(
         script_path::AbstractString;
         project::AbstractString = pwd(),
     )::String
+    DistSSHBase.throw_if_legacy_env!(ENV)
     existing = strip(get(ENV, "DISTSSH_OUTPUT_DIR", ""))
     if !isempty(existing)
         dir = canonical_local_path(existing)

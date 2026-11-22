@@ -824,7 +824,20 @@ function _source_from_user(source::AbstractDict)::Dict{String, Any}
     return out
 end
 
+function _throw_if_obsolete_source_env!()
+    for (old, new) in (
+            string("DISTSSH_", "SOURCE_COMMIT") => "DISTSSH_INTERNAL_SOURCE_COMMIT",
+            string("DISTSSH_", "SOURCE_DIRTY") => "DISTSSH_INTERNAL_SOURCE_DIRTY",
+            string("DISTSSH_", "SOURCE_CAPTURED") => "DISTSSH_INTERNAL_SOURCE_CAPTURED",
+            string("DISTSSH_", "SOURCE_UNTRACKED") => "DISTSSH_INTERNAL_SOURCE_UNTRACKED",
+        )
+        haskey(ENV, old) && DistSSHBase.throw_renamed_env!(old, new)
+    end
+    return nothing
+end
+
 function _source_from_env()::Union{Nothing, Dict{String, Any}}
+    _throw_if_obsolete_source_env!()
     haskey(ENV, _PROVENANCE_SOURCE_ENV.commit) || return nothing
     raw = Dict{String, Any}(
         "commit" => ENV[_PROVENANCE_SOURCE_ENV.commit],

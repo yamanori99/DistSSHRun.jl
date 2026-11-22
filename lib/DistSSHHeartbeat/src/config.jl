@@ -1,12 +1,10 @@
 # Master-side env for worker heartbeat monitors (opt-in self-exit only).
 
 function _heartbeat_interval(env)::Float64
-    raw = haskey(env, "DISTSSH_HEARTBEAT_INTERVAL_SEC") ?
-        String(get(env, "DISTSSH_HEARTBEAT_INTERVAL_SEC", "")) : ""
+    haskey(env, "DISTSSH_HEARTBEAT_INTERVAL_SEC") || return 30.0
     v = DistSSHBase.parse_env_float(
         "DISTSSH_HEARTBEAT_INTERVAL_SEC",
-        raw;
-        default = 30.0,
+        String(get(env, "DISTSSH_HEARTBEAT_INTERVAL_SEC", ""));
         positive = true,
     )
     return Float64(v)
@@ -16,11 +14,9 @@ end
 function _heartbeat_deadline_explicit(env)::Union{Nothing, Float64}
     haskey(env, "DISTSSH_HEARTBEAT_DEADLINE_SEC") || return nothing
     raw = String(get(env, "DISTSSH_HEARTBEAT_DEADLINE_SEC", ""))
-    isempty(strip(raw)) && return nothing
     return DistSSHBase.parse_env_float(
         "DISTSSH_HEARTBEAT_DEADLINE_SEC",
         raw;
-        default = nothing,
         positive = true,
     )
 end

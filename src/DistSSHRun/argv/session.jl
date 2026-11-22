@@ -182,8 +182,12 @@ end
 
 """Max concurrent SSH host jobs (`DISTSSH_JOBS`, default 1) from `env`."""
 function kit_host_jobs(env::ProcessEnv = invocation_process_env())::Int
-    raw = haskey(env, "DISTSSH_JOBS") ? String(get(env, "DISTSSH_JOBS", "")) : ""
-    return DistSSHBase.parse_env_int("DISTSSH_JOBS", raw; default = 1, minimum = 1)
+    haskey(env, "DISTSSH_JOBS") || return 1
+    return DistSSHBase.parse_env_int(
+        "DISTSSH_JOBS",
+        String(get(env, "DISTSSH_JOBS", ""));
+        minimum = 1,
+    )
 end
 
 """Call `f(i, host)` for each host, at most `kit_host_jobs(env)` at once (1 → sequential)."""
