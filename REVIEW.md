@@ -1,52 +1,42 @@
 # Review
 
-What failure looks like in this repository. DistSSHRun is one DistSSHKit
-run. Users add DistSSHKit. Cap comments at bugs and regressions in this
-diff. Style, diagnostics, and cleanup are out of scope. Runic and JETLS
-already gate those.
+DistSSHRun is the run layer. DistSSHKit reexports it, and most users add
+DistSSHKit. DistSSHQueue and DistSSHKit both build on its public names,
+command line, and files. Comment only on bugs and regressions that this
+diff introduces. Formatting, types, lint rules, the pull request body,
+and labels are checked by CI. Do not repeat them.
 
-Cite a file and a line in the diff. Do not guess from a name. Do not
-repeat a finding already posted. A bug this pull request did not
-introduce is pre-existing. Say so, and do not ask for it to be fixed
-here.
+Start the summary with the number of findings. When it is zero, say
+there is nothing to fix. Cite a file and a line in the diff for each
+finding. Do not guess from a name. Do not repeat a finding already
+posted.
 
-Start the summary with the count of findings. When the count is zero,
-say there is nothing to fix.
+## Questions
 
-## Invariants
+Ask these of every diff.
 
-- Ids are compared exactly.
-- Run state has an owner.
-- Invalid input errors.
-- A change adds no fallback, skip, allowlist entry, or non-blocking job.
+1. Does every input path this diff touches still reject a missing, malformed, or old-form value with an error, with no new fallback, alias, silent default, skip, or allowlist entry?
+2. Does this diff change a public name, a command-line flag, an exit code, a message, a file this package writes or reads, or other behavior that DistSSHQueue or DistSSHKit relies on, without a changelog fragment in this pull request that says so?
+3. Does any manual page, README, docstring, help text, error hint, or changelog fragment now say something the changed code does not do?
+
+## Where they apply here
+
+- Question 1: a value that reaches a remote shell goes through the shared
+  quoting helper. A host that starts with `-` (including `user@-host`), or
+  a host or path that contains a control character, is rejected before
+  `ssh` runs.
+- Question 1: delete and prune remove only a path the user confirmed
+  (`--confirm-path`). A yes flag or variable (`-y`, `--yes`,
+  `DISTSSH_YES`) never stands in for it. A host without its own confirmed
+  path is not deleted.
+- Question 2: a removed or renamed public name appears as an identifier in
+  a changelog fragment bullet. Teardown and the run marker belong to
+  DistSSHQueue. This package writes no run marker.
+- Question 3: the controller's run record and the remote shipped-tree
+  stamp are different files. A user doc says to add DistSSHKit, not
+  DistSSHRun.
 
 ## Pre-existing
 
-A finding outside this diff stays out of the pull request. List it under
-this heading, one line each, with file:line.
-
-## Failures
-
-- **Docs lie.** A manual, README, or NEWS states a flag, confirmation,
-  exit code, or deleted path that the code does not implement. A doc
-  tells the user to add or run DistSSHRun instead of DistSSHKit. A doc
-  mixes controller `DISTSSH_RUN_DIR/run.toml` with the remote Ship
-  stamp, or treats `teardown` as this package.
-- **Config misroutes.** A required check name, the heavy-job allowlist,
-  or a label rule sends a change to the wrong gate. An Aqua job gains a
-  `run:` that is not `aqua-check.sh`.
-- **Remote shell.** A remote command interpolates a value without
-  `posix_quote` or `_remote_shell_path_word`. `~` expansion belongs
-  to `_remote_shell_path_word`. A host that starts with `-`, including
-  `user@-host`, or a host or path that contains a control character, is
-  rejected before `ssh` runs.
-- **Delete and prune.** A path calculation in this diff can remove a path
-  the user did not confirm. `setup!(session, :delete)` and
-  `setup!(session, :prune)` delete without a matching `confirm_path`, or
-  a host with no dict key is deleted. `-y`, `--yes`, and `DISTSSH_YES`
-  authorize `setup --delete` or `setup --prune` without `--confirm-path`.
-  Delete scans `<target>/runs` when stamps live under a nested deploy
-  root. This diff writes a `.distssh-run` / `.distsshrun` marker.
-- **Public behavior.** A public name removed in this diff must appear as an identifier in a changelog fragment bullet in the same pull request. Do not request a `breaking` label. A same-name behavior change, and a break that is only in the CLI, are not a label.
-- **Registrator.** The register command appears in an issue, a pull
-  request body, or a pull request comment.
+A finding outside this diff stays out of this pull request. List it
+here, one line each, with file:line, and do not ask for a fix.

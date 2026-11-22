@@ -3,10 +3,9 @@
 language: en-US
 # tone_instructions is at most 250 characters after the folded lines are joined.
 tone_instructions: >
-  Brief. Cite file:line for a bug this diff introduced. Outside the
-  diff, list under Pre-existing; do not ask for a fix. Finding count
-  first. Exact ids, owned run state, invalid input errors; no new
-  fallback, skip, allowlist or non-blocking job.
+  Brief. Finding count first. Cite file:line for a bug this diff added.
+  Ask the three questions in the path instructions. Outside the diff,
+  list under Pre-existing and do not ask for a fix.
 # Reviews and chat run only after a mention. `@coderabbitai review` is
 # incremental. `@coderabbitai full review` starts over. A later push does
 # not review again. This file is read from the pull request head.
@@ -28,40 +27,46 @@ reviews:
   path_instructions:
     - path: "**"
       instructions: >
-        Do not request the labels bug, enhancement, chore, breaking,
-        cut, cut-hold, when:*, or julia-next. A removed public name is
-        a changelog fragment bullet, not a label.         Do not request a
-        checklist or a body heading that titles the pull request. The
-        GitHub title is the title. Do not ask to add Testing, Risk, or
-        Revert when they are absent. Do not add lines to AGENTS.md.
-        Ids compare exactly. Run state has an owner. Invalid input
-        errors. Do not add a fallback, skip, allowlist entry, or
-        non-blocking job. Outside this diff, list file:line under
-        Pre-existing and do not ask for a fix here.
+        Ask these three questions of the diff. 1. Does every input path
+        this diff touches still reject a missing, malformed, or old-form
+        value with an error, with no new fallback, alias, silent default,
+        skip, or allowlist entry? 2. Does this diff change a public name,
+        a command-line flag, an exit code, a message, a file this package
+        writes or reads, or other behavior that DistSSHQueue or DistSSHKit
+        relies on, without a changelog fragment in this pull request that
+        says so? 3. Does any manual page, README, docstring, help text,
+        error hint, or changelog fragment now say something the changed
+        code does not do? Formatting, types, lint rules, the pull request
+        body, and labels are checked by CI. Do not request a label, a
+        checklist, a title heading, or a Testing, Risk, or Revert section.
+        Outside this diff, list file:line under Pre-existing and do not
+        ask for a fix here.
     - path: "AGENTS.md"
       instructions: >
-        This file is a short entry. Do not ask to paste a skill back
-        into it, and do not ask for a new section. Destructive setup
-        stays here.
+        This file is a short entry. Do not ask to paste a skill into it
+        or to add a section. It names behavior, not repository files or
+        functions; do not ask for a path.
     - path: ".agents/**"
       instructions: >
         A skill is not a CI job. Do not ask to install a hook, spawn a
-        subagent, or add a line to AGENTS.md. The MIT notice is
+        subagent, or add a line to AGENTS.md. The license notice lives in
         `.agents/LICENSE`. Do not paste it into a skill.
         continual-learning and correct run only when the user names them.
     - path: "docs/src/devdocs/agents/**"
       instructions: >
         A skill is not a CI job. Do not ask to install a hook, spawn a
-        subagent, or add a line to AGENTS.md. The MIT notice is
+        subagent, or add a line to AGENTS.md. The license notice lives in
         `.agents/LICENSE`. Do not paste it into a skill.
         continual-learning and correct run only when the user names them.
     - path: "scripts/**"
       instructions: >
         The push gate is scripts/check.sh. It is the same on macOS and
         Linux. WSL2 Ubuntu uses the Linux conditions. Native Windows
-        stops. Do not ask for a hardcoded depot path or for Pkg.Apps.add.
-        docs/make.jl runs only when docs/ or a docstring line changes,
-        and the local run does not pass linkcheck.
+        stops. The local harness never installs a tool. A missing
+        optional tool prints a note and does not fail. Do not ask for a
+        hardcoded depot path or for Pkg.Apps.add. docs/make.jl runs only
+        when docs/ or a docstring line changes, and the local run does
+        not pass linkcheck.
     - path: ".github/workflows/**"
       instructions: >
         Do not rename a required check. Do not add a native Windows job.
