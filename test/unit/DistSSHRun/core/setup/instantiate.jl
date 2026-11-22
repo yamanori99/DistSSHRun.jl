@@ -15,10 +15,7 @@ using TOML
     @test !occursin("JULIA_PKG_OFFLINE", expr)
 
     function _child_env(depot::AbstractString)
-        env = Dict{String, String}(k => v for (k, v) in ENV)
-        env["JULIA_DEPOT_PATH"] = depot
-        delete!(env, "JULIA_PKG_OFFLINE")
-        return env
+        return _child_julia_env(Dict("JULIA_DEPOT_PATH" => depot))
     end
 
     function _run_instantiate_e(project::AbstractString, depot::AbstractString)
