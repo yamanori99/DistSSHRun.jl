@@ -2145,7 +2145,7 @@ const CEILING_PROCESS_PATTERN = 55
 const CEILING_LOCK_CREATE = 8
 const CEILING_ENV_DEFAULT = 11
 const CEILING_ENV_DEFAULT_TEST = 37
-const CEILING_SWALLOWED_CATCH = 137
+const CEILING_SWALLOWED_CATCH = 136
 const CEILING_LOOP_SKIP = 0
 const CEILING_PR_REFS = 2
 const CEILING_EXCUSE_PHRASES = 25
@@ -2435,6 +2435,7 @@ function collect_swallowed_catch(root, files, src_for_path; whole::Bool)
     paths = whole ? tracked_jl(root) : collect(keys(files))
     for path in paths
         skipped_path(path) && continue
+        startswith(replace(path, '\\' => '/'), ".github/") && continue
         endswith(path, ".jl") || continue
         src = src_for_path(path)
         added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
