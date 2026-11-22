@@ -357,9 +357,20 @@ _mb="$(git merge-base HEAD origin/main)"
 _age="$(($(git log -1 --format=%ct origin/main) - $(git log -1 --format=%ct "${_mb}")))"
 if ((_behind > 40)) || ((_age > 48 * 3600)); then
   printf 'note: branch is stale versus origin/main (%s commits, %ss)\n' "${_behind}" "${_age}"
-  _labels="$(gh pr view --json labels --jq '[.labels[].name] | join(",")' 2>/dev/null)" || die "stale branch: could not read pull request labels"
-  if [[ ",${_labels}," == *",cut,"* ]]; then
-    die "stale branch with cut label"
+  _pr_err="$(mktemp)"
+  if _labels="$(gh pr view --json labels --jq '[.labels[].name] | join(",")' 2>"${_pr_err}")"; then
+    rm -f "${_pr_err}"
+    if [[ ",${_labels}," == *",cut,"* ]]; then
+      die "stale branch with cut label"
+    fi
+  else
+    if grep -q 'no pull requests found' "${_pr_err}"; then
+      rm -f "${_pr_err}"
+    else
+      cat "${_pr_err}" >&2
+      rm -f "${_pr_err}"
+      die "stale branch: could not read pull request labels"
+    fi
   fi
 fi
 
