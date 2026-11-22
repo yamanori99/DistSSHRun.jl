@@ -48,7 +48,8 @@ jobs:
   linux-e2e:
     needs: linux-image
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Weekly linux-e2e sets DISTSSH_CODE_COVERAGE; main coverage E2E can exceed 45 min.
+    timeout-minutes: 75
     name: DistSSHRun (ubuntu-latest → ubuntu-26.04)
     permissions:
       contents: read
@@ -678,6 +679,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FAILED: ${{ needs.linux-image.result != 'success' || needs.linux-e2e.result != 'success' || needs.macos-e2e.result != 'success' || needs.wsl-e2e.result != 'success' || needs.up-linux-e2e.result != 'success' || needs.up-macos-e2e.result != 'success' || needs.up-wsl-e2e.result != 'success' || needs.base-linux-e2e.result != 'success' || needs.base-macos-e2e.result != 'success' || needs.base-wsl-e2e.result != 'success' || needs.queue-ssh-e2e.result != 'success' }}
           LINUX_FAILED: ${{ needs.linux-image.result != 'success' || needs.linux-e2e.result != 'success' }}
+          ANY_CANCELLED: ${{ contains(join(needs.*.result, ','), 'cancelled') }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           WEEKLY: ${{ github.event_name == 'schedule' }}
         run: |
@@ -703,7 +705,7 @@ jobs:
             else
               gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label "$labels" --body "$body"
             fi
-          else
+          elif [ "$ANY_CANCELLED" != "true" ]; then
             for t in 'E2E weekly failed' 'E2E daily failed'; do
               n="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label alert --search "in:title $t" --json number --jq '.[0].number // empty')"
               if [ -n "$n" ]; then
