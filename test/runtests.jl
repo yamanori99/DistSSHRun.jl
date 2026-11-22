@@ -96,6 +96,7 @@ end
             _runtest_include("unit/DistSSHRun/infra/job_environment.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "job_environment.jl"))
             _runtest_include("unit/DistSSHRun/infra/cluster_manager_api.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "cluster_manager_api.jl"))
             _runtest_include("unit/DistSSHRun/infra/seed_golden.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "seed_golden.jl"))
+            _runtest_include("unit/DistSSHRun/infra/plan_ranks_item_seeds.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "plan_ranks_item_seeds.jl"))
             _runtest_include("unit/DistSSHRun/infra/topology.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "topology.jl"))
             _runtest_include("unit/DistSSHRun/infra/bind_overrides.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "bind_overrides.jl"))
             _runtest_include("unit/DistSSHRun/infra/bind_pre_ssh.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "bind_pre_ssh.jl"))
@@ -149,6 +150,7 @@ end
             _runtest_include("unit/cli/doctor/main.jl", joinpath(@__DIR__, "unit", "cli", "doctor", "main.jl"))
             _runtest_include("unit/cli/hostinfo/args.jl", joinpath(@__DIR__, "unit", "cli", "hostinfo", "args.jl"))
             _runtest_include("unit/cli/pool/args.jl", joinpath(@__DIR__, "unit", "cli", "pool", "args.jl"))
+            _runtest_include("unit/docs/cli_examples.jl", joinpath(@__DIR__, "unit", "docs", "cli_examples.jl"))
             _runtest_include("unit/cli/exit_conventions.jl", joinpath(@__DIR__, "unit", "cli", "exit_conventions.jl"))
             _runtest_include("unit/cli/subcommands_main.jl", joinpath(@__DIR__, "unit", "cli", "subcommands_main.jl"))
         end
@@ -187,6 +189,7 @@ end
             end
             _runtest_include("integration/drive/fail.jl", joinpath(@__DIR__, "integration", "drive", "fail.jl"))
             _runtest_include("integration/drive/sigint.jl", joinpath(@__DIR__, "integration", "drive", "sigint.jl"))
+            _runtest_include("integration/drive/cluster_scope.jl", joinpath(@__DIR__, "integration", "drive", "cluster_scope.jl"))
             if !_distsshrun_short_skip("integration/drive/interrupt_grace.jl")
                 _runtest_include("integration/drive/interrupt_grace.jl", joinpath(@__DIR__, "integration", "drive", "interrupt_grace.jl"))
             end

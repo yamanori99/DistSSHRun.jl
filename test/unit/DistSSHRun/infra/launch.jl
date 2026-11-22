@@ -54,7 +54,7 @@ using TOML
     items_only = DistSSHRun._seed_provenance()
     @test items_only isa AbstractDict
     items_only isa AbstractDict || error("expected item provenance")
-    @test !haskey(items_only, "job")
+    @test haskey(items_only, "job")
     @test !haskey(items_only, "workers")
     item_rows = items_only["items"]
     @test item_rows isa Vector

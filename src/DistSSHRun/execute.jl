@@ -831,6 +831,20 @@ function _execute_detached!(
     )
     verbosity_sym = verbosity isa Symbol ? verbosity :
         verbosity === nothing ? nothing : throw(ArgumentError("verbosity must be a Symbol or nothing"))
+    blob_parent_env = snapshot_process_env()
+    blob_env_fields = detached_job_blob_fields_from_env(blob_parent_env)
+    julia_for_blob = julia
+    if julia_for_blob === nothing || (
+            julia_for_blob isa AbstractString && (
+                isempty(strip(String(julia_for_blob))) ||
+                    lowercase(strip(String(julia_for_blob))) == "auto"
+            )
+        )
+        je = strip(get(blob_parent_env, "JULIA_DISTRIBUTED_EXE", ""))
+        if !isempty(je) && lowercase(je) != "auto"
+            julia_for_blob = je
+        end
+    end
     job_blob_path = write_detached_job_blob!(
         run_dir,
         kind,
@@ -841,7 +855,7 @@ function _execute_detached!(
         remote = remote,
         output_dir = resolved_output,
         log_dir = resolved_log,
-        julia = julia,
+        julia = julia_for_blob,
         run_id = run_id,
         quiet = quiet,
         verbosity = verbosity_sym === nothing ? nothing : String(verbosity_sym),
@@ -857,12 +871,25 @@ function _execute_detached!(
         allow_external_symlinks = allow_external_symlinks,
         head_workers = head_workers,
         head_slots = head_slots,
+        unsafe_master_silence_exit = get(blob_env_fields, :unsafe_master_silence_exit, false),
+        unsafe_expose_port = get(blob_env_fields, :unsafe_expose_port, false),
+        unsafe_all_to_all = get(blob_env_fields, :unsafe_all_to_all, false),
+        topology = get(blob_env_fields, :topology, nothing),
+        distributed_heartbeat_deadline_sec = get(
+            blob_env_fields,
+            :distributed_heartbeat_deadline_sec,
+            nothing,
+        ),
+        distributed_heartbeat_interval_sec = get(
+            blob_env_fields,
+            :distributed_heartbeat_interval_sec,
+            nothing,
+        ),
     )
     argv = _execute_detached_bootstrap_argv(kind; job_blob = job_blob_path)
     extra = Dict{String, String}(
         "DISTRIBUTED_PROJECT_ROOT" => proj,
         DISTSSH_RUN_DIR_ENV => run_dir,
-        DETACHED_JOB_BLOB_ENV => job_blob_path,
     )
     if remote !== nothing && !isempty(strip(String(remote)))
         extra["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote_env_project_root(String(remote))

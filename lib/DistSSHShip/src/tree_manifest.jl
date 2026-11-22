@@ -168,10 +168,11 @@ function shipped_file_mode_violations(
             want = String(rel) in exec ? _SHIPPED_FILE_MODE_EXEC : _SHIPPED_FILE_MODE_NONEXEC
             mode == want || push!(hits, String(rel))
         else
-            (mode & 0o222) != 0 && push!(hits, String(rel))
-            mode != _SHIPPED_FILE_MODE_NONEXEC &&
-                mode != _SHIPPED_FILE_MODE_EXEC &&
+            if (mode & 0o222) != 0
                 push!(hits, String(rel))
+            elseif mode != _SHIPPED_FILE_MODE_NONEXEC && mode != _SHIPPED_FILE_MODE_EXEC
+                push!(hits, String(rel))
+            end
         end
     end
     return hits

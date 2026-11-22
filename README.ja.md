@@ -91,10 +91,10 @@ Julia **1.13+**。
 フラグは `julia -m DistSSHRun help go` で見る。
 
 ```bash
-julia -m DistSSHRun setup check child:host1
+julia -m DistSSHRun doctor --deploy host1
 julia -m DistSSHRun go SCRIPT.jl
-julia -m DistSSHRun drive parent:2 SCRIPT.jl
-julia -m DistSSHRun drive --local-workers 2 SCRIPT.jl
+julia -m DistSSHRun drive --head-workers 2 SCRIPT.jl
+julia -m DistSSHRun drive --head-workers 2 --hosts '2*host1' SCRIPT.jl
 julia -m DistSSHRun hostinfo
 julia -m DistSSHRun pool
 ```

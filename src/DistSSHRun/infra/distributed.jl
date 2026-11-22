@@ -1,4 +1,5 @@
 using Distributed
+using Random: copy, copy!, default_rng, seed!
 
 """
     resolve_distributed_output_dir!(script_args, default_dir)
@@ -180,19 +181,31 @@ function resolve_drive_log_dir(
 end
 
 """
-    worker_pmap(f, collection)
+    worker_pmap(f, collection; batch_size = nothing)
 
 Like `Distributed.pmap`, but evaluates `f` with `Base.invokelatest` on each element.
+
+Seeds the task-local default RNG from `job_item_seed` for each element before `f`,
+then restores the previous RNG state. The first `rand` inside `f` matches
+`rand(Random.Xoshiro(item_seed), T)` for the same `item_seed`. Worker count and
+`batch_size` do not change that stream.
 
 After `drive` syncs your driver to workers and loads the project package, plain
 `pmap` is usually enough. Use `worker_pmap` when a callback still hits Julia 1.12+
 world-age errors (for example, a function reference or closure captured before
 package load).
 """
-function worker_pmap(f, collection)
+function worker_pmap(f, collection; batch_size = nothing)
     call = myid() == 1 ? _take_pmap_call() : remotecall_fetch(_take_pmap_call, 1)
+    job = myid() == 1 ? job_seed() : remotecall_fetch(job_seed, 1)
     indexed = collect(enumerate(collection))
-    return pmap(indexed) do (item, x)
+    work = Tuple{Int, Any, UInt64}[]
+    sizehint!(work, length(indexed))
+    for (item, x) in indexed
+        push!(work, (item, x, job_item_seed(job, call, item)))
+    end
+    pmap_kwargs = batch_size === nothing ? () : (; batch_size = batch_size)
+    return pmap(work; pmap_kwargs...) do (item, x, item_seed)
         raw = get(ENV, "DISTSSH_WORKER_RANK", "")
         rank = something(tryparse(Int, raw), 0)
         if myid() == 1
@@ -200,6 +213,13 @@ function worker_pmap(f, collection)
         else
             remotecall_fetch(_note_item!, 1, call, item, rank)
         end
-        return Base.invokelatest(f, x)
+        rng = default_rng()
+        saved = copy(rng)
+        seed!(rng, item_seed)
+        try
+            return Base.invokelatest(f, x)
+        finally
+            copy!(rng, saved)
+        end
     end
 end

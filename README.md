@@ -95,10 +95,10 @@ The command is `julia -m DistSSHRun`.
 See flags with `julia -m DistSSHRun help go`.
 
 ```bash
-julia -m DistSSHRun setup check child:host1
+julia -m DistSSHRun doctor --deploy host1
 julia -m DistSSHRun go SCRIPT.jl
-julia -m DistSSHRun drive parent:2 SCRIPT.jl
 julia -m DistSSHRun drive --head-workers 2 SCRIPT.jl
+julia -m DistSSHRun drive --head-workers 2 --hosts '2*host1' SCRIPT.jl
 julia -m DistSSHRun hostinfo
 julia -m DistSSHRun pool
 ```
@@ -110,8 +110,9 @@ go!("job.jl")
 
 ## CLI conventions and exit codes
 
-Commands follow Rust [clap](https://docs.rs/clap)
-[`Command::arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Command.html#method.arg_required_else_help):
+Commands follow [clap](https://docs.rs/clap)
+[`Command::arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Command.html#method.arg_required_else_help)
+(bare invocation with no operands → full help on stderr, exit 2):
 
 - No arguments on a command that needs operands or flags → full help on **stderr**, exit **2**
 - `--help` / `-h` → same help on **stdout**, exit **0**

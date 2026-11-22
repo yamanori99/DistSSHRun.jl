@@ -6,13 +6,12 @@ const RUNNER_WORKER_SCRIPT_PATHS = Dict{Int, String}()
 function _register_drive_workers!(
         before::Set{Int},
         proj_path::String,
-        script_path::String,
+        script_path::Union{Nothing, String},
     )
     for w in workers()
-        if w ∉ before
-            RUNNER_WORKER_PROJECT_DIRS[w] = proj_path
-            RUNNER_WORKER_SCRIPT_PATHS[w] = script_path
-        end
+        w ∉ before || continue
+        RUNNER_WORKER_PROJECT_DIRS[w] = proj_path
+        script_path === nothing || (RUNNER_WORKER_SCRIPT_PATHS[w] = String(script_path))
     end
     return nothing
 end
@@ -70,7 +69,7 @@ function add_drive_workers!(
         default_workers,
         julia_exe,
         proj_dir::String,
-        script_path::String,
+        script_path::Union{Nothing, String},
         project_root::String;
         bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
         launch_plans::Union{Nothing, AbstractVector{HostLaunchPlan}} = nothing,
@@ -87,7 +86,7 @@ function add_drive_workers!(
     end
     DistSSHRun._require_drive_host_status_idle!()
     DistSSHRun._clear_drive_host_worker_ids!()
-    script_path = abspath(String(script_path))
+    script_abs = script_path === nothing ? nothing : abspath(String(script_path))
     writeln_both("Adding workers..."; color = :light_black)
 
     remote_ssh = String[h for (h, _) in hosts]
@@ -115,13 +114,15 @@ function add_drive_workers!(
             local_line = DistSSHRun.format_kit_head_placement(head_workers, "workers")
             write_both("  $local_line: ")
             DistSSHRun._drive_host_span!(DistSSHRun.PARENT_HOST_NAME, "workers", :running)
+            head_ranks = DistSSHRun.reserve_worker_ranks!(head_workers)
             try
                 before = Set(workers())
                 DistSSHRun._add_local_drive_workers!(
                     head_workers, proj_dir, local_julia;
+                    ranks = head_ranks,
                     verify_project = !snapshot_run,
                 )
-                _register_drive_workers!(before, proj_dir, script_path)
+                _register_drive_workers!(before, proj_dir, script_abs)
                 added = sort!(Int[w for w in workers() if w ∉ before])
                 DistSSHRun._register_drive_host_worker_ids!(
                     DistSSHRun.PARENT_HOST_NAME,
@@ -186,20 +187,26 @@ function add_drive_workers!(
             host_ok = false
             try
                 host_workers = something(host_workers_spec, default_workers, 1)
+                host_ranks = DistSSHRun.reserve_worker_ranks!(host_workers)
 
                 repo_ra = canonical_local_path(project_root)
                 remote_proj = resolve_host_path_abs(host_name, proj_dir, repo_ra)
-                remote_script = if DistSSHRun._script_inside_project(proj_dir, script_path)
-                    resolve_host_path_abs(host_name, script_path, repo_ra)
+                remote_script = if script_abs === nothing
+                    nothing
+                elseif DistSSHRun._script_inside_project(proj_dir, script_abs)
+                    resolve_host_path_abs(host_name, script_abs, repo_ra)
                 elseif remote_proj === nothing
                     nothing
                 else
-                    joinpath(remote_proj, DistSSHRun._go_script_relpath(proj_dir, script_path))
+                    joinpath(remote_proj, DistSSHRun._go_script_relpath(proj_dir, script_abs))
                 end
-                if remote_proj === nothing || remote_script === nothing
+                if remote_proj === nothing || (script_abs !== nothing && remote_script === nothing)
                     write_both("$host_name ($host_workers workers): ")
-                    missing = remote_proj === nothing ? remote_layout_path(proj_dir, repo_ra) :
-                        remote_layout_path(script_path, repo_ra)
+                    missing = if remote_proj === nothing
+                        remote_layout_path(proj_dir, repo_ra)
+                    else
+                        remote_layout_path(script_abs, repo_ra)
+                    end
                     print_progress_err("✗ (remote path not found: $missing)")
                     writeln_both("")
                     writeln_both("    hint: julia --project=. -m DistSSHKit setup ship-tree $(setup_cli_host_token(host_name))")
@@ -305,7 +312,8 @@ function add_drive_workers!(
                         host_julia,
                         remote_proj,
                         sshflags_cmd,
-                        host_name,
+                        host_name;
+                        ranks = host_ranks,
                     )
                     added = sort!(Int[w for w in workers() if w ∉ before])
                     # `SSHManager.launch` can swallow a failed machine; `addprocs` then
@@ -614,4 +622,22 @@ function register_worker_cleanup!(successful_hosts::Vector{String})
     end
     atexit(drive_atexit_cleanup)
     return drive_atexit_cleanup
+end
+
+"""
+    _teardown_drive_workers_after_run!(drive_atexit_cleanup)
+
+Interrupt owned workers after Ctrl-C, then `rmprocs` DistSSH-launched workers.
+Shared by `run_drive_parsed!` and [`cluster`](@ref).
+"""
+function _teardown_drive_workers_after_run!(drive_atexit_cleanup)
+    _ensure_second_sigint_watch!()
+    if _drive_was_interrupted()
+        writeln_both("\nInterrupted. Cleaning up workers...")
+        flush(stdout)
+        _interrupt_drive_workers!()
+    end
+    drive_atexit_cleanup !== nothing && drive_atexit_cleanup()
+    _drive_was_interrupted() && _retire_distributed_gc_task!()
+    return nothing
 end
