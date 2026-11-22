@@ -48,7 +48,7 @@ function render_churn_markdown(report, chart_prefix::AbstractString)::String
         end
         push!(
             lines,
-            "| $(area_cell) | $(row.files) | $(row.loc) | $(row.added_7) | $(row.deleted_7) | $net7 | $(row.added_30) | $(row.deleted_30) | $net30 | $(round(row.stale_pct; digits=1)) | $(fmt_date(row.last_touch)) |",
+            "| $(area_cell) | $(row.files) | $(row.loc) | $(row.added_7) | $(row.deleted_7) | $net7 | $(row.added_30) | $(row.deleted_30) | $net30 | $(round(row.stale_pct; digits = 1)) | $(fmt_date(row.last_touch)) |",
         )
     end
     if !isempty(report.removed)
@@ -82,7 +82,7 @@ function write_churn_csv(report, path::AbstractString)
                         row.added_30,
                         row.deleted_30,
                         row.added_30 - row.deleted_30,
-                        round(row.stale_pct; digits=2),
+                        round(row.stale_pct; digits = 2),
                         fmt_date(row.last_touch),
                     ],
                     ',',

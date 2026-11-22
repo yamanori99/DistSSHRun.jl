@@ -45,7 +45,7 @@ function jst_from_utc(t::DateTime)::DateTime
     return t + JST_OFFSET
 end
 
-function jst_today(t::DateTime=Dates.now(UTC))::Date
+function jst_today(t::DateTime = Dates.now(UTC))::Date
     return Date(jst_from_utc(t))
 end
 
@@ -60,7 +60,7 @@ end
 
 function ensure_full_history(repo::AbstractString)
     shallow = git_read(repo, `git -C $repo rev-parse --is-shallow-repository`)
-  shallow == "true" && error("shallow git history: checkout needs fetch-depth 0")
+    shallow == "true" && error("shallow git history: checkout needs fetch-depth 0")
     return nothing
 end
 
@@ -114,7 +114,7 @@ function area_label(package::String, pkg_rel::AbstractString)::String
             return occursin(r"^cli/[^/]+/_using\.jl$", pkg_rel) ? "cli/" : "cli/"
         elseif startswith(pkg_rel, "DistSSHRun/")
             rest = pkg_rel[(length("DistSSHRun/") + 1):end]
-            parts = split(rest, '/'; limit=2)
+            parts = split(rest, '/'; limit = 2)
             if length(parts) == 1
                 return "DistSSHRun/(root files)"
             end
@@ -142,8 +142,8 @@ end
 function parse_commit_times(repo::AbstractString, since::AbstractString)::Dict{String, DateTime}
     text = read(`git -C $repo log --since=$since --pretty=format:%H%x09%at`, String)
     out = Dict{String, DateTime}()
-    for line in eachsplit(text, '\n'; keepempty=false)
-        hash, secs = split(line, '\t'; limit=2)
+    for line in eachsplit(text, '\n'; keepempty = false)
+        hash, secs = split(line, '\t'; limit = 2)
         out[hash] = Dates.unix2datetime(parse(Int, secs))
     end
     return out
@@ -153,7 +153,7 @@ end
 function commit_renames(repo::AbstractString, commit::AbstractString)::Dict{String, String}
     out = Dict{String, String}()
     text = read(`git -C $repo show -M --name-status --pretty=format: $commit`, String)
-    for line in eachsplit(text, '\n'; keepempty=false)
+    for line in eachsplit(text, '\n'; keepempty = false)
         m = match(r"^R\d+\t(.+)\t(.+)$", line)
         m === nothing && continue
         out[m.captures[1]] = m.captures[2]
@@ -176,7 +176,7 @@ end
 function move_only_paths(repo::AbstractString, commit::AbstractString)::Set{String}
     text = read(`git -C $repo show -M --numstat --summary --pretty=format: $commit`, String)
     rename_old = String[]
-    for line in eachsplit(text, '\n'; keepempty=false)
+    for line in eachsplit(text, '\n'; keepempty = false)
         m = match(r"^rename from (.+)$", line)
         m !== nothing && push!(rename_old, m.captures[1])
         m2 = match(r"^rename to (.+)$", line)
@@ -187,7 +187,7 @@ function move_only_paths(repo::AbstractString, commit::AbstractString)::Set{Stri
         end
     end
     numstat_rename = Set{String}()
-    for line in eachsplit(text, '\n'; keepempty=false)
+    for line in eachsplit(text, '\n'; keepempty = false)
         m = match(r"^(\d+|-)\t(\d+|-)\t(.+)$", line)
         m === nothing && continue
         path = m.captures[3]
@@ -210,7 +210,7 @@ function parse_numstat_log(repo::AbstractString, since::AbstractString)::Vector{
     text = read(cmd, String)
     lines = NumstatLine[]
     commit = ""
-    for line in eachsplit(text, '\n'; keepempty=false)
+    for line in eachsplit(text, '\n'; keepempty = false)
         if startswith(line, "--")
             commit = strip(line[3:end])
             continue
@@ -266,7 +266,7 @@ function blame_staleness(repo::AbstractString, path::AbstractString, cutoff::Dat
     total = 0
     stale = 0
     last_touch = nothing
-    for line in eachsplit(text, '\n'; keepempty=false)
+    for line in eachsplit(text, '\n'; keepempty = false)
         m = match(r"^author-time (\d+)$", line)
         m === nothing && continue
         total += 1
@@ -281,7 +281,7 @@ function blame_staleness(repo::AbstractString, path::AbstractString, cutoff::Dat
     return stale, total, last_touch
 end
 
-function compute_churn(repo::AbstractString=REPO_ROOT; now::DateTime=Dates.now(UTC))::ChurnReport
+function compute_churn(repo::AbstractString = REPO_ROOT; now::DateTime = Dates.now(UTC))::ChurnReport
     ensure_full_history(repo)
     head = head_commit(repo)
     head_date = jst_today(now)
@@ -289,7 +289,7 @@ function compute_churn(repo::AbstractString=REPO_ROOT; now::DateTime=Dates.now(U
     since7 = head_date - Day(7)
     since_git = string(since30 - Day(1))
     commit_times = parse_commit_times(repo, since_git)
-    commits = sort(collect(keys(commit_times)); by=c -> commit_times[c])
+    commits = sort(collect(keys(commit_times)); by = c -> commit_times[c])
     per_commit = build_forward_renames(repo, commits)
     commit_index = Dict(c => i for (i, c) in enumerate(commits))
     files = collect_source_files(repo)
@@ -346,7 +346,7 @@ function compute_churn(repo::AbstractString=REPO_ROOT; now::DateTime=Dates.now(U
     stale_cutoff = head_date - Day(30)
     area_rows = AreaRow[]
     weekly_by_area = Dict{String, Vector{Pair{Date, Int}}}()
-    for ((pkg, area), paths) in sort(collect(area_files); by=x -> (x[1][1], x[1][2]))
+    for ((pkg, area), paths) in sort(collect(area_files); by = x -> (x[1][1], x[1][2]))
         sort!(paths)
         loc = sum(count_code_lines(joinpath(repo, p)) for p in paths)
         a7 = sum(get(add7, p, 0) for p in paths)
@@ -384,13 +384,13 @@ function compute_churn(repo::AbstractString=REPO_ROOT; now::DateTime=Dates.now(U
                 wmap[wk] = get(wmap, wk, 0) + net
             end
         end
-        weekly_by_area[area_key] = sort(collect(wmap); by=first)
+        weekly_by_area[area_key] = sort(collect(wmap); by = first)
     end
     pkgs = sort(unique(r.package for r in area_rows))
     ordered = AreaRow[]
     for pkg in pkgs
         group = filter(r -> r.package == pkg, area_rows)
-        sort!(group; by=r -> -(r.added_30 + r.deleted_30), rev=false)
+        sort!(group; by = r -> -(r.added_30 + r.deleted_30), rev = false)
         append!(ordered, group)
     end
     area_rows = ordered
