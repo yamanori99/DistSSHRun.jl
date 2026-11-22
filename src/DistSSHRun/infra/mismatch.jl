@@ -104,6 +104,11 @@ function run_identity(project::AbstractString)::Dict{String, String}
     for (k, v) in _distssh_versions_from_manifest(man)
         ident["pkg." * k] = v
     end
+    st, err = job_distssh_load_probe(proj; site = "controller")
+    ident["job.distssh"] = st
+    if !isempty(err)
+        ident["job.distssh.error"] = err
+    end
     return ident
 end
 public run_identity
@@ -203,6 +208,21 @@ function _worker_production_identity_expr()
                     end
                 end
             end
+            function __job_distssh_probe!()
+                try
+                    Base.require(
+                        Base.PkgId(
+                            Base.UUID("b568025c-2759-4ef1-8b14-17d00e2cd000"),
+                            "DistSSHRun",
+                        ),
+                    )
+                    d["job.distssh"] = "ok"
+                catch e
+                    d["job.distssh"] = "fail"
+                    d["job.distssh.error"] = replace(sprint(showerror, e), '\n' => ' ')
+                end
+            end
+            __job_distssh_probe!()
             d
         end
     end
@@ -331,6 +351,17 @@ When the parent has a non-empty `manifest.sha256`, the worker must supply the
 same digest or the check fails (unless `unsafe_skip_env_digests`); an empty worker
 snapshot is a mismatch. `"julia"` binary path is not compared.
 """
+function _identity_job_distssh_load_mismatches(other::AbstractDict)::Vector{String}
+    st = strip(get(other, "job.distssh", ""))
+    st == "ok" && return String[]
+    st == "" && return String[]
+    err = strip(get(other, "job.distssh.error", ""))
+    if isempty(err)
+        return String["job environment: DistSSHRun is not loadable from --project (job.distssh=$(st))"]
+    end
+    return String[replace(err, '\n' => ' ')]
+end
+
 function identity_mismatches(
         parent::AbstractDict,
         other::AbstractDict;
@@ -340,6 +371,7 @@ function identity_mismatches(
     append!(lines, _identity_julia_build_mismatches(parent, other))
     append!(lines, _identity_sysimage_mismatches(parent, other))
     append!(lines, _identity_pkg_mismatches(parent, other))
+    append!(lines, _identity_job_distssh_load_mismatches(other))
     unsafe_skip_env_digests || append!(lines, _identity_env_file_mismatches(parent, other))
     return lines
 end
@@ -506,6 +538,7 @@ public assert_controller_default_sysimage!
 
 """Controller gates for drive, and go before worker environment verification."""
 function assert_controller_environment_for_verify!(project::AbstractString)
+    assert_job_resolves_required_distssh!(project)
     assert_controller_manifest_for_environment_verify!(project)
     assert_controller_manifest_current!(project)
     assert_controller_default_sysimage!()
@@ -519,6 +552,7 @@ public assert_controller_environment_for_verify!
 """Controller gates for `--run-id` runs (skip local Manifest / shipped-tree compare)."""
 function assert_controller_environment_for_shipped_run!(project::AbstractString)
     canonical_local_path(project)
+    assert_job_resolves_required_distssh!(project)
     assert_controller_default_sysimage!()
     assert_controller_loaded_identity!()
     return nothing
@@ -919,6 +953,23 @@ if !isempty(man) && isfile(man)
                 v isa AbstractString && print("pkg.", name, '=', String(v), '\n')
             end
         end
+    end
+end
+let job_distssh = "ok", job_distssh_err = ""
+    try
+        Base.require(
+            Base.PkgId(
+                Base.UUID("b568025c-2759-4ef1-8b14-17d00e2cd000"),
+                "DistSSHRun",
+            ),
+        )
+    catch e
+        job_distssh = "fail"
+        job_distssh_err = sprint(showerror, e)
+    end
+    print("job.distssh=", job_distssh, '\n')
+    if !isempty(job_distssh_err)
+        print("job.distssh.error=", replace(job_distssh_err, '\n' => ' '), '\n')
     end
 end
 """

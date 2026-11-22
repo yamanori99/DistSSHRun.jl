@@ -5,27 +5,27 @@ using TOML
 using DistSSHRun
 
 function _env_verify_job!(proj::AbstractString)
-    write(joinpath(proj, "Project.toml"), "name = \"EnvVerifyJob\"\n")
     write(
-        joinpath(proj, "Manifest.toml"),
+        joinpath(proj, "Project.toml"),
         """
-        julia_version = "$(VERSION)"
-        manifest_format = "2.0"
-        project_hash = "0123456789abcdef0123456789abcdef01234567"
-        """
+        name = "EnvVerifyJob"
+        [deps]
+        DistSSHRun = "b568025c-2759-4ef1-8b14-17d00e2cd000"
+        """,
     )
+    _sync_test_project_manifest!(proj)
+    julia = _julia_exe()
+    cmd = setenv(
+        `$julia --startup-file=no --project=$proj -e "using Pkg; Pkg.instantiate()"`,
+        _child_julia_env(),
+    )
+    proc, combined = _run_subprocess(cmd)
+    _assert_proc_ok(proc, combined; label = "Pkg.instantiate env verify job")
     return nothing
 end
 
 function _env_verify_job_distssh_pkg!(proj::AbstractString)
-    _env_verify_job!(proj)
-    open(joinpath(proj, "Manifest.toml"), "a") do io
-        println(
-            io,
-            "deps = {DistSSHRun = [{uuid = \"00000000-0000-0000-0000-000000000001\", version = \"0.2.0-DEV\"}]}"
-        )
-    end
-    return nothing
+    return _env_verify_job!(proj)
 end
 
 function _env_verify_set_snapshot!(snap)
@@ -97,8 +97,15 @@ function _go_identity_env(parent::AbstractDict; tweak::Pair{String, String})
         ),
         "DISTSSH_TEST_RUN_IDENTITY_SYSIMAGE" => get(parent, "sysimage", ""),
         "DISTSSH_TEST_RUN_IDENTITY_MAN_SHA" => get(parent, "manifest.sha256", ""),
-        "DISTSSH_TEST_RUN_IDENTITY_PROJ_SHA" => get(parent, "project.sha256", "")
+        "DISTSSH_TEST_RUN_IDENTITY_PROJ_SHA" => get(parent, "project.sha256", ""),
+        "DISTSSH_TEST_RUN_IDENTITY_JOB_DISTSSH" => get(parent, "job.distssh", "ok"),
     )
+    for (k, v) in parent
+        sk = String(k)
+        startswith(sk, "pkg.") || continue
+        pkg = sk[5:end]
+        d["DISTSSH_TEST_RUN_IDENTITY_PKG_$(pkg)"] = string(v)
+    end
     key = tweak[1]
     if key == "version"
         d["DISTSSH_TEST_RUN_IDENTITY_VERSION"] = tweak[2]
@@ -224,14 +231,25 @@ function _env_verify_guards()
 
         @testset "controller Manifest not current fails closed" begin
             _with_tempdir() do proj
-                write(joinpath(proj, "Project.toml"), "name = \"Stale\"\n[deps]\nExample = \"7876af07-990d-54b4-ab0e-23690620f79a\"\n")
                 write(
-                    joinpath(proj, "Manifest.toml"),
+                    joinpath(proj, "Project.toml"),
                     """
-                    manifest_format = "2.0"
-                    julia_version = "$(VERSION)"
-                    project_hash = "0123456789abcdef0123456789abcdef01234567"
+                    name = "Stale"
+                    [deps]
+                    Example = "7876af07-990d-54b4-ab0e-23690620f79a"
+                    DistSSHRun = "b568025c-2759-4ef1-8b14-17d00e2cd000"
+                    """,
+                )
+                _sync_test_project_manifest!(proj)
+                write(
+                    joinpath(proj, "Project.toml"),
                     """
+                    name = "Stale"
+                    [deps]
+                    Example = "7876af07-990d-54b4-ab0e-23690620f79a"
+                    DistSSHRun = "b568025c-2759-4ef1-8b14-17d00e2cd000"
+                    Logging = "56ddb016-972b-5a25-ab2e-bc7aa0102871"
+                    """,
                 )
                 @test_throws ErrorException DistSSHRun.assert_controller_manifest_current!(proj)
                 err = try
@@ -471,7 +489,7 @@ function _env_verify_guards()
                 @test haskey(parent, "pkg.DistSSHRun")
                 parent_ver = get(parent, "pkg.DistSSHRun", "")
                 @test !isempty(parent_ver)
-                @test parent_ver == "0.2.0-DEV"
+                @test !isempty(parent_ver)
                 flags = DistSSHRun.worker_exeflag_strings(proj)
                 env = Dict(DistSSHRun.worker_env_pairs(proj))
                 addprocs(1; exeflags = Cmd(flags), env = env)
@@ -538,7 +556,8 @@ function _env_verify_guards()
                     "JULIA_LOAD_PATH" => DistSSHRun._LAUNCH_LOAD_PATH
                 )
                 out = read(cmd, String)
-                @test occursin("pkg.DistSSHRun=0.2.0-DEV", out)
+                @test occursin("pkg.DistSSHRun=", out)
+                @test occursin("job.distssh=ok", out)
                 @test occursin("version=$(VERSION)", out)
                 @test occursin("commit=", out)
             end
@@ -758,11 +777,11 @@ function _env_run_id_shipped_run_verify_tests()
                 _env_verify_job!(proj)
                 test_proj = Base.active_project()
                 try
+                    _env_run_id_deploy_record!(proj, rid)
                     _with_one_local_worker(
                         test_proj,
                         function (w)
                             _env_verify_activate_worker!(w, proj)
-                            _env_run_id_deploy_record!(proj, rid)
                             DistSSHRun._mark_workers_launched!([w], proj)
                             DistSSHRun.verify_workers_match_shipped_run!(proj; run_id = rid)
                             return nothing
@@ -778,11 +797,11 @@ function _env_run_id_shipped_run_verify_tests()
                 _env_verify_job!(proj)
                 test_proj = Base.active_project()
                 try
+                    _env_run_id_deploy_record!(proj, rid)
                     _with_one_local_worker(
                         test_proj,
                         function (w)
                             _env_verify_activate_worker!(w, proj)
-                            _env_run_id_deploy_record!(proj, rid)
                             DistSSHRun._mark_workers_launched!([w], proj)
                             remotecall_fetch(
                                 Core.eval,
@@ -824,11 +843,11 @@ function _env_run_id_shipped_run_verify_tests()
                 _env_verify_job!(proj)
                 test_proj = Base.active_project()
                 try
+                    parent = _env_run_id_deploy_record!(proj, rid)
                     _with_one_local_worker(
                         test_proj,
                         function (w)
-                            parent = DistSSHRun.run_identity(proj)
-                            _env_run_id_deploy_record!(proj, rid)
+                            _env_verify_activate_worker!(w, proj)
                             DistSSHRun._mark_workers_launched!([w], proj)
                             other = copy(parent)
                             other["project.sha256"] = repeat("f", 64)
@@ -856,8 +875,8 @@ function _env_run_id_shipped_run_verify_tests()
                 _env_verify_job!(proj)
                 test_proj = Base.active_project()
                 try
-                    ws = _env_verify_add_local_workers(2, test_proj)
                     parent = _env_run_id_deploy_record!(proj, rid)
+                    ws = _env_verify_add_local_workers(2, test_proj)
                     DistSSHRun._mark_workers_launched!(ws, proj)
                     other = copy(parent)
                     other["manifest.sha256"] = repeat("a", 64)
@@ -881,19 +900,19 @@ function _env_run_id_shipped_run_verify_tests()
                 _env_verify_job!(proj)
                 test_proj = Base.active_project()
                 try
+                    pack = DistSSHRun._pack_project_tree(proj)
+                    digest_rows = try
+                        Any[
+                            Dict{String, Any}("path" => p, "blob" => h)
+                                for (p, h) in pack.content_file_digests
+                        ]
+                    finally
+                        rm(pack.directory; recursive = true, force = true)
+                    end
                     _with_one_local_worker(
                         test_proj,
                         function (w)
                             _env_verify_activate_worker!(w, proj)
-                            pack = DistSSHRun._pack_project_tree(proj)
-                            digest_rows = try
-                                Any[
-                                    Dict{String, Any}("path" => p, "blob" => h)
-                                        for (p, h) in pack.content_file_digests
-                                ]
-                            finally
-                                rm(pack.directory; recursive = true, force = true)
-                            end
                             rec = DistSSHRun.build_deploy_record(
                                 proj,
                                 :ship_tree;

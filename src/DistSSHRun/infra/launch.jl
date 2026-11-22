@@ -13,22 +13,11 @@ const _LAUNCH_UNSET_ENV = (
 )
 const _LAUNCH_LOAD_PATH = "@:@stdlib"
 
-function _worker_load_path_entries()::Vector{String}
-    parts = String["@", "@stdlib"]
-    d = pkgdir(@__MODULE__)
-    if d !== nothing
-        ds = String(d)
-        !isempty(ds) && !(ds in parts) && push!(parts, ds)
-    end
-    return parts
-end
-
 function worker_load_path(; ssh::Bool = false)::String
-    # Job packages load via `--project=` only; kit source is pinned explicitly,
-    # not inherited from the parent's active project or sandbox LOAD_PATH.
+    # Job packages load via `--project=` only (`@` + active project, `@stdlib`).
+    # Do not inherit the controller depot, pkgdir, or sandbox LOAD_PATH extras.
     ssh # keyword kept for call-site documentation
-    sep = Sys.iswindows() ? ";" : ":"
-    return join(_worker_load_path_entries(), sep)
+    return _LAUNCH_LOAD_PATH
 end
 
 function _env_unset_prefix()::String

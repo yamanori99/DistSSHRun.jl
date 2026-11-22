@@ -199,6 +199,15 @@ function main()
         print("manifest.sha256=", man_sha, '\n')
         print("project=\n")
         print("project.sha256=", proj_sha, '\n')
+        job_st = get(ENV, "DISTSSH_TEST_RUN_IDENTITY_JOB_DISTSSH", "ok")
+        print("job.distssh=", job_st, '\n')
+        for (k, v) in ENV
+            sk = string(k)
+            prefix = "DISTSSH_TEST_RUN_IDENTITY_PKG_"
+            startswith(sk, prefix) || continue
+            pkg = sk[(length(prefix) + 1):end]
+            print("pkg.", pkg, '=', v, '\n')
+        end
         exit(0)
     end
 

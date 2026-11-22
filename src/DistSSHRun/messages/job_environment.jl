@@ -21,6 +21,47 @@ function job_package_collision_error(
     )
 end
 
+function job_distssh_not_listed_error(
+        pkg_name::AbstractString,
+        project::AbstractString,
+        site::AbstractString,
+    )::String
+    host = string(gethostname())
+    q = _quoted_hint_path(project)
+    return join(
+        [
+            "what: $(pkg_name) is not listed in the job environment",
+            "where: $(site); host=$(host); project=$(project)",
+            "why: workers and remote probes load DistSSH only from the job --project with JULIA_LOAD_PATH=@:@stdlib (no controller pkgdir or depot paths)",
+            "fix: add $(pkg_name) to the job Project.toml [deps], run `Pkg.resolve()` / `Pkg.instantiate()`, ship the tree with setup, and list the package in the job Manifest",
+            "note: run `julia --project=$(q) -e 'using Pkg; Pkg.add(\"$(pkg_name)\")'` then setup ship-tree for this project",
+        ],
+        "\n",
+    )
+end
+
+function job_distssh_load_error(
+        pkg_name::AbstractString,
+        project::AbstractString,
+        detail::AbstractString,
+        site::AbstractString,
+    )::String
+    host = string(gethostname())
+    err = strip(String(detail))
+    isempty(err) && (err = "(no detail)")
+    q = _quoted_hint_path(project)
+    return join(
+        [
+            "what: $(pkg_name) cannot be loaded from the job environment",
+            "where: $(site); host=$(host); project=$(project)",
+            "why: $(err)",
+            "fix: ensure $(pkg_name) is a direct job dependency with a resolvable Manifest entry, then run setup ship-tree / instantiate on workers",
+            "note: probe from `julia --project=$(q)` with `JULIA_LOAD_PATH=@:@stdlib` only",
+        ],
+        "\n",
+    )
+end
+
 function deploy_manifest_digest_mismatch_error(
         got::AbstractString,
         want::AbstractString,

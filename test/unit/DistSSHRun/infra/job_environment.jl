@@ -5,16 +5,11 @@ using Pkg
 using Dates
 
 @testset "job environment" begin
-    @testset "worker_load_path pins @ @stdlib and kit, not parent extras" begin
+    @testset "worker_load_path is @:@stdlib only" begin
         lp = DistSSHRun.worker_load_path()
         lp_ssh = DistSSHRun.worker_load_path(; ssh = true)
         @test lp == lp_ssh
-        @test occursin("@", lp)
-        @test occursin("@stdlib", lp)
-        kit = pkgdir(DistSSHRun)
-        if kit !== nothing
-            @test occursin(String(kit), lp)
-        end
+        @test lp == "@:@stdlib"
         env = Dict(DistSSHRun.worker_env_pairs("/tmp/job"))
         @test env["JULIA_LOAD_PATH"] == lp
         ap = mktempdir()
@@ -116,6 +111,30 @@ using Dates
             @test !called[]
         finally
             Base.ACTIVE_PROJECT[] = prev_active
+            rm(job; force = true, recursive = true)
+        end
+    end
+
+    @testset "job without DistSSHRun fails closed" begin
+        job = mktempdir()
+        try
+            write(joinpath(job, "Project.toml"), "name = \"NoDistSSH\"\n")
+            _sync_test_project_manifest!(job)
+            err = ""
+            @test_throws ErrorException DistSSHRun.assert_job_resolves_required_distssh!(job)
+            try
+                DistSSHRun.assert_job_resolves_required_distssh!(job)
+            catch e
+                err = e isa ErrorException ? e.msg : sprint(showerror, e)
+            end
+            @test occursin("what:", err)
+            @test occursin("DistSSHRun", err)
+            @test occursin("job environment", err)
+            @test occursin("JULIA_LOAD_PATH=@:@stdlib", err)
+            st, msg = DistSSHRun.job_distssh_load_probe(job; site = "remote probe")
+            @test st == "fail"
+            @test occursin("DistSSHRun", msg)
+        finally
             rm(job; force = true, recursive = true)
         end
     end

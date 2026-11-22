@@ -130,19 +130,7 @@ function _drive_isolated_child_args(original_args::AbstractVector{<:AbstractStri
 end
 
 function _isolated_child_load_path()::String
-    sep = Sys.iswindows() ? ";" : ":"
-    parts = String[]
-    for entry in LOAD_PATH
-        entry isa AbstractString || continue
-        s = String(entry)
-        (isempty(s) || s in parts) && continue
-        push!(parts, s)
-    end
-    d = pkgdir(@__MODULE__)
-    if d !== nothing && !isempty(d) && !(d in parts)
-        push!(parts, d)
-    end
-    return join(parts, sep)
+    return DistSSHRun.worker_load_path()
 end
 
 function _isolated_project_flag()::Union{Nothing, String}

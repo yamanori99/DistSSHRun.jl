@@ -15,6 +15,89 @@ function restrict_job_load_path!()
     return nothing
 end
 
+function _parsed_project_deps(project::AbstractString)::Dict{String, Any}
+    pf = DistSSHBase._located_project_file(project)
+    if !(pf isa String) || !isfile(pf)
+        return Dict{String, Any}()
+    end
+    raw = try
+        TOML.parsefile(String(pf))
+    catch
+        return Dict{String, Any}()
+    end
+    raw isa AbstractDict || return Dict{String, Any}()
+    deps = get(raw, "deps", nothing)
+    deps isa AbstractDict || return Dict{String, Any}()
+    return Dict{String, Any}(deps)
+end
+
+function _job_required_distssh_names(mode::Symbol)::Vector{String}
+    mode == :queue_job && return ["DistSSHRun", "DistSSHQueue"]
+    return ["DistSSHRun"]
+end
+
+function _job_required_distssh_uuid(name::AbstractString)::Union{Nothing, Base.UUID}
+    n = String(name)
+    n == "DistSSHRun" && return Base.UUID("b568025c-2759-4ef1-8b14-17d00e2cd000")
+    n == "DistSSHQueue" && return Base.UUID("24254401-70d8-4a51-8ea4-cfab19f5bc73")
+    return nothing
+end
+
+"""Return `("ok","")` or `("fail", error detail)` after a narrow-path `require`."""
+function job_distssh_load_probe(
+        project::AbstractString;
+        mode::Symbol = loaded_launch_mode(),
+        site::AbstractString = "controller",
+    )::Tuple{String, String}
+    for name in _job_required_distssh_names(mode)
+        deps = _parsed_project_deps(project)
+        if !haskey(deps, name)
+            return (
+                "fail",
+                job_distssh_not_listed_error(name, project, site),
+            )
+        end
+        man_deps = _parsed_manifest_deps(project)
+        if !isempty(man_deps) && !haskey(man_deps, name)
+            return (
+                "fail",
+                job_distssh_not_listed_error(name, project, site),
+            )
+        end
+    end
+    try
+        _with_controller_job_verify!(project, () -> begin
+            for name in _job_required_distssh_names(mode)
+                uid = _job_required_distssh_uuid(name)
+                uid === nothing && continue
+                try
+                    Base.require(Base.PkgId(uid, String(name)))
+                catch e
+                    detail = sprint(showerror, e)
+                    throw(ErrorException(job_distssh_load_error(name, project, detail, site)))
+                end
+            end
+            return nothing
+        end)
+    catch e
+        e isa ErrorException || rethrow()
+        return ("fail", e.msg)
+    end
+    return ("ok", "")
+end
+
+function assert_job_lists_required_distssh!(project::AbstractString; mode::Symbol = loaded_launch_mode())
+    st, msg = job_distssh_load_probe(project; mode, site = "controller")
+    st == "ok" && return nothing
+    throw(ErrorException(msg))
+end
+public assert_job_lists_required_distssh!
+
+function assert_job_resolves_required_distssh!(project::AbstractString; mode::Symbol = loaded_launch_mode())
+    return assert_job_lists_required_distssh!(project; mode)
+end
+public assert_job_resolves_required_distssh!
+
 function _manifest_dep_entry(raw_deps::AbstractDict, name::AbstractString)
     entry = get(raw_deps, name, nothing)
     entry isa AbstractDict && return entry
