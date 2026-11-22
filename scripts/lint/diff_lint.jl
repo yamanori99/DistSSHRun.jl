@@ -2460,6 +2460,7 @@ function collect_loop_skip(root, files, src_for_path; whole::Bool)
     paths = whole ? filter(test_path, tracked_jl(root)) : collect(keys(files))
     for path in paths
         test_path(path) || continue
+        endswith(path, ".jl") || continue
         src = src_for_path(path)
         added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
         whole || (isempty(added) && continue)
@@ -2488,7 +2489,7 @@ function collect_pr_refs(root, files, src_for_path; whole::Bool)
         skipped_path(path) && continue
         p = replace(path, '\\' => '/')
         in_src = startswith(p, "src/") || occursin(r"^lib/[^/]+/src/", p)
-        in_test = test_path(p)
+        in_test = test_path(p) && endswith(p, ".jl")
         (in_src || in_test) || continue
         src = src_for_path(path)
         added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
