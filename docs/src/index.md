@@ -47,7 +47,7 @@ on the default thread.
 
 If the controller dies while self-exit is off, workers may keep running
 until Distributed tears down the session or you stop them. With
-`DISTSSH_JOB_ID` set, `cancel!` / `cancel!` can reap tagged
+`DISTSSH_JOB_ID` set, `cancel!` can reap tagged
 workers on the hosts listed in `kit.hosts`. A machine-wide sweep remains
 `setup cleanup` (kills every `julia.*--worker` on listed hosts; not
 run-scoped).
@@ -218,16 +218,16 @@ hashing for a ship finishes under `setup ship-tree` before selection.
 `outputs` is reserved and not written. There is no
 `run.private.toml`; public records keep relative paths and aliases only.
 
-`cancel!` and `cancel!` record how the stop ended. `DistSSHJobResult.stop`
+`cancel!` records how the stop ended. `DistSSHJobResult.stop`
 is `:within_grace` when the process exited after one SIGINT and before
 SIGTERM, `:sigterm` or `:sigkill` when that `interrupt_grace` window ended
 and the ladder escalated, and `:no_sigint` when `interrupt_grace` was 0.
 `nothing` means this call did not run the ladder. The same string is `stop`
 in `kit.result`. When the kit run directory already has this package's
-`run.toml`, `stop` is set there too. `cancel!` finds that directory
+`run.toml`, `stop` is set there too. `cancel!(run_dir)` finds that directory
 from `kit.run_dir` next to `kit.pid`. A `run.toml` in the artifact
 `output_dir` or log directory is left alone unless the supplied
-`output_dir` already holds this package's `run.toml`; `cancel!`
+`output_dir` already holds this package's `run.toml`; `cancel!(run_dir)`
 updates that file. `schema` stays 1. Read it from
 the return value or from `kit_result_from_dir` / `read_kit_run_toml`.
 

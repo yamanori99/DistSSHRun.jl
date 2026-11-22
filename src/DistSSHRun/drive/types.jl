@@ -204,7 +204,7 @@ Convert with [`kit_run_result`](@ref).
 `hosts` is post-run collect ([`HostRunResult`](@ref)); empty for `go`, hung
 `wait`, or a `drive` that never collected.
 
-`stop` is the [`cancel!`](@ref) / [`cancel!`](@ref) ladder outcome.
+`stop` is the [`cancel!`](@ref) ladder outcome.
 `nothing` on a run that was not stopped that way. `:within_grace` means one
 SIGINT was sent and the process was gone before SIGTERM, so workers had that
 `interrupt_grace` window. `:sigterm` and `:sigkill` mean that window ended

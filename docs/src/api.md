@@ -21,7 +21,7 @@ Filter = function (x)
         :worker_pmap, :worker_seed, :go!, :GoResult, :report_go_errors,
         :drive!, :DriveResult, :HostRunResult, :DriveHostStatus, :drive_host_status,
         :DistSSHJobResult, :DetachedProcess, :kit_run_result, :report_run_errors,
-        :cancel!, :cancel!, :kit_result_from_dir, :result_run_dir, :result_provenance,
+        :cancel!, :kit_result_from_dir, :result_run_dir, :result_provenance,
         :result_content_tree_hash, :result_ship_id,
     )
     n = try
@@ -263,7 +263,7 @@ Filter = function (x)
         :worker_pmap, :worker_seed, :go!, :GoResult, :report_go_errors,
         :drive!, :DriveResult, :HostRunResult, :DriveHostStatus, :drive_host_status,
         :DistSSHJobResult, :DetachedProcess, :kit_run_result, :report_run_errors,
-        :cancel!, :cancel!, :kit_result_from_dir, :result_run_dir, :result_provenance,
+        :cancel!, :kit_result_from_dir, :result_run_dir, :result_provenance,
         :result_content_tree_hash,         :result_ship_id,
         :WorkerPlan, :pool!, :ResourcePool, :HostInventory, :print_pool, :print_hostinfo,
         :LaunchReport, :launch_report_planned, :launch_report_joined, :launch_report_failures,
