@@ -183,4 +183,41 @@ end
             rm(dir; force = true, recursive = true)
         end
     end
+
+    @testset "interactive html charts" begin
+        include(joinpath(@__DIR__, "..", "..", "..", "bench", "compile", "churn_charts_html.jl"))
+        week = Date(2026, 6, 9)
+        row = ChurnCompute.AreaRow(
+            "DistSSHRun", "cli/", 2, 100, 1, 0, 5, 1, 50.0, Date(2026, 6, 1), String[],
+        )
+        report = ChurnCompute.ChurnReport(
+            "0123456789abcdef0123456789abcdef01234567",
+            Date(2026, 6, 15),
+            DateTime(2026, 6, 15, 3),
+            [row],
+            ChurnCompute.RemovedPathRow[],
+            Dict("DistSSHRun/cli/" => Pair{Date, Int}[week => 3]),
+            Dict(week => 5),
+            Dict(week => 1),
+        )
+        dir = mktempdir()
+        try
+            write_churn_html_charts(report, dir)
+            for name in ("churn-summary.html", "churn-weekly.html", "churn-heatmap.html")
+                path = joinpath(dir, name)
+                @test isfile(path)
+                text = read(path, String)
+                @test occursin(CHURN_PLOTLY_CDN, text)
+                @test count("<script", text) == 2
+                @test !occursin("/*! plotly.js", text)
+                @test stat(path).size < CHURN_HTML_MAX_BYTES
+            end
+            md = render_churn_markdown(report, "charts")
+            @test occursin("churn-summary.html", md)
+            @test occursin("churn-weekly.html", md)
+            @test occursin("churn-heatmap.html", md)
+        finally
+            rm(dir; force = true, recursive = true)
+        end
+    end
 end

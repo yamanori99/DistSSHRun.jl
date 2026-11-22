@@ -29,6 +29,8 @@ function render_churn_markdown(report, chart_prefix::AbstractString)::String
         "",
         "![Net churn heatmap]($chart_prefix/churn-heatmap.png)",
         "",
+        "Interactive charts (hover for values): [summary]($chart_prefix/churn-summary.html) · [weekly]($chart_prefix/churn-weekly.html) · [heatmap]($chart_prefix/churn-heatmap.html).",
+        "",
     ]
     pkgs = unique(r.package for r in report.areas)
     for pkg in sort(collect(pkgs))

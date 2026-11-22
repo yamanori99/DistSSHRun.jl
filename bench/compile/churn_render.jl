@@ -8,6 +8,7 @@ include(joinpath(@__DIR__, "churn_compute.jl"))
 using .ChurnCompute
 include(joinpath(@__DIR__, "churn_report.jl"))
 include(joinpath(@__DIR__, "churn_charts.jl"))
+include(joinpath(@__DIR__, "churn_charts_html.jl"))
 
 function parse_cli_args()::Tuple{String, Union{Nothing, String}}
     out_dir = nothing
@@ -37,6 +38,7 @@ function main()
     report = compute_churn()
     chart_dir = joinpath(out_dir, "charts")
     write_churn_charts(report, chart_dir)
+    write_churn_html_charts(report, chart_dir)
     write_churn_csv(report, joinpath(out_dir, "summary.csv"))
     report_prefix = relpath(chart_dir, abspath(out_dir))
     report_md = render_churn_markdown(report, report_prefix)
