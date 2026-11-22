@@ -129,26 +129,27 @@ function setup!(
     step = setup_progress_step_name(mode)
     return with_kit_invocation_env!(session.cli_session.process_env) do
         _with_kit_inproc_run!(:setup) do
-            apply_session_env!(session)
-            with_kit_setup_progress(
-                log_dir,
-                step;
-                path_anchor = session.project,
-            ) do
-                _setup_one!(
-                    session,
-                    mode;
-                    repo = repo,
-                    julia = julia,
-                    older_days = older_days,
-                    id = id,
-                    run_id = snap,
-                    job_id = job_id,
-                    bound_plan = bound_plan,
-                    allow_external_symlinks = allow_external_symlinks,
-                    extra_files = extra_files,
-                    allow_dirty = allow_dirty,
-                )
+            return _with_session_env!(session) do
+                with_kit_setup_progress(
+                    log_dir,
+                    step;
+                    path_anchor = session.project,
+                ) do
+                    _setup_one!(
+                        session,
+                        mode;
+                        repo = repo,
+                        julia = julia,
+                        older_days = older_days,
+                        id = id,
+                        run_id = snap,
+                        job_id = job_id,
+                        bound_plan = bound_plan,
+                        allow_external_symlinks = allow_external_symlinks,
+                        extra_files = extra_files,
+                        allow_dirty = allow_dirty,
+                    )
+                end
             end
         end
     end

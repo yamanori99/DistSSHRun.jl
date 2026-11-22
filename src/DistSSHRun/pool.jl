@@ -87,12 +87,13 @@ function pool!(session::DistSSHSession)::ResourcePool
     all_hosts = String[PARENT_HOST_NAME]
     append!(all_hosts, session.hosts)
     return _with_kit_inproc_run!(:pool) do
-        apply_session_env!(session)
-        rows = HostInventory[_inventory_from_facts(f) for f in collect_host_facts(all_hosts)]
-        healthy = [r for r in rows if r.ok]
-        cores = _sum_present(r.nproc for r in healthy)
-        gb = _sum_present_f(r.total_gb for r in healthy)
-        return ResourcePool(all(r -> r.ok, rows), rows, cores, gb)
+        return _with_session_env!(session) do
+            rows = HostInventory[_inventory_from_facts(f) for f in collect_host_facts(all_hosts)]
+            healthy = [r for r in rows if r.ok]
+            cores = _sum_present(r.nproc for r in healthy)
+            gb = _sum_present_f(r.total_gb for r in healthy)
+            return ResourcePool(all(r -> r.ok, rows), rows, cores, gb)
+        end
     end
 end
 
