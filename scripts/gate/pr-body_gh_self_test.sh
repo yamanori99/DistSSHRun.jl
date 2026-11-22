@@ -10,6 +10,17 @@ fail() {
   exit 1
 }
 
+fail_out() {
+  local msg="$1"
+  local captured="${2:-}"
+  echo "pr-body_gh_self_test: ${msg}" >&2
+  if [[ -n "${captured}" ]]; then
+    echo "--- captured output ---" >&2
+    printf '%s\n' "${captured}" >&2
+  fi
+  exit 1
+}
+
 tmpdir="$(mktemp -d)"
 cleanup() { rm -rf "${tmpdir}"; }
 trap cleanup EXIT
@@ -49,12 +60,18 @@ PATH="${STUB_PATH}" gh_pr_note_or_continue "${tmpdir}/auth.txt" || fail "auth"
 [[ "${gh_pr_note_reason}" == gh\ not\ authenticated ]] || fail "auth reason"
 
 export GATE_DIFF_BASE=origin/main GATE_DIFF_HEAD=HEAD
-out="$(env PATH="${STUB_PATH}" "${TOOLS_PATH}/bash" "${ROOT}/scripts/gate/pr-body.sh" 2>&1)" || fail "pr-body unauthenticated gh exit"
-grep -Fq 'note:' <<<"${out}" || fail "pr-body missing note"
-grep -Fq 'pr body lint skipped' <<<"${out}" || fail "pr-body skip text"
+out="$(
+  env -u GATE_PR_BODY_FILE -u GATE_PR_PATHS_FILE PATH="${STUB_PATH}" \
+    "${TOOLS_PATH}/bash" "${ROOT}/scripts/gate/pr-body.sh" 2>&1
+)" || fail_out "pr-body unauthenticated gh exit" "${out}"
+grep -Fq 'note:' <<<"${out}" || fail_out "pr-body missing note" "${out}"
+grep -Fq 'pr body lint skipped' <<<"${out}" || fail_out "pr-body skip text" "${out}"
 
-out="$(env PATH="${TOOLS_PATH}" "${TOOLS_PATH}/bash" "${ROOT}/scripts/gate/pr-body.sh" 2>&1)" || fail "pr-body missing gh exit"
-grep -Fq 'note: gh not on PATH' <<<"${out}" || fail "pr-body missing gh note: ${out}"
+out="$(
+  env -u GATE_PR_BODY_FILE -u GATE_PR_PATHS_FILE PATH="${TOOLS_PATH}" \
+    "${TOOLS_PATH}/bash" "${ROOT}/scripts/gate/pr-body.sh" 2>&1
+)" || fail_out "pr-body missing gh exit" "${out}"
+grep -Fq 'note: gh not on PATH' <<<"${out}" || fail_out "pr-body missing gh note" "${out}"
 
 body="$(mktemp)"
 paths="$(mktemp)"
