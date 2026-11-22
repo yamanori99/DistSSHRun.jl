@@ -1205,255 +1205,255 @@ function _go_run!(
         verbosity = verbosity,
     )
     return _with_session_env!(go_env_session) do
-    init_log_file(batch_dir; prefix = "go", path_anchor = anchor)
+        init_log_file(batch_dir; prefix = "go", path_anchor = anchor)
 
-    progress_ok = false
-    completed = false
-    try
-        go_session = DistSSHSession(
-            project = proj,
-            workers = String[],
-            remote = remote,
-            quiet = quiet,
-            verbosity = verbosity,
-        )
-        sess_rr = session_remote_root(go_session)
-
-        child_hosts = unique(String[s.host for s in slots if s.kind === :child])
-        remote_argv = _remote_script_argv(script_path)
-        _reject_script_outside_project_run!(
-            "go!",
-            proj,
-            script_path;
-            run_id = snap_arg,
-            remote_argv = remote_argv,
-        )
-        _write_kit_hosts_file(child_hosts, batch_dir, nothing)
-
-        skip_collect = collect_spec === false
-        any_run_fail = Ref(false)
-        any_collect_fail = Ref(false)
-        last_run = Ref(DriveResult(true, 0))
-        first_fail_run = Ref{Union{Nothing, DriveResult}}(nothing)
-        last_collect = Ref{Union{Nothing, CollectResult}}(nothing)
-
-        _, implicit_no_hosts = resolve_go_head_slots(tokens, head_slots)
-        _go_print_run_header!(
-            original_args, script_path, args, slots, proj, anchor;
-            implicit_no_hosts = implicit_no_hosts,
-        )
-
-        n_slots = length(slots)
-        if n_slots > 0
-            kit_progress_begin!(
-                "go";
-                steps = n_slots,
-                items = String[s.label for s in slots],
-                kind = :go,
+        progress_ok = false
+        completed = false
+        try
+            go_session = DistSSHSession(
+                project = proj,
+                workers = String[],
+                remote = remote,
+                quiet = quiet,
+                verbosity = verbosity,
             )
-            _kit_progress_mark!("ready")
-        end
-        sync_result = nothing
-        run_rr = if isempty(child_hosts)
-            sess_rr
-        else
-            rr = _project_work_root(
-                child_hosts, proj; cli_override = remote, run_id = snap_arg,
+            sess_rr = session_remote_root(go_session)
+
+            child_hosts = unique(String[s.host for s in slots if s.kind === :child])
+            remote_argv = _remote_script_argv(script_path)
+            _reject_script_outside_project_run!(
+                "go!",
+                proj,
+                script_path;
+                run_id = snap_arg,
+                remote_argv = remote_argv,
             )
-            doctor_launch_assert_hosts!(child_hosts, rr; local_project = proj)
-            rr
-        end
+            _write_kit_hosts_file(child_hosts, batch_dir, nothing)
 
-        if !isempty(child_hosts)
-            deploy_root = _resolved_deploy_root_for_work(
-                proj; cli_override = remote,
+            skip_collect = collect_spec === false
+            any_run_fail = Ref(false)
+            any_collect_fail = Ref(false)
+            last_run = Ref(DriveResult(true, 0))
+            first_fail_run = Ref{Union{Nothing, DriveResult}}(nothing)
+            last_collect = Ref{Union{Nothing, CollectResult}}(nothing)
+
+            _, implicit_no_hosts = resolve_go_head_slots(tokens, head_slots)
+            _go_print_run_header!(
+                original_args, script_path, args, slots, proj, anchor;
+                implicit_no_hosts = implicit_no_hosts,
             )
-            record_deploy_status_for_run!(child_hosts, deploy_root, proj)
-        end
 
-        verify_go_slots_match_job!(
-            proj,
-            slots;
-            remote_root = run_rr,
-            julia = julia,
-        )
-
-        n_slots > 0 && _kit_progress_mark!("run")
-        slot_run_ok = fill(false, n_slots)
-        @sync for (i, slot) in enumerate(slots)
-            @async begin
-                kit_progress_item!(slot.label; status = :running)
-                err = nothing
-                outcome = try
-                    _go_exec_slot!(
-                        slot,
-                        proj,
-                        script_path,
-                        args,
-                        batch_dir,
-                        run_rr;
-                        quiet = quiet,
-                        julia = julia,
-                    )
-                catch e
-                    err = e
-                    (
-                        run = DriveResult(false, 1),
-                        collect = nothing,
-                        collect_fail = false,
-                    )
-                end
-                slot_run_ok[i] = outcome.run.ok
-                lock(_GO_IO_LOCK) do
-                    last_run[] = outcome.run
-                    if !outcome.run.ok && first_fail_run[] === nothing
-                        first_fail_run[] = outcome.run
-                    end
-                    if err !== nothing
-                        any_run_fail[] = true
-                        kit_progress_item!(slot.label; status = :fail)
-                        _progress_release_line!()
-                        write(stderr, "  ")
-                        print_err("✗ $(slot.label): $(sprint(showerror, err))"; io = stderr)
-                        println(stderr)
-                    elseif !outcome.run.ok
-                        any_run_fail[] = true
-                        kit_progress_item!(slot.label; status = :fail)
-                        _progress_release_line!()
-                        write(stderr, "  ")
-                        print_err(
-                            "✗ $(slot.label) (exit $(outcome.run.exit_code))$(_go_trace_suffix(outcome.run.output_dir))";
-                            io = stderr,
-                        )
-                        println(stderr)
-                    else
-                        kit_progress_item!(slot.label; status = :ok)
-                        ok(slot.label)
-                    end
-                end
+            n_slots = length(slots)
+            if n_slots > 0
+                kit_progress_begin!(
+                    "go";
+                    steps = n_slots,
+                    items = String[s.label for s in slots],
+                    kind = :go,
+                )
+                _kit_progress_mark!("ready")
             end
-        end
+            sync_result = nothing
+            run_rr = if isempty(child_hosts)
+                sess_rr
+            else
+                rr = _project_work_root(
+                    child_hosts, proj; cli_override = remote, run_id = snap_arg,
+                )
+                doctor_launch_assert_hosts!(child_hosts, rr; local_project = proj)
+                rr
+            end
 
-        n_slots > 0 && _kit_progress_mark!("collect")
-        slot_collect_ok = fill(false, n_slots)
-        if !skip_collect
+            if !isempty(child_hosts)
+                deploy_root = _resolved_deploy_root_for_work(
+                    proj; cli_override = remote,
+                )
+                record_deploy_status_for_run!(child_hosts, deploy_root, proj)
+            end
+
+            verify_go_slots_match_job!(
+                proj,
+                slots;
+                remote_root = run_rr,
+                julia = julia,
+            )
+
+            n_slots > 0 && _kit_progress_mark!("run")
+            slot_run_ok = fill(false, n_slots)
             @sync for (i, slot) in enumerate(slots)
-                slot_run_ok[i] || continue
-                slot.kind === :child || continue
                 @async begin
+                    kit_progress_item!(slot.label; status = :running)
                     err = nothing
                     outcome = try
-                        _go_collect_slot!(
-                            slot, proj, batch_dir, run_rr; julia = julia,
+                        _go_exec_slot!(
+                            slot,
+                            proj,
+                            script_path,
+                            args,
+                            batch_dir,
+                            run_rr;
+                            quiet = quiet,
+                            julia = julia,
                         )
                     catch e
                         err = e
-                        (collect = CollectResult(false, 1), collect_fail = true)
+                        (
+                            run = DriveResult(false, 1),
+                            collect = nothing,
+                            collect_fail = false,
+                        )
                     end
+                    slot_run_ok[i] = outcome.run.ok
                     lock(_GO_IO_LOCK) do
-                        if outcome.collect !== nothing
-                            last_collect[] = outcome.collect
-                        end
-                        if err === nothing && outcome.collect !== nothing &&
-                                outcome.collect.ok && !outcome.collect_fail
-                            slot_collect_ok[i] = true
-                        end
-                        if outcome.collect_fail || err !== nothing
-                            any_collect_fail[] = true
+                        last_run[] = outcome.run
+                        if !outcome.run.ok && first_fail_run[] === nothing
+                            first_fail_run[] = outcome.run
                         end
                         if err !== nothing
+                            any_run_fail[] = true
+                            kit_progress_item!(slot.label; status = :fail)
+                            _progress_release_line!()
+                            write(stderr, "  ")
+                            print_err("✗ $(slot.label): $(sprint(showerror, err))"; io = stderr)
+                            println(stderr)
+                        elseif !outcome.run.ok
+                            any_run_fail[] = true
+                            kit_progress_item!(slot.label; status = :fail)
                             _progress_release_line!()
                             write(stderr, "  ")
                             print_err(
-                                "✗ $(slot.label): $(sprint(showerror, err))";
+                                "✗ $(slot.label) (exit $(outcome.run.exit_code))$(_go_trace_suffix(outcome.run.output_dir))";
                                 io = stderr,
                             )
                             println(stderr)
+                        else
+                            kit_progress_item!(slot.label; status = :ok)
+                            ok(slot.label)
                         end
                     end
                 end
             end
-        end
-        for (i, slot) in enumerate(slots)
-            slot.kind === :child || continue
-            slot_collect_ok[i] && continue
-            host = slot.host::String
-            slot_dir = joinpath(batch_dir, slot.label)
-            slot_rel = _go_remote_slot_rel(proj, slot_dir, batch_dir, slot.label)
-            _go_fetch_slot_provenance!(host, run_rr, slot_rel, slot_dir)
-        end
-        if any_run_fail[]
-            completed = true
-            return _go_complete!(
-                GoResult(
-                    false,
-                    sync_result,
-                    something(first_fail_run[], last_run[]),
-                    last_collect[],
-                    script_path,
-                    batch_dir;
-                    failed_step = "run",
-                ),
-                batch_dir,
-                release_lock,
-                false,
-                proj,
-                anchor,
-                place,
-            )
-        end
-        if any_collect_fail[]
-            completed = true
-            return _go_complete!(
-                GoResult(
-                    false,
-                    sync_result,
-                    last_run[],
-                    last_collect[],
-                    script_path,
-                    batch_dir;
-                    failed_step = "collect",
-                ),
-                batch_dir,
-                release_lock,
-                false,
-                proj,
-                anchor,
-                place,
-            )
-        end
 
-        writeln_both("")
-        writeln_both("Results: $(display_path(batch_dir, anchor))")
-        progress_ok = true
-        completed = true
-        return _go_complete!(
-            GoResult(true, sync_result, last_run[], last_collect[], script_path, batch_dir),
-            batch_dir,
-            release_lock,
-            true,
-            proj,
-            anchor,
-            place,
-        )
-    finally
-        # A throw after ship-tree registered hash tasks (for example
-        # `instantiate_after_ship!`) never reaches the awaits above.
-        try
-            await_declared_input_hashes!()
+            n_slots > 0 && _kit_progress_mark!("collect")
+            slot_collect_ok = fill(false, n_slots)
+            if !skip_collect
+                @sync for (i, slot) in enumerate(slots)
+                    slot_run_ok[i] || continue
+                    slot.kind === :child || continue
+                    @async begin
+                        err = nothing
+                        outcome = try
+                            _go_collect_slot!(
+                                slot, proj, batch_dir, run_rr; julia = julia,
+                            )
+                        catch e
+                            err = e
+                            (collect = CollectResult(false, 1), collect_fail = true)
+                        end
+                        lock(_GO_IO_LOCK) do
+                            if outcome.collect !== nothing
+                                last_collect[] = outcome.collect
+                            end
+                            if err === nothing && outcome.collect !== nothing &&
+                                    outcome.collect.ok && !outcome.collect_fail
+                                slot_collect_ok[i] = true
+                            end
+                            if outcome.collect_fail || err !== nothing
+                                any_collect_fail[] = true
+                            end
+                            if err !== nothing
+                                _progress_release_line!()
+                                write(stderr, "  ")
+                                print_err(
+                                    "✗ $(slot.label): $(sprint(showerror, err))";
+                                    io = stderr,
+                                )
+                                println(stderr)
+                            end
+                        end
+                    end
+                end
+            end
+            for (i, slot) in enumerate(slots)
+                slot.kind === :child || continue
+                slot_collect_ok[i] && continue
+                host = slot.host::String
+                slot_dir = joinpath(batch_dir, slot.label)
+                slot_rel = _go_remote_slot_rel(proj, slot_dir, batch_dir, slot.label)
+                _go_fetch_slot_provenance!(host, run_rr, slot_rel, slot_dir)
+            end
+            if any_run_fail[]
+                completed = true
+                return _go_complete!(
+                    GoResult(
+                        false,
+                        sync_result,
+                        something(first_fail_run[], last_run[]),
+                        last_collect[],
+                        script_path,
+                        batch_dir;
+                        failed_step = "run",
+                    ),
+                    batch_dir,
+                    release_lock,
+                    false,
+                    proj,
+                    anchor,
+                    place,
+                )
+            end
+            if any_collect_fail[]
+                completed = true
+                return _go_complete!(
+                    GoResult(
+                        false,
+                        sync_result,
+                        last_run[],
+                        last_collect[],
+                        script_path,
+                        batch_dir;
+                        failed_step = "collect",
+                    ),
+                    batch_dir,
+                    release_lock,
+                    false,
+                    proj,
+                    anchor,
+                    place,
+                )
+            end
+
+            writeln_both("")
+            writeln_both("Results: $(display_path(batch_dir, anchor))")
+            progress_ok = true
+            completed = true
+            return _go_complete!(
+                GoResult(true, sync_result, last_run[], last_collect[], script_path, batch_dir),
+                batch_dir,
+                release_lock,
+                true,
+                proj,
+                anchor,
+                place,
+            )
         finally
-            if !completed
-                footer = progress_ok ? display_path(batch_dir, anchor) : nothing
-                kit_progress_done!(; ok = progress_ok, footer = footer)
-                _print_go_slot_stdout_after_progress!(batch_dir)
-                _maybe_print_kit_progress_phases(batch_dir)
-                close_log_file()
-                _set_kit_progress_sidecar!(nothing)
-                release_lock()
-                _remove_kit_pid_file(getpid(), batch_dir, nothing)
+            # A throw after ship-tree registered hash tasks (for example
+            # `instantiate_after_ship!`) never reaches the awaits above.
+            try
+                await_declared_input_hashes!()
+            finally
+                if !completed
+                    footer = progress_ok ? display_path(batch_dir, anchor) : nothing
+                    kit_progress_done!(; ok = progress_ok, footer = footer)
+                    _print_go_slot_stdout_after_progress!(batch_dir)
+                    _maybe_print_kit_progress_phases(batch_dir)
+                    close_log_file()
+                    _set_kit_progress_sidecar!(nothing)
+                    release_lock()
+                    _remove_kit_pid_file(getpid(), batch_dir, nothing)
+                end
             end
         end
-    end
     end
 end
 

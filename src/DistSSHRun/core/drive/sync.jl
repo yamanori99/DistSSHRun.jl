@@ -42,50 +42,50 @@ function sync!(
     )
     return _with_kit_inproc_run!(:sync) do
         return _with_session_env!(session) do
-        warn_project_sshflags(session.project)
-        if kind === :ship_tree
-            remote_path = remote_deploy_root(
-                session.project; cli_override = session.remote,
-            )
-            raw = ship_tree!(
-                session.project,
-                session.hosts,
-                remote_path;
-                confirm = session_confirms(session),
-                path_anchor = session.project,
-                allow_external_symlinks = allow_external_symlinks,
-                await_inputs = await_inputs,
-                extra_files = extra_files,
-            )
-            return _sync_result_from_ship(raw)
-        else
-            remote_path = session_remote_root(session)
-            deploy = remote_deploy_root(
-                session.project; cli_override = session.remote,
-            )
-            raw = git_sync_project_to_hosts!(
-                session.hosts,
-                session.project,
-                remote_path;
-                do_push = true,
-                do_pull = true,
-                confirm = session_confirms(session),
-                allow_dirty = allow_dirty,
-            )
-            if raw.cancelled
-                return SyncResult(true, HostResult[]; ok = false)
-            end
-            result = SyncResult(false, raw.host_results; ok = raw.ok)
-            if result.ok
-                forget_last_ship_default!(session.project, deploy)
-                ok_hosts = String[String(hr.host) for hr in result.hosts if hr.ok]
-                commit_deploy_record_after_git!(
-                    ok_hosts, deploy, session.project, :git_sync;
-                    dirty = allow_dirty,
+            warn_project_sshflags(session.project)
+            if kind === :ship_tree
+                remote_path = remote_deploy_root(
+                    session.project; cli_override = session.remote,
                 )
+                raw = ship_tree!(
+                    session.project,
+                    session.hosts,
+                    remote_path;
+                    confirm = session_confirms(session),
+                    path_anchor = session.project,
+                    allow_external_symlinks = allow_external_symlinks,
+                    await_inputs = await_inputs,
+                    extra_files = extra_files,
+                )
+                return _sync_result_from_ship(raw)
+            else
+                remote_path = session_remote_root(session)
+                deploy = remote_deploy_root(
+                    session.project; cli_override = session.remote,
+                )
+                raw = git_sync_project_to_hosts!(
+                    session.hosts,
+                    session.project,
+                    remote_path;
+                    do_push = true,
+                    do_pull = true,
+                    confirm = session_confirms(session),
+                    allow_dirty = allow_dirty,
+                )
+                if raw.cancelled
+                    return SyncResult(true, HostResult[]; ok = false)
+                end
+                result = SyncResult(false, raw.host_results; ok = raw.ok)
+                if result.ok
+                    forget_last_ship_default!(session.project, deploy)
+                    ok_hosts = String[String(hr.host) for hr in result.hosts if hr.ok]
+                    commit_deploy_record_after_git!(
+                        ok_hosts, deploy, session.project, :git_sync;
+                        dirty = allow_dirty,
+                    )
+                end
+                return result
             end
-            return result
-        end
         end
     end
 end

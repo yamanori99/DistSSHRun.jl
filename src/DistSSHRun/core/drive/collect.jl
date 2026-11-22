@@ -71,19 +71,19 @@ function collect!(
     end
     return _with_kit_inproc_run!(:collect) do
         return _with_session_env!(session) do
-        return _with_session_remote_env!(session) do
-            ok, skipped = drive_collect_tree(
-                String(local_root),
-                host_list;
-                merge = opts.merge,
-                best_effort = opts.best_effort,
-                project_root = session.project,
-                path_anchor = canonical_local_path(session.project),
-                julia = opts.julia,
-                run_id = snap,
-            )
-            return CollectResult(ok, ok ? 0 : 1, skipped)
-        end
+            return _with_session_remote_env!(session) do
+                ok, skipped = drive_collect_tree(
+                    String(local_root),
+                    host_list;
+                    merge = opts.merge,
+                    best_effort = opts.best_effort,
+                    project_root = session.project,
+                    path_anchor = canonical_local_path(session.project),
+                    julia = opts.julia,
+                    run_id = snap,
+                )
+                return CollectResult(ok, ok ? 0 : 1, skipped)
+            end
         end
     end
 end

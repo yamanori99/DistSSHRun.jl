@@ -325,15 +325,15 @@ function push_cache!(
     )
     return _with_kit_inproc_run!(:sync) do
         return _with_session_env!(session) do
-        local_dir = DistSSHBase.resolve_local_state_item(session.project, "cache", "sha256")
-        files = _cache_blob_names(local_dir, hashes)
-        isempty(files) && return SyncResult(false, HostResult[]; ok = true)
-        remote_dir = cache_remote_dir(session_remote_root(session))
-        results = Vector{HostResult}(undef, length(session.hosts))
-        map_host_jobs(session.hosts) do i, host
-            results[i] = _tar_cache_one_host!(host, local_dir, remote_dir, files)
-        end
-        return SyncResult(false, results; ok = all(r -> r.ok, results))
+            local_dir = DistSSHBase.resolve_local_state_item(session.project, "cache", "sha256")
+            files = _cache_blob_names(local_dir, hashes)
+            isempty(files) && return SyncResult(false, HostResult[]; ok = true)
+            remote_dir = cache_remote_dir(session_remote_root(session))
+            results = Vector{HostResult}(undef, length(session.hosts))
+            map_host_jobs(session.hosts) do i, host
+                results[i] = _tar_cache_one_host!(host, local_dir, remote_dir, files)
+            end
+            return SyncResult(false, results; ok = all(r -> r.ok, results))
         end
     end
 end
