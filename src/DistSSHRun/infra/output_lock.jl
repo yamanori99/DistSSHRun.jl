@@ -23,7 +23,16 @@ function _output_lock_writer()::String
     return DistSSHBase.record_writer_string("DistSSHRun", dist_ssh_kit_version())
 end
 
+function _output_lock_start_hex_ok(start_hex::AbstractString)::Bool
+    s = String(start_hex)
+    n = ncodeunits(s)
+    (n > 0 && iseven(n)) || return false
+    return all(c -> ('0' <= c <= '9') || ('a' <= c <= 'f'), s)
+end
+
 function _output_lock_text(host::AbstractString, pid::Integer, start_hex::AbstractString, id::AbstractString)::String
+    _output_lock_start_hex_ok(start_hex) ||
+        throw(ArgumentError("output lock: start is not lowercase hex"))
     for (label, value) in (
             ("host", String(host)),
             ("start", String(start_hex)),
@@ -59,6 +68,7 @@ function _parse_output_lock(text::AbstractString)
     end
     isempty(fields["host"]) && return nothing
     isempty(fields["start"]) && return nothing
+    _output_lock_start_hex_ok(fields["start"]) || return nothing
     pid = tryparse(Int, fields["pid"])
     (pid === nothing || pid <= 0) && return nothing
     DistSSHBase.record_writer_minor_match(
@@ -91,6 +101,26 @@ function _excl_write_lock(path::AbstractString, body::AbstractString)::Bool
     return rc == 0
 end
 
+"""Remove `lock_path` only when it still names the observed inode and bytes."""
+function _unlink_output_lock_if_record!(lock_path::AbstractString, expected::AbstractString)::Bool
+    isfile(lock_path) || return false
+    token = string(lock_path, ".stale.", getpid(), ".", time_ns())
+    rc = ccall(:link, Cint, (Cstring, Cstring), lock_path, token)
+    rc == 0 || return false
+    try
+        read(token, String) == String(expected) || return false
+        st_tok = stat(token)
+        st_path = stat(lock_path)
+        (st_path.device == st_tok.device && st_path.inode == st_tok.inode) || return false
+        rm(lock_path; force = true)
+        return true
+    catch
+        return false
+    finally
+        rm(token; force = true)
+    end
+end
+
 """
     output_dir_lock!(output_dir; id=nothing) -> release::Function
 
@@ -120,10 +150,11 @@ function output_dir_lock!(
     release = () -> begin
         try
             isfile(lock_path) || return nothing
-            rec = _parse_output_lock(read(lock_path, String))
+            raw = read(lock_path, String)
+            rec = _parse_output_lock(raw)
             rec === nothing && return nothing
             (rec.host == host && rec.pid == mypid && rec.start == start) || return nothing
-            rm(lock_path; force = true)
+            _unlink_output_lock_if_record!(lock_path, raw)
         catch e
             e isa InterruptException && rethrow()
             @debug "output lock: release skipped" exception = (e, catch_backtrace())
@@ -137,6 +168,7 @@ function output_dir_lock!(
         catch
             ""
         end
+        isempty(raw) && continue
         rec = _parse_output_lock(raw)
         if rec === nothing
             throw(ArgumentError("output lock: malformed lock $(lock_path)"))
@@ -151,7 +183,7 @@ function output_dir_lock!(
                 ),
             )
         end
-        rm(lock_path; force = true)
+        _unlink_output_lock_if_record!(lock_path, raw)
     end
     throw(ArgumentError("output lock: could not create $(lock_path)"))
 end
@@ -170,9 +202,13 @@ function _leaf_job_id(name::AbstractString)::Union{Nothing, String}
 end
 
 """Reason string when `dir` must not be pruned, else `nothing`."""
-function _output_lock_prune_block(dir::AbstractString)::Union{Nothing, String}
+function _output_lock_prune_block(
+        dir::AbstractString;
+        skip::Union{Nothing, AbstractString} = nothing,
+    )::Union{Nothing, String}
     isdir(dir) || return nothing
     host = _output_lock_host()
+    skip_path = skip === nothing ? nothing : String(skip)
     locks = String[]
     direct = joinpath(dir, _OUTPUT_LOCK_NAME)
     isfile(direct) && push!(locks, direct)
@@ -182,6 +218,7 @@ function _output_lock_prune_block(dir::AbstractString)::Union{Nothing, String}
         path in locks || push!(locks, path)
     end
     for path in locks
+        skip_path !== nothing && path == skip_path && continue
         raw = try
             read(path, String)
         catch
@@ -220,15 +257,34 @@ function _output_lock_shell_helpers()::String
       [ -n "\$_cur" ] || return 1
       printf '%s' "\$_cur" | od -An -tx1 | tr -d ' \\n'
     }
+    _distssh_lock_complete() {
+      _f=\$1
+      [ -f "\$_f" ] || return 1
+      _nw=\$(grep -c '^writer=' "\$_f" 2>/dev/null || true)
+      _nh=\$(grep -c '^host=' "\$_f" 2>/dev/null || true)
+      _np=\$(grep -c '^pid=' "\$_f" 2>/dev/null || true)
+      _ns=\$(grep -c '^start=' "\$_f" 2>/dev/null || true)
+      _ni=\$(grep -c '^id=' "\$_f" 2>/dev/null || true)
+      [ "\$_nw" = 1 ] && [ "\$_nh" = 1 ] && [ "\$_np" = 1 ] && [ "\$_ns" = 1 ] && [ "\$_ni" = 1 ] || return 1
+      _writer=\$(sed -n 's/^writer=//p' "\$_f")
+      _host=\$(sed -n 's/^host=//p' "\$_f")
+      _pid=\$(sed -n 's/^pid=//p' "\$_f")
+      _start=\$(sed -n 's/^start=//p' "\$_f")
+      [ -n "\$_writer" ] && [ -n "\$_host" ] && [ -n "\$_pid" ] && [ -n "\$_start" ] || return 1
+      case "\$_start" in
+        *[!0-9a-f]*) return 1 ;;
+      esac
+      [ \$((\${#_start} % 2)) -eq 0 ] || return 1
+      return 0
+    }
     _distssh_one_blocks() {
       _f=\$1
       [ -f "\$_f" ] || return 1
-      _writer=\$(sed -n 's/^writer=//p' "\$_f" | head -n 1)
-      _host=\$(sed -n 's/^host=//p' "\$_f" | head -n 1)
-      _pid=\$(sed -n 's/^pid=//p' "\$_f" | head -n 1)
-      _start=\$(sed -n 's/^start=//p' "\$_f" | head -n 1)
-      _idline=\$(sed -n 's/^id=//p' "\$_f" | head -n 1)
-      [ -n "\$_writer" ] && [ -n "\$_host" ] && [ -n "\$_pid" ] && [ -n "\$_start" ] || return 0
+      _distssh_lock_complete "\$_f" || return 0
+      _writer=\$(sed -n 's/^writer=//p' "\$_f")
+      _host=\$(sed -n 's/^host=//p' "\$_f")
+      _pid=\$(sed -n 's/^pid=//p' "\$_f")
+      _start=\$(sed -n 's/^start=//p' "\$_f")
       case "\$_writer" in
         "DistSSHRun $(maj).$(minr)"|"DistSSHRun $(maj).$(minr)."*) ;;
         *) return 0 ;;
@@ -264,25 +320,69 @@ end
 function _output_lock_hold_shell_helpers()::String
     writer_q = posix_quote(_output_lock_writer())
     return _output_lock_shell_helpers() * """
-        _distssh_hold_lock() {
+        _distssh_unlink_if_same() {
+          _path=\$1
+          _obs=\$2
+          _tok="\${_path}.stale.\$\$"
+          ln "\$_path" "\$_tok" 2>/dev/null || return 1
+          _cur=\$(cat "\$_tok" 2>/dev/null) || {
+            rm -f "\$_tok"
+            return 1
+          }
+          if [ "\$_cur" != "\$_obs" ]; then
+            rm -f "\$_tok"
+            return 1
+          fi
+          _i1=\$(ls -id "\$_path" 2>/dev/null | awk '{print \$1}')
+          _i2=\$(ls -id "\$_tok" 2>/dev/null | awk '{print \$1}')
+          rm -f "\$_tok"
+          [ -n "\$_i1" ] && [ "\$_i1" = "\$_i2" ] || return 1
+          rm -f "\$_path"
+          return 0
+        }
+        _distssh_write_lock() {
           _dir=\$1
           _id=\$2
-          mkdir -p "\$_dir" || exit 1
-          _hex=\$(_distssh_start_hex \$\$) || exit 1
-          [ -n "\$_hex" ] || exit 1
-          _host=\$(hostname)
-          _writer=$writer_q
-          _tmp=\$(mktemp "\$_dir/.distssh.lock.XXXXXX") || exit 1
-          printf '%s\\n' "writer=\${_writer}" "host=\${_host}" "pid=\$\$" "start=\${_hex}" "id=\${_id}" > "\$_tmp" || {
+          _writer=\$3
+          _me=\$4
+          _hex=\$5
+          _tmp=\$(mktemp "\$_dir/.distssh.lock.XXXXXX") || return 1
+          printf '%s\\n' "writer=\${_writer}" "host=\${_me}" "pid=\$\$" "start=\${_hex}" "id=\${_id}" > "\$_tmp" || {
             rm -f "\$_tmp"
-            exit 1
+            return 1
           }
           if ln "\$_tmp" "\$_dir/.distssh.lock" 2>/dev/null; then
             rm -f "\$_tmp"
             return 0
           fi
           rm -f "\$_tmp"
-          [ -f "\$_dir/.distssh.lock" ] || exit 1
+          return 1
+        }
+        _distssh_hold_lock() {
+          _dir=\$1
+          _id=\$2
+          mkdir -p "\$_dir" || exit 1
+          _hex=\$(_distssh_start_hex \$\$) || exit 1
+          [ -n "\$_hex" ] || exit 1
+          _me=\$(hostname)
+          [ -n "\$_me" ] || exit 1
+          _writer=$writer_q
+          _distssh_write_lock "\$_dir" "\$_id" "\$_writer" "\$_me" "\$_hex" && return 0
+          _lf="\$_dir/.distssh.lock"
+          [ -f "\$_lf" ] || exit 1
+          _distssh_lock_complete "\$_lf" || exit 1
+          _hpid=\$(sed -n 's/^pid=//p' "\$_lf")
+          _hstart=\$(sed -n 's/^start=//p' "\$_lf")
+          _hhost=\$(sed -n 's/^host=//p' "\$_lf")
+          if [ "\$_hpid" = "\$\$" ] && [ "\$_hstart" = "\$_hex" ] && [ "\$_hhost" = "\$_me" ]; then
+            return 0
+          fi
+          if _distssh_one_blocks "\$_lf"; then
+            exit 1
+          fi
+          _obs=\$(cat "\$_lf") || exit 1
+          _distssh_unlink_if_same "\$_lf" "\$_obs" || exit 1
+          _distssh_write_lock "\$_dir" "\$_id" "\$_writer" "\$_me" "\$_hex" || exit 1
           return 0
         }
         """

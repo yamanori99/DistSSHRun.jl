@@ -670,7 +670,7 @@ function _go_remote_slot_shell_inner(
     write_hs = "cat > $hs_q << 'DISTSSH_INTERNAL_GO_HS'\n$(_GO_HANDSHAKE_LOADER_SRC)\nDISTSSH_INTERNAL_GO_HS\n"
     prov_load = " -L $loader_q -L $hs_q"
     job_for_lock = job_id === nothing ? "" : job_id
-    hold_lock = output_lock_hold_shell("\"\$(dirname $slot_q)\"", job_for_lock)
+    hold_lock = output_lock_hold_shell(slot_q, job_for_lock)
     return string(
         _output_lock_hold_shell_helpers(),
         "cd $rr && mkdir -p $slot_q && mkdir -p $kit_q && ",

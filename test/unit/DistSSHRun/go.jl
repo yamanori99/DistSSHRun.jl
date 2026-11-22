@@ -400,7 +400,10 @@ using Dates
         @test startswith(inner, "_distssh_start_hex()")
         @test occursin("cd ", inner)
         slot = "demos/output/go_sim/root@192.0.2.10-1"
-        @test occursin("cd $(DistSSHRun._remote_shell_path_word("~/proj")) && mkdir -p $(DistSSHRun._remote_shell_path_word(slot))", inner)
+        slot_q = DistSSHRun._remote_shell_path_word(slot)
+        @test occursin("_distssh_hold_lock $(slot_q)", inner)
+        @test !occursin("\$(dirname", inner)
+        @test occursin("cd $(DistSSHRun._remote_shell_path_word("~/proj")) && mkdir -p $(slot_q)", inner)
         @test occursin("mkdir -p $(DistSSHRun._remote_shell_path_word(slot * "/.distssh"))", inner)
         log_q = DistSSHRun._remote_shell_path_word(slot * "/julia.stdout.log")
         @test occursin("tee $log_q", inner) || occursin("tee " * log_q, inner)

@@ -60,8 +60,29 @@ function prune_kit_leaf_dirs!(
             push!(refused, reason)
             continue
         end
-        rm(p; recursive = true, force = true)
-        n += 1
+        release = try
+            output_dir_lock!(p)
+        catch e
+            e isa ArgumentError || rethrow()
+            push!(refused, e.msg)
+            continue
+        end
+        try
+            self = joinpath(p, _OUTPUT_LOCK_NAME)
+            reason = _output_lock_prune_block(p; skip = self)
+            if reason !== nothing
+                push!(refused, reason)
+                continue
+            end
+            rm(p; recursive = true, force = true)
+            n += 1
+        finally
+            try
+                release()
+            catch e
+                e isa InterruptException && rethrow()
+            end
+        end
     end
     isempty(refused) || throw(ArgumentError(join(unique(refused), "\n")))
     return n
@@ -318,6 +339,11 @@ function _prune_remote_shell(
       exit 1
     fi
     while IFS= read -r _child; do
+      [ -d "\$_child" ] || continue
+      if _distssh_tree_blocks "\$_child"; then
+        printf '%s\\n' "\$_child" >> "\$_distssh_refused"
+        continue
+      fi
       rm -rf "\$_child"
     done < "\$_distssh_victims"
     rm -f "\$_distssh_victims"
