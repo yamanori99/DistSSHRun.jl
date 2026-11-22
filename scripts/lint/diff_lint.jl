@@ -1443,6 +1443,8 @@ function self_test_body_main()
     notes = testing_shape_notes("## Testing\n\nran it\n", "abc")
     any(startswith(n, "note: Testing has no environment") for n in notes) || die("self-test: testing shape")
     any(occursin("HEAD abc: passed", n) for n in notes) || die("self-test: testing head")
+    shaped = "## Testing\n\nmacOS arm64, Julia 1.13.4.\n\n`./scripts/check.sh`\n\n```text\nHEAD abc: passed\n```\n"
+    isempty(testing_shape_notes(shaped, "abc")) || die("self-test: testing shape without git")
     banned_hit("# until later") == "until" || die("self-test: until phrase $(repr(banned_hit("# until later")))")
     println("self-test: passed")
     return 0
@@ -2711,7 +2713,7 @@ function testing_shape_notes(body::AbstractString, head::AbstractString)
     notes = String[]
     testing_section_present(body) || return notes
     txt = testing_section_text(body)
-    env = occursin(r"(?im)(macos|darwin|linux|ubuntu|wsl).*(arm64|aarch64|x86_64|x64|amd64).*(julia).*(git).*\.", txt)
+    env = occursin(r"(?im)(macos|darwin|linux|ubuntu|wsl).*(arm64|aarch64|x86_64|x64|amd64).*(julia).*\.", txt)
     cmd = occursin(r"`[^`]+`", txt)
     fence = occursin(r"(?m)^```text\s*$", txt)
     if !(env && cmd && fence)

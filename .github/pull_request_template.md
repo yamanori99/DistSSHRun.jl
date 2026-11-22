@@ -4,7 +4,7 @@
 
 ## Testing
 
-<!-- One block per environment: OS and arch, Julia version, git version, ending with a period; the command in a code span; the output tail in a text fence. Example: macOS arm64, Julia 1.13.4, git 2.56.0. / `./scripts/check.sh` / ```text / HEAD <sha>: passed / ```. Delete this section if nothing ran. -->
+<!-- One block per environment: OS and arch, Julia version, ending with a period; the command in a code span; the output tail in a text fence. Name git only when the command depends on it. Example: macOS arm64, Julia 1.13.4. / `./scripts/check.sh` / ```text / HEAD <sha>: passed / ```. Delete this section if nothing ran. -->
 
 ## Risk
 

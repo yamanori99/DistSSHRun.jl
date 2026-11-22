@@ -97,10 +97,11 @@ JETLS is the type gate. Do not commit `.vscode/settings.json` to silence the Lan
   [`.github/pull_request_template.md`](.github/pull_request_template.md).
   Summary is required. Testing, Risk, and Revert may be omitted.
   When Testing is present, it is one block per environment: a line with OS
-  and arch, Julia version and git version, ending with a period; the exact
-  command in a code span; the verbatim tail in a `text` fence. Example:
+  and arch and Julia version, ending with a period; the exact
+  command in a code span; the verbatim tail in a `text` fence. Name git
+  only when that command depends on it. Example:
 
-  macOS arm64, Julia 1.13.4, git 2.56.0.
+  macOS arm64, Julia 1.13.4.
 
   `./scripts/check.sh`
 
