@@ -1261,7 +1261,7 @@ function _go_run!(
             rr = _project_work_root(
                 child_hosts, proj; cli_override = remote, run_id = snap_arg,
             )
-            doctor_launch_assert_hosts!(child_hosts, rr)
+            doctor_launch_assert_hosts!(child_hosts, rr; local_project = proj)
             rr
         end
 

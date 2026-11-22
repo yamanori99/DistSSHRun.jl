@@ -561,6 +561,62 @@ function missing_manifest_message(project::AbstractString)::String
     return "No Manifest for $q. Run: julia --project=$q -e 'using Pkg; Pkg.resolve()'"
 end
 
+"""Setup verbs echoed when a no-sync run finds a Manifest path dep missing on the remote."""
+function path_dep_deploy_fixup_message()::String
+    return "use setup git-sync / setup ship-tree, or re-run setup git-clone"
+end
+
+function _probe_expected_remote_path(
+        remote_root::AbstractString,
+        probe_path::AbstractString,
+    )::String
+    p = String(probe_path)
+    if isabspath(p) || (!isempty(p) && first(p) == '~')
+        return p
+    end
+    return joinpath(rstrip(String(remote_root), '/'), p)
+end
+
+"""
+One line for missing Manifest path deps on a host (or locally when `host` is omitted).
+
+`missing_raws` are the declared path strings (e.g. `../Bar`). `specs` are
+`(name, raw, probe_path)` tuples from [`_manifest_path_probe_specs`](@ref).
+"""
+function format_path_dep_probe_failure(
+        missing_raws::AbstractVector{<:AbstractString},
+        specs::AbstractVector{<:Tuple{String, String, String}},
+        remote_root::AbstractString;
+        host::Union{Nothing, AbstractString} = nothing,
+        deploy_mode::Union{Nothing, AbstractString} = nothing,
+    )::String
+    parts = String[]
+    for raw in missing_raws
+        raw_s = strip(String(raw))
+        raw_s == "…" && continue
+        probe = raw_s
+        for (_, r, p) in specs
+            r == raw_s && (probe = p; break)
+        end
+        expected = _probe_expected_remote_path(remote_root, probe)
+        push!(parts, "missing $raw_s (expected at $expected)")
+    end
+    isempty(parts) && push!(parts, "missing path dependencies")
+    body = join(parts, "; ")
+    if deploy_mode !== nothing
+        mode = strip(String(deploy_mode))
+        !isempty(mode) && (body *= "; deployed with $mode")
+    end
+    body *= "; $(path_dep_deploy_fixup_message())"
+    host === nothing && return body
+    return "$(String(host)): $body"
+end
+
+"""Whether a probe error names missing path directories rather than Pkg instantiate."""
+function probe_deps_is_missing_path_message(msg::AbstractString)::Bool
+    return occursin("expected at", String(msg))
+end
+
 """
 Throw when `project` has a project file and [`manifest_path`](@ref) is `nothing`.
 

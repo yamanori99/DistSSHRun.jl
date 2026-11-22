@@ -139,9 +139,158 @@ function check_project(host::String, remote_path::String)
     end
 end
 
-"""Julia `-e` body: fail if Manifest packages are not locatable (instantiate skipped)."""
-function _project_deps_probe_expr()::String
+const _PathProbeSpec = Tuple{String, String, String}
+
+function _manifest_path_probe_join(
+        project_dir::AbstractString,
+        declared_file::AbstractString,
+        raw::AbstractString,
+    )::String
+    r = strip(String(raw))
+    if isabspath(r) || (!isempty(r) && first(r) == '~')
+        return r
+    end
+    abs = joinpath(dirname(String(declared_file)), r)
+    rel = relpath(abs, project_dir)
+    return replace(String(rel), '\\' => '/')
+end
+
+function _workspace_member_project_files(env_dir::AbstractString)::Vector{String}
+    located = _located_project_file(env_dir)
+    located isa String || return String[]
+    data = try
+        TOML.parsefile(located)
+    catch
+        return String[]
+    end
+    ws = get(data, "workspace", nothing)
+    ws isa AbstractDict || return String[]
+    listed = get(ws, "projects", Any[])
+    listed isa AbstractVector || return String[]
+    root = dirname(located)
+    out = String[]
+    for rel in listed
+        rel isa AbstractString || continue
+        pf = _located_project_file(joinpath(root, String(rel)))
+        pf isa String && push!(out, pf)
+    end
+    return out
+end
+
+"""
+`(name, raw, probe_path)` for every path in the active environment Manifest and Project `[sources]` path.
+
+Does not walk path-dependency Manifest files: Pkg resolves only the active
+Manifest. Resolved on the controller only from TOML. `probe_path` is relative
+to the active `--project` directory unless the declared path is absolute or
+starts with `~` (not expanded here).
+"""
+function _manifest_path_probe_specs(project::AbstractString)::Vector{_PathProbeSpec}
+    env = resolve_pkg_env(project)
+    project_dir = env.project_dir
+    seen = Set{Tuple{String, String}}()
+    specs = _PathProbeSpec[]
+    function add!(name::AbstractString, raw::AbstractString, declared_file::AbstractString)
+        key = (String(name), String(strip(String(raw))))
+        key in seen && return nothing
+        push!(seen, key)
+        probe = _manifest_path_probe_join(project_dir, declared_file, raw)
+        push!(specs, (String(name), key[2], probe))
+        return nothing
+    end
+    files = _pkg_env_project_files(env)
+    for pf in files
+        for (name, raw) in _project_path_sources(pf)
+            add!(name, raw, pf)
+        end
+    end
+    for pf in _workspace_member_project_files(env.env_dir)
+        pf in files && continue
+        for (name, raw) in _project_path_sources(pf)
+            add!(name, raw, pf)
+        end
+    end
+    man = env.manifest
+    if man isa String && isfile(man)
+        for (name, raw) in DistSSHShip._manifest_path_pairs(man)
+            add!(name, raw, man)
+        end
+    end
+    return specs
+end
+
+function _parse_missing_path_probe_stderr(msg::AbstractString)::Vector{String}
+    m = match(r"missing path \(([^)]+)\)", String(msg))
+    m === nothing && return String[]
+    caps = m.captures[1]
+    cap_s = caps isa AbstractString ? caps : ""
+    return [strip(s) for s in split(cap_s, ',') if !isempty(strip(s))]
+end
+
+function _format_probe_deps_failure(
+        stderr_msg::AbstractString,
+        specs::Vector{_PathProbeSpec},
+        remote_root::AbstractString;
+        host::Union{Nothing, AbstractString} = nothing,
+    )::String
+    missing_raws = _parse_missing_path_probe_stderr(stderr_msg)
+    if !isempty(missing_raws)
+        mode = nothing
+        rec = active_deploy_record()
+        if rec !== nothing
+            raw_mode = get(rec, "mode", nothing)
+            raw_mode isa AbstractString && (mode = strip(String(raw_mode)))
+        end
+        return format_path_dep_probe_failure(
+            missing_raws,
+            specs,
+            remote_root;
+            host = host,
+            deploy_mode = mode,
+        )
+    end
+    m = match(r"not instantiated \(([^)]+)\)", stderr_msg)
+    if m !== nothing
+        cap = m.captures[1]
+        cap_s = cap isa AbstractString ? cap : ""
+        return "dependencies missing: $cap_s"
+    end
+    return isempty(stderr_msg) ? "dependency check failed" : first(split(stderr_msg, '\n'))
+end
+
+"""Julia `-e` body: Manifest path dirs, then locatable registry deps."""
+function _project_deps_probe_expr(path_specs::Vector{_PathProbeSpec})::String
+    embed = repr(path_specs)
     return """
+    path_specs = $embed
+    function _distssh_probe_has_project(dir)
+        for n in ("Project.toml", "JuliaProject.toml")
+            isfile(joinpath(dir, n)) && return true
+        end
+        return false
+    end
+    function _distssh_probe_resolve(root, p)
+        if isabspath(p)
+            return p
+        elseif !isempty(p) && p[1] == '~'
+            return expanduser(p)
+        else
+            return joinpath(root, p)
+        end
+    end
+    root = dirname(Base.active_project())
+    missing_raw = String[]
+    for (_, raw, probe) in path_specs
+        loc = _distssh_probe_resolve(root, probe)
+        if !isdir(loc) || !_distssh_probe_has_project(loc)
+            push!(missing_raw, raw)
+        end
+    end
+    if !isempty(missing_raw)
+        shown = join(missing_raw[1:min(end, 5)], ", ")
+        extra = length(missing_raw) > 5 ? ", …" : ""
+        error("missing path (" * shown * extra * ")")
+    end
     using Pkg
     missing = String[]
     for (uuid, info) in Pkg.dependencies()
@@ -169,7 +318,9 @@ function probe_project_deps(
     )::Union{Nothing, String}
     proj = canonical_local_path(project)
     _located_project_file(proj) isa String || return "Project.toml not found"
-    resolve_pkg_env(proj).manifest isa String || return missing_manifest_message(proj)
+    env = resolve_pkg_env(proj)
+    env.manifest isa String || return missing_manifest_message(proj)
+    specs = _manifest_path_probe_specs(proj)
     cmd = ignorestatus(
         Cmd(
             [
@@ -177,7 +328,7 @@ function probe_project_deps(
                 "--project=$proj",
                 "--startup-file=no",
                 "-e",
-                _project_deps_probe_expr(),
+                _project_deps_probe_expr(specs),
             ]
         ),
     )
@@ -187,9 +338,7 @@ function probe_project_deps(
     DistSSHBase.shell_status(proc) == 0 && occursin("ok", String(take!(out))) && return nothing
     msg = strip(String(take!(err)))
     isempty(msg) && (msg = strip(String(take!(out))))
-    m = match(r"not instantiated \(([^)]+)\)", msg)
-    m !== nothing && return "dependencies missing: $(m.captures[1])"
-    return isempty(msg) ? "dependency check failed" : first(split(msg, '\n'))
+    return _format_probe_deps_failure(msg, specs, env.project_dir)
 end
 
 """
@@ -199,12 +348,15 @@ function probe_remote_project_deps(
         host::AbstractString,
         remote_path::AbstractString;
         julia_path::AbstractString = "auto",
+        local_project::Union{Nothing, AbstractString} = nothing,
     )::Union{Nothing, String}
     host_julia = julia_path == "auto" ? detect_julia_path(String(host)) : String(julia_path)
     host_julia === nothing && return "Julia not found"
+    proj = canonical_local_path(something(local_project, remote_path))
+    specs = _manifest_path_probe_specs(proj)
     pq = _remote_shell_path_word(remote_path)
     jb = _remote_shell_path_word(host_julia)
-    expr = _project_deps_probe_expr()
+    expr = _project_deps_probe_expr(specs)
     # Single-quoted -e payload for the remote shell (escape embedded single quotes).
     eq = replace(expr, "'" => "'\\''")
     remote_cmd = "$jb --project=$pq --startup-file=no -e '$eq'"
@@ -223,15 +375,12 @@ function probe_remote_project_deps(
         code == 0 && occursin("ok", String(take!(out))) && return nothing
         msg = strip(String(take!(err)))
         isempty(msg) && (msg = strip(String(take!(out))))
-        m = match(r"not instantiated \(([^)]+)\)", msg)
-        shown = if m !== nothing
-            cap = m.captures[1]
-            "dependencies missing: $(cap isa AbstractString ? cap : "")"
-        elseif isempty(msg)
-            "dependency check failed"
-        else
-            first(split(msg, '\n'))
-        end
+        shown = _format_probe_deps_failure(
+            msg,
+            specs,
+            remote_path;
+            host = String(host),
+        )
         return DistSSHBase._append_remote_shell_hint(String(host), code, shown)
     catch e
         return "dependency check failed: $(sprint(showerror, e))"
@@ -364,15 +513,20 @@ function check_prerequisites(
             host_ok[] = false
         else
             deps_err = probe_remote_project_deps(
-                host, remote_path; julia_path = String(host_julia),
+                host,
+                remote_path;
+                julia_path = String(host_julia),
+                local_project = project,
             )
             if deps_err === nothing
                 ok("Project dependencies resolvable")
             else
                 _fail_host(host, deps_err)
-                _host_check_detail(
-                    "Fix: julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host))",
-                )
+                if !probe_deps_is_missing_path_message(deps_err)
+                    _host_check_detail(
+                        "Fix: julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host))",
+                    )
+                end
                 all_ok = false
                 host_ok[] = false
             end
