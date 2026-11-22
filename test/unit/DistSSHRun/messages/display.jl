@@ -665,6 +665,13 @@ using Test
         end
 
         @testset "output_dir_lock!" begin
+            _with_tempdir() do empty_path
+                host = withenv("PATH" => empty_path) do
+                    DistSSHRun._output_lock_host()
+                end
+                @test host == DistSSHRun.kit_head_host_label()
+                @test !isempty(host)
+            end
             _with_tempdir() do tmp
                 lock_path = joinpath(tmp, ".distssh.lock")
                 release = DistSSHRun.output_dir_lock!(tmp)

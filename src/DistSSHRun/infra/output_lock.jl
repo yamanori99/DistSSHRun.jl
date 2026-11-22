@@ -3,13 +3,9 @@
 const _OUTPUT_LOCK_NAME = ".distssh.lock"
 const _OUTPUT_LOCK_TRIES = 8
 
-"""Hostname recorded in `.distssh.lock`. Empty output is an error."""
+"""Hostname recorded in `.distssh.lock`. Same as [`kit_head_host_label`](@ref)."""
 function _output_lock_host()::String
-    host = try
-        strip(read(`hostname`, String))
-    catch
-        ""
-    end
+    host = kit_head_host_label()
     (isempty(host) || occursin('\n', host) || occursin('\r', host)) &&
         throw(ArgumentError("output lock: hostname is empty or has a line break"))
     return host
