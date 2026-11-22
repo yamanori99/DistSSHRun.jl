@@ -96,41 +96,54 @@ JETLS is the type gate. Do not commit `.vscode/settings.json` to silence the Lan
 - The body is
   [`.github/pull_request_template.md`](.github/pull_request_template.md).
   Summary is required. Testing, Risk, and Revert may be omitted.
-  When Testing is present, it is one block per environment: a line with the
-  OS name, arch, and Julia version, ending with a period; the exact
-  command in a code span; the verbatim tail in a `text` fence. The OS name
-  is not a fixed list. Name git only when that command depends on it.
-  Example:
+  When Testing is present, it is one block per environment: one line with
+  the OS, arch, and Julia version, and git version only when that command
+  depends on git; the exact command in a code span; the last few output
+  lines, verbatim, in a `text` fence. The OS name is not a fixed list. Do
+  not list the local push gate. Example:
 
-  macOS arm64, Julia 1.13.4.
+  macOS 15.5 arm64, Julia 1.13.4.
 
-  `./scripts/check.sh`
+  `julia --project=. -e 'using Pkg; Pkg.test()'`
 
   ```text
-  HEAD abcdef: passed
+       Testing DistSSHRun tests passed
   ```
 
-  The GitHub title is the title. The body has no title heading and no checklist.
-  It does not list every changed path. `./scripts/check.sh` reads the open
-  pull request and fails when a bullet list or a fenced block repeats
-  `git diff --name-only origin/main...HEAD`.
-  [REVIEW.md](REVIEW.md) tells a reviewer what failure looks like here.
-  The type label stays out of the body. CI applies it.
+  After the body check passes, a Testing block that lacks the environment
+  line, a command in a code span, or a `text` fence prints only `note:`
+  lines and does not fail the gate. Other body problems fail the check: a
+  title heading, a checklist, a missing Summary, a bullet list or fenced
+  block that repeats `git diff --name-only origin/main...HEAD`, or excuse
+  wording without an Actions run.
+- The GitHub title is the title. The body has no title heading and no
+  checklist, and it does not list every changed path.
+- In Testing or Risk, a failure called known, pre-existing, unrelated,
+  flaky, or left to CI needs, in the same paragraph, the URL of an Actions
+  run that shows it, and the word `main`. The push gate fails without
+  both.
+- A title that starts with `fix` (in any case) runs the required check
+  `fix tests fail on merge-base src`. That check needs a changed test file
+  under `test/` or `lib/*/test/` (not `e2e.jl`) that passes on this pull
+  request and fails on the base. A docs-only or CI-only change whose
+  title starts with `fix` fails that check.
+- [REVIEW.md](REVIEW.md) holds the three questions a reviewer asks of
+  every diff. They are for reviewers. Do not answer them in the body.
+- The type label stays out of the body. CI applies it.
 - Every pull request needs one type label (`bug` / `enhancement` / `breaking` / `chore`) when labels exist.
 - When this pull request finishes the remaining work of an issue, write `Closes #N`. When work remains, write `Part of #N` and name the leftover as another `#M`. Do not write `Part of` alone.
-- When a generative tool wrote a substantive part of a pull request or an issue, add one line after the body naming the tool. Review the change before opening. Do not put that line in Summary, Testing, or Risk.
+- When a generative tool wrote a substantive part of a pull request or an issue, add one line after the body, `Generative tool: <name>`. Review the change before opening. Do not put that line in Summary, Testing, or Risk.
 
-### CodeRabbit (experimental)
+### CodeRabbit (optional)
 
-[CodeRabbit](https://docs.coderabbit.ai) does not review a pull request
-until someone comments `@coderabbitai review` (changes since the last
-review) or `@coderabbitai full review` (the whole pull request). It does
-not reply in a thread until it is mentioned, and a later push does not
-start another review. Config is [`.coderabbit.yaml`](.coderabbit.yaml)
-on the **PR head** (not a merge gate). `scripts/check.sh` is the push gate.
-It comments on a bug this diff introduced that `REVIEW.md` does not already
-name. Treat inline comments as hints; do not apply Autofix or generated
-tests unless you want that change.
+[CodeRabbit](https://docs.coderabbit.ai) reviews a pull request only when
+someone comments `@coderabbitai review` (changes since the last review) or
+`@coderabbitai full review` (the whole pull request). It replies in a
+thread only when mentioned, and a later push does not start another
+review. Its config is [`.coderabbit.yaml`](.coderabbit.yaml) on the pull
+request head. It is not a merge gate. It asks the same three questions as
+[REVIEW.md](REVIEW.md) and does not offer autofix, generated tests, or
+generated docstrings. Treat its comments as hints.
 
 ## Issues
 
@@ -185,7 +198,7 @@ change that Kit reexports lands here first. Kit freeze and cut rules:
 
 ## Language
 
-`.jl` comments, docstrings, and errors: English. Install or Docs links: `docs/src`, [README.md](README.md), and [README.ja.md](README.ja.md). User-visible behavior: one fragment in `changelog.d/`. The version-cut PR copies fragments into `NEWS.md`. Generative AI is allowed; you own the diff. Keep docs plain.
+`.jl` comments, docstrings, and errors: English. Install or Docs links: `docs/src`, [README.md](README.md), and [README.ja.md](README.ja.md). User-visible behavior: one fragment in `changelog.d/`. The version-cut PR copies fragments into `NEWS.md`. Generative tools are allowed; you own the diff. Keep docs plain.
 
 ## Labels
 
@@ -373,7 +386,7 @@ julia --project=. -e 'using Pkg; Pkg.test(; coverage=true)'
 DISTSSHQUEUE_CODE_COVERAGE=1 ./testenv/docker-ssh/scripts/up.sh --e2e
 ```
 
-Required to merge (ruleset `main` uses these names). **nightly** jobs, and **1.14-pre** jobs other than Ubuntu and macOS `Pkg.test`, are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu **1.14-pre** `Pkg.test`, Aqua, and JETLS run on ordinary heavy PRs. macOS **1.14-pre** `Pkg.test` does too, after Runic, JETLS 1.13, and Aqua 1.13, beside the 1.13 macOS jobs. Linux SSH E2E **1.14-pre** uses the E2E path filter (`DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)`). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and workflow_dispatch, not ordinary PRs (version-cut pull requests skip them too). macOS **nightly**, and WSL2 **1.14-pre** and nightly, run on CI weekly only. PkgEval runs on push and dispatch (heavy gate), not on ordinary pull requests, and is not in the list below. `Registry install (1.13, ubuntu-latest, x64)`, and the four 1.14-pre Run group checks (Ubuntu and macOS `unit` / `integration`) are in the list below and in ruleset `main`. The required Linux E2E title is now `DistSSHRun (1.13, ubuntu-latest → ubuntu-26.04)` (was `DistSSHRun (ubuntu-latest → ubuntu-26.04)`); update ruleset `main` in the same PR. E2E weekly and CI weekly are not required. Run's titles are `DistSSHRun (...)`, the same shape as DistSSHBase, DistSSHUp, and DistSSHShip, plus `DistSSHRun (1.14-pre, ubuntu-latest, x64)`, `DistSSHRun (1.14-pre, xcode-27, aarch64, unit)` / `integration`, `DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)`, `DistSSHRun (nightly, ubuntu-latest, x64)`, `Aqua (1.14-pre, ubuntu-latest, x64)`, `Aqua (nightly, ubuntu-latest, x64)`, `JETLS (1.14-pre, ubuntu-latest, x64)`, and `PkgEval (nightly, ubuntu-latest, x64)`. DistSSHBase, DistSSHUp, and DistSSHShip are their own jobs on Ubuntu and macOS. DistSSHBase, DistSSHUp, and DistSSHShip each have their own Ubuntu SSH E2E rows (`lib/<pkg>/test/e2e.jl`). Their WSL2 titles run on a main push and CI weekly, not a pull request. Downstream is `Downstream (DistSSHQueue@main, 1.13)` and `Downstream (DistSSHKit@main, 1.13)`. `Downstream SSH E2E (DistSSHQueue, 1.13)` runs on a version-cut pull request, a push to `main`, and `workflow_dispatch`. Ordinary pull requests skip it. Downstream runs on a pull request only with the `downstream` or `cut` label; when it runs, failures block `gate`. Names outside the list are not in the ruleset. The ruleset itself is edited on GitHub; this list is the names to add.
+Required to merge (ruleset `main` uses these names). **nightly** jobs, and **1.14-pre** jobs other than Ubuntu and macOS `Pkg.test`, are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu **1.14-pre** `Pkg.test`, Aqua, and JETLS run on ordinary heavy PRs. macOS **1.14-pre** `Pkg.test` does too, after Runic, JETLS 1.13, and Aqua 1.13, beside the 1.13 macOS jobs. Linux SSH E2E **1.14-pre** uses the E2E path filter (`DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)`). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and workflow_dispatch, not ordinary PRs (version-cut pull requests skip them too). macOS **nightly**, and WSL2 **1.14-pre** and nightly, run on CI weekly only. PkgEval runs on push and dispatch (heavy gate), not on ordinary pull requests, and is not in the list below. `Registry install (1.13, ubuntu-latest, x64)`, and the four 1.14-pre Run group checks (Ubuntu and macOS `unit` / `integration`) are in the list below and in ruleset `main`. The required Linux E2E title is now `DistSSHRun (1.13, ubuntu-latest → ubuntu-26.04)` (was `DistSSHRun (ubuntu-latest → ubuntu-26.04)`); update ruleset `main` in the same PR. E2E weekly and CI weekly are not required. Run's titles are `DistSSHRun (...)`, the same shape as DistSSHBase, DistSSHUp, and DistSSHShip, plus `DistSSHRun (1.14-pre, ubuntu-latest, x64)`, `DistSSHRun (1.14-pre, xcode-27, aarch64, unit)` / `integration`, `DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)`, `DistSSHRun (nightly, ubuntu-latest, x64)`, `Aqua (1.14-pre, ubuntu-latest, x64)`, `Aqua (nightly, ubuntu-latest, x64)`, `JETLS (1.14-pre, ubuntu-latest, x64)`, and `PkgEval (nightly, ubuntu-latest, x64)`. DistSSHBase, DistSSHUp, and DistSSHShip are their own jobs on Ubuntu and macOS. DistSSHBase, DistSSHUp, and DistSSHShip each have their own Ubuntu SSH E2E rows (`lib/<pkg>/test/e2e.jl`). Their WSL2 titles run on a main push and CI weekly, not a pull request. Downstream is `Downstream (DistSSHQueue@main, 1.13)` and `Downstream (DistSSHKit@main, 1.13)`. `Downstream SSH E2E (DistSSHQueue, 1.13)` runs on a version-cut pull request, a push to `main`, and `workflow_dispatch`. Ordinary pull requests skip it. Downstream runs on a pull request only with the `downstream` or `cut` label; when it runs, failures block `gate`. Names outside the list are not in the ruleset. The ruleset itself is edited on GitHub; this list is the names to add. A required check that its gate skips reports as skipping and does not block merge. The rows under "Run only on some pull requests" are the ones an ordinary pull request usually skips.
 
 - `DistSSHRun (1.13, ubuntu-latest, x64, unit)`
 - `DistSSHRun (1.13, ubuntu-latest, x64, integration)`
@@ -400,11 +413,13 @@ Required to merge (ruleset `main` uses these names). **nightly** jobs, and **1.1
 - `DistSSHBase (ubuntu-latest → ubuntu-26.04)`
 - `DistSSHUp (ubuntu-latest → ubuntu-26.04)`
 - `DistSSHShip (ubuntu-latest → ubuntu-26.04)`
-- `Downstream SSH E2E (DistSSHQueue, 1.13)`
-- `Downstream (DistSSHQueue@main, 1.13)`
-- `Downstream (DistSSHKit@main, 1.13)`
 - `PR label`
-- `fix tests fail on merge-base src`
+
+Run only on some pull requests:
+
+- `Downstream SSH E2E (DistSSHQueue, 1.13)`: a version-cut pull request.
+- `Downstream (DistSSHQueue@main, 1.13)` and `Downstream (DistSSHKit@main, 1.13)`: the `downstream` or `cut` label.
+- `fix tests fail on merge-base src`: a title that starts with `fix`.
 
 | When | Workflow | What |
 | --- | --- | --- |
