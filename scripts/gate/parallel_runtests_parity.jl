@@ -27,8 +27,8 @@ function main()
     listed = _parallel_listed_test_count()
     listed == info.n_files ||
         error(
-            "parallel --list count ($listed) != runtests selection ($(info.n_files))",
-        )
+        "parallel --list count ($listed) != runtests selection ($(info.n_files))",
+    )
     println(
         "parallel/runtests parity: ",
         info.n_files,

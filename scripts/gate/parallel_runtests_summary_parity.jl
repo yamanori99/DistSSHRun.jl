@@ -27,7 +27,7 @@ function _parse_summary(output::AbstractString)
     nums = parse.(Int, split(rhs))
     length(nums) < 3 &&
         error("unexpected Test Summary line: $(line)")
-  return (;
+    return (;
         pass = nums[1],
         broken = nums[2],
         total = nums[3],
@@ -43,8 +43,8 @@ function main()
     serial = _parse_summary(serial_out)
     parallel = _parse_summary(parallel_out)
     if serial.pass != parallel.pass ||
-       serial.broken != parallel.broken ||
-       serial.total != parallel.total
+            serial.broken != parallel.broken ||
+            serial.total != parallel.total
         io = IOBuffer()
         println(io, "runtests versus parallel summary mismatch:")
         println(io, "  runtests: ", serial.raw)
