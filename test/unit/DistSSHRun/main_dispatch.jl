@@ -250,6 +250,9 @@ using Test
             DistSSHRun.print_rejected_command("ride"; script = false, io = buf_ride)
             ride_text = String(take!(buf_ride))
             @test occursin(DistSSHRun.REMOVED_RIDE_SUBCOMMAND_HINT, ride_text)
+            buf_ride_script = IOBuffer()
+            DistSSHRun.print_rejected_command("ride"; script = true, io = buf_ride_script)
+            @test occursin(DistSSHRun.REMOVED_RIDE_SUBCOMMAND_HINT, String(take!(buf_ride_script)))
         end
 
         @testset "help-only argv is the root page" begin

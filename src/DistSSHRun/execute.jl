@@ -25,7 +25,7 @@ const _EXECUTE_DETACHED_KW = Set{Symbol}(
         :unsafe_expose_port,
         :unsafe_all_to_all,
         :allow_external_symlinks,
-        :run_id,
+        :ship_id,
         :head_workers,
         :head_slots,
     )
@@ -229,8 +229,8 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
         lw = session.head_workers
         lw !== nothing && (kw[:head_workers] = lw)
     end
-    snap0 = get(parsed, :run_id, nothing)
-    snap0 === nothing || (kw[:run_id] = snap0)
+    snap0 = get(parsed, :ship_id, nothing)
+    snap0 === nothing || (kw[:ship_id] = snap0)
     dr0 = get(parsed, :deploy_root, nothing)
     dr0 === nothing || (kw[:remote] = dr0)
     if kind === :go
@@ -288,7 +288,7 @@ function DetachedProcess(
 end
 
 """
-    detached_launch(kp::DetachedProcess) -> NamedTuple
+    detached_launch(detached::DetachedProcess) -> NamedTuple
 
 `(dir, threads, dropped, sensitive)` for a detached [`execute!`](@ref) child.
 
@@ -303,9 +303,9 @@ and empty lists. Local go slots and local drive workers inherit the child
 environment, so a kept `SSH_AUTH_SOCK` reaches them. SSH workers do not
 receive this process's agent socket.
 """
-function detached_launch(kp::DetachedProcess)
+function detached_launch(detached::DetachedProcess)
     return lock(_DETACHED_LAUNCH_LOCK) do
-        found = get(_DETACHED_LAUNCH, kp.process, nothing)
+        found = get(_DETACHED_LAUNCH, detached.process, nothing)
         found === nothing && return (
             dir = "",
             threads = "unset",
@@ -334,8 +334,8 @@ function _remember_detached_launch!(proc::Base.Process, report)
     end
 end
 
-function _close_owned_stdio!(kp::DetachedProcess)
-    for io in (kp.stdout_owned, kp.stderr_owned)
+function _close_owned_stdio!(detached::DetachedProcess)
+    for io in (detached.stdout_owned, detached.stderr_owned)
         io === nothing && continue
         try
             close(io)
@@ -346,11 +346,11 @@ function _close_owned_stdio!(kp::DetachedProcess)
 end
 
 """
-    wait(kp::DetachedProcess; timeout=nothing) -> DistSSHJobResult
+    wait(detached::DetachedProcess; timeout=nothing) -> DistSSHJobResult
 
 Block until the detached child exits, then return a [`DistSSHJobResult`](@ref).
 
-Does not mutate `kp.output_dir` / `kp.log_dir`. After a detached `:drive`
+Does not mutate `detached.output_dir` / `detached.log_dir`. After a detached `:drive`
 that deferred the artifact leaf, read the returned result (or
 [`kit_result_from_dir`](@ref) / [`read_kit_run_toml`](@ref) on the
 directory from [`result_run_dir`](@ref)).
@@ -358,7 +358,7 @@ directory from [`result_run_dir`](@ref)).
 `timeout` is wall-clock seconds until the **child process** exits (not the
 drive worker heartbeat). `nothing` waits forever. On timeout the child is
 left running: `failed_step` is `"hung"`, `exit_code` is `124`, and owned
-stdio stays open. Call [`terminate!`](@ref) if the hang is fatal.
+stdio stays open. Call [`cancel!`](@ref) if the hang is fatal.
 
 If the child wrote `kit.result` under `run_dir` or `output_dir`, that file is
 the source of truth (including `failed_step` from `go!` / . Otherwise
@@ -370,7 +370,7 @@ before `wait` on the OS process; after reap `getpid` can throw ESRCH).
 Not on a hung timeout.
 """
 function Base.wait(
-        kp::DetachedProcess;
+        detached::DetachedProcess;
         timeout::Union{Nothing, Real} = nothing,
     )::DistSSHJobResult
     timeout !== nothing && timeout < 0 && throw(
@@ -379,42 +379,42 @@ function Base.wait(
         )
     )
     child_pid = try
-        Int(getpid(kp.process))
+        Int(getpid(detached.process))
     catch
         nothing
     end
-    if timeout !== nothing && process_running(kp.process)
+    if timeout !== nothing && process_running(detached.process)
         t0 = time()
-        while process_running(kp.process) && (time() - t0) < Float64(timeout)
+        while process_running(detached.process) && (time() - t0) < Float64(timeout)
             sleep(0.05)
         end
-        if process_running(kp.process)
+        if process_running(detached.process)
             return DistSSHJobResult(
-                false, kp.kind, kp.output_dir, kp.log_dir, "hung", 124;
-                run_dir = kp.run_dir,
+                false, detached.kind, detached.output_dir, detached.log_dir, "hung", 124;
+                run_dir = detached.run_dir,
             )
         end
     end
     try
-        wait(kp.process)
-        recovered = _kit_result_from_process(kp)
+        wait(detached.process)
+        recovered = _kit_result_from_process(detached)
         child_pid !== nothing && _remove_kit_pid_file(
-            child_pid, kp.output_dir, kp.log_dir; run_dir = kp.run_dir,
+            child_pid, detached.output_dir, detached.log_dir; run_dir = detached.run_dir,
         )
         recovered !== nothing && return recovered
-        code = DistSSHBase.shell_status(kp.process)
+        code = DistSSHBase.shell_status(detached.process)
         ok = code == 0
         return DistSSHJobResult(
             ok,
-            kp.kind,
-            kp.output_dir,
-            kp.log_dir,
-            ok ? nothing : String(kp.kind),
+            detached.kind,
+            detached.output_dir,
+            detached.log_dir,
+            ok ? nothing : String(detached.kind),
             code;
-            run_dir = kp.run_dir,
+            run_dir = detached.run_dir,
         )
     finally
-        _close_owned_stdio!(kp)
+        _close_owned_stdio!(detached)
     end
 end
 
@@ -440,10 +440,10 @@ and [`drive!`](@ref) already share. With `detached=false`
 spawn (run no longer transfers). Ship or git-sync first with [`setup!`](@ref)
 `:ship_tree` / `:git_sync`, or CLI `setup ship-tree` / `setup git-sync`.
 A script outside the project is `extra_files=[script]` (one file, at
-`_distsshrun_external/<basename>`), then `setup!(session, :instantiate; run_id=id)`,
-then `execute!(...; run_id=id)` with that same local script.
+`_distsshrun_external/<basename>`), then `setup!(session, :instantiate; ship_id=id)`,
+then `execute!(...; ship_id=id)` with that same local script.
 In-process [`go!`](@ref) / [`drive!`](@ref) reject `sync=:ship_tree` and
-`sync=:git_sync` the same way. Omitted/`false` `sync` and `run_id=` are
+`sync=:git_sync` the same way. Omitted/`false` `sync` and `ship_id=` are
 unchanged.
 `--project=` is always the job `project=` when that
 tree has a `Project.toml`. The job must list DistSSHKit or DistSSHRun in
@@ -746,9 +746,9 @@ function _execute_detached!(
     unsafe_skip_env_digests = get(kwargs, :unsafe_skip_env_digests, false)
     allow_external_symlinks = get(kwargs, :allow_external_symlinks, false) === true
     _reject_removed_allow_mismatch!(get(kwargs, :allow_mismatch, nothing))
-    run_id = get(kwargs, :run_id, nothing)
-    if run_id !== nothing
-        run_id = validate_run_id(run_id)
+    ship_id = get(kwargs, :ship_id, nothing)
+    if ship_id !== nothing
+        ship_id = validate_ship_id(ship_id)
     end
     head_workers = get(kwargs, :head_workers, nothing)
     head_slots = get(kwargs, :head_slots, nothing)
@@ -856,7 +856,7 @@ function _execute_detached!(
         output_dir = resolved_output,
         log_dir = resolved_log,
         julia = julia_for_blob,
-        run_id = run_id,
+        ship_id = ship_id,
         quiet = quiet,
         verbosity = verbosity_sym === nothing ? nothing : String(verbosity_sym),
         best_effort = best_effort,
@@ -1098,7 +1098,7 @@ function _write_kit_text_file!(
     return nothing
 end
 
-"""Best-effort host list for [`terminate_run!`](@ref) (SSH names, one per line)."""
+"""Best-effort host list for [`cancel!`](@ref) (SSH names, one per line)."""
 function _write_kit_hosts_file(
         hosts::AbstractVector{<:AbstractString},
         output_dir::AbstractString,
@@ -1496,8 +1496,8 @@ function _read_kit_hosts(output_dir::AbstractString)::Vector{String}
 end
 
 """`kit.job` from `run_dir`, `output_dir`, or `log_dir` (detached go may split them)."""
-function _read_kit_job_id_for_reap(kp::DetachedProcess)::Union{Nothing, String}
-    for d in _kit_sidecar_dirs(kp.output_dir, kp.log_dir; run_dir = kp.run_dir)
+function _read_kit_job_id_for_reap(detached::DetachedProcess)::Union{Nothing, String}
+    for d in _kit_sidecar_dirs(detached.output_dir, detached.log_dir; run_dir = detached.run_dir)
         raw = _read_kit_text_file(d, "kit.job")
         if raw !== nothing && !isempty(strip(raw))
             return strip(String(raw))
@@ -1507,10 +1507,10 @@ function _read_kit_job_id_for_reap(kp::DetachedProcess)::Union{Nothing, String}
 end
 
 """Union of `kit.hosts` from every kit sidecar directory."""
-function _read_kit_hosts_for_reap(kp::DetachedProcess)::Vector{String}
+function _read_kit_hosts_for_reap(detached::DetachedProcess)::Vector{String}
     seen = Set{String}()
     out = String[]
-    for d in _kit_sidecar_dirs(kp.output_dir, kp.log_dir; run_dir = kp.run_dir)
+    for d in _kit_sidecar_dirs(detached.output_dir, detached.log_dir; run_dir = detached.run_dir)
         for h in _read_kit_hosts(d)
             h in seen && continue
             push!(seen, h)
@@ -1626,7 +1626,7 @@ end
 """
 Keyword, else `DISTSSH_WAIT_SIGINT_GRACE` in this process, else 30 seconds.
 
-The variable is read here, in the process calling `terminate!` or `cancel`,
+The variable is read here, in the process calling `cancel!` or `cancel`,
 not on the driver host. `0` is kept. A negative value, `NaN`, or `Inf` errors.
 """
 function _resolve_interrupt_grace(explicit::Union{Nothing, Real})::Float64
@@ -1648,7 +1648,7 @@ end
 SIGINT once, then SIGTERM, then SIGKILL.
 
 `interrupt_grace == 0` does not send SIGINT. `grace == 0` still sends
-SIGTERM and does not wait, which is what `terminate!` did before
+SIGTERM and does not wait, which is what `cancel!` did before
 `interrupt_grace` existed. SIGKILL is sent only when the process is still
 alive, then this waits up to one second.
 
@@ -1804,8 +1804,8 @@ function kit_result_from_dir(output_dir::AbstractString)::Union{Nothing, DistSSH
     end
 end
 
-function _kit_result_from_process(kp::DetachedProcess)::Union{Nothing, DistSSHJobResult}
-    for d in (kp.run_dir, kp.output_dir, kp.log_dir)
+function _kit_result_from_process(detached::DetachedProcess)::Union{Nothing, DistSSHJobResult}
+    for d in (detached.run_dir, detached.output_dir, detached.log_dir)
         d === nothing && continue
         recovered = kit_result_from_dir(d)
         recovered !== nothing && return recovered
@@ -1831,7 +1831,7 @@ end
 
 """
     drive_host_status(output_dir) -> Vector{DriveHostStatus}
-    drive_host_status(kp::DetachedProcess) -> Vector{DriveHostStatus}
+    drive_host_status(detached::DetachedProcess) -> Vector{DriveHostStatus}
 
 Live per-host membership for a running (or recently collecting) `drive`
 Reads `kit.hosts.status`. Empty when the file is missing (too
@@ -1868,8 +1868,8 @@ function drive_host_status(output_dir::AbstractString)::Vector{DriveHostStatus}
     end
 end
 
-function drive_host_status(kp::DetachedProcess)::Vector{DriveHostStatus}
-    for d in (kp.run_dir, kp.output_dir, kp.log_dir)
+function drive_host_status(detached::DetachedProcess)::Vector{DriveHostStatus}
+    for d in (detached.run_dir, detached.output_dir, detached.log_dir)
         d === nothing && continue
         rows = drive_host_status(d)
         isempty(rows) || return rows
@@ -2005,7 +2005,7 @@ function _execute_detached_argv(
         worker_include::Bool = false,
         unsafe_skip_env_digests::Bool = false,
         allow_external_symlinks::Bool = false,
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
         head_workers::Union{Nothing, Integer} = nothing,
         head_slots::Union{Nothing, Integer} = nothing,
@@ -2028,8 +2028,8 @@ function _execute_detached_argv(
     _reject_run_transfer_kw!("execute!", sync; surface = :api)
     allow_external_symlinks &&
         _reject_run_transfer_cli!(String(kind), "--allow-external-symlinks")
-    if run_id !== nothing
-        push!(argv, "--run-id", validate_run_id(run_id))
+    if ship_id !== nothing
+        push!(argv, "--ship-id", validate_ship_id(ship_id))
     end
     if remote !== nothing && !isempty(strip(String(remote)))
         push!(argv, DEPLOY_ROOT_FLAG, String(strip(String(remote))))
@@ -2421,14 +2421,14 @@ function _persist_stop(
 end
 
 """
-    terminate!(kp::DetachedProcess; grace=10, interrupt_grace=nothing) -> DistSSHJobResult
+    cancel!(detached::DetachedProcess; grace=10, interrupt_grace=nothing) -> DistSSHJobResult
 
 Stop a detached run. Omit `interrupt_grace` and the wait is 30 seconds, or
 `DISTSSH_WAIT_SIGINT_GRACE` when that variable is set in this process.
 The driver host does not read it. An explicit `interrupt_grace` keyword
 wins, including `0`, which sends no SIGINT. A negative value or `NaN` is
 an error. The 30 second default is a constant, chosen from the internal
-stop budgets, not computed when [`terminate!`](@ref) runs.
+stop budgets, not computed when [`cancel!`](@ref) runs.
 
 A positive value sends SIGINT once and waits that many seconds. There is
 no retry. A `drive` child runs its Ctrl-C path: one `kill -INT` per SSH
@@ -2442,7 +2442,7 @@ a lower bound. On Julia 1.13 a second Ctrl-C forces the driver out of that
 cleanup. On Julia 1.13, a driver waiting in `pmap` ignores SIGINT, so this
 wait runs out and SIGTERM stops it. With the defaults that is 30 seconds
 plus `grace` (10) plus one second after SIGKILL, about 41 seconds, and
-then the tagged `pkill` below. A
+then the tagged worker reap below. A
 process-group SIGINT, as from a terminal Ctrl-C, also misses that path on
 Julia 1.13: the driver exits 1 and does not send `kill -INT`. Measured on
 macOS. On builds without `Base.CANCEL_TOKEN` (e.g. 1.13 and 1.14.0-beta1 through
@@ -2452,18 +2452,18 @@ A `go` child is `julia -m` with
 exit-on-sigint, so SIGINT runs `atexit` and does not enter `catch` or
 `finally`. Then SIGTERM, wait up to `grace` seconds (`0` sends SIGTERM
 and does not wait), then SIGKILL if the process is still alive. Then
-`pkill` only processes tagged with this run's `job_id` (from `kit.job`),
+reap only processes tagged with this run's `job_id` (from `kit.job`),
 never `julia.*--worker`. Without `job_id`, only the child is signaled.
-That `pkill` is one SSH command per host, in parallel, deduplicated, with
+That reap is one SSH command per host, in parallel, deduplicated, with
 its own 15 second bound (SSH connect plus margin). It does not spend
 `interrupt_grace`. Worst case for those two stages is `interrupt_grace`
-plus that bound. `pkill` exit 1 means nothing matched and is success.
+plus that bound. Exit 1 on the remote reap means nothing matched and is success.
 Hosts that cannot be reached are named in one warning, and this still
-returns. The remote pattern is `[d]istsshkit-job:…`, so `pkill -f` does
-not match the `sh -c` line that contains the command.
+returns. The remote tag hides itself from the `sh -c` command line that
+contains the reap.
 
 For `:go`, local head slots that outlive the detached child (Julia 1.14) are
-signaled with `pkill -f` on each slot's `go-handshake.jl` path under this
+signaled on each slot's `go-handshake.jl` path under this
 run's kit directories (`run_dir`, `output_dir`, `log_dir`). This reaper waits
 until each targeted slot pid is gone from the process table (reaping a zombie
 when this process is its parent, then SIGKILL by exact pid). A survivor
@@ -2474,27 +2474,27 @@ string is written to `kit.result`. When `run_dir` holds this package's
 `run.toml` (`writer` with this package's `major.minor`), `stop` is
 set there too. Artifact `output_dir` / `log_dir` are not rewritten.
 """
-function terminate!(
-        kp::DetachedProcess;
+function cancel!(
+        detached::DetachedProcess;
         grace::Real = 10,
         interrupt_grace::Union{Nothing, Real} = nothing,
     )::DistSSHJobResult
     _require_nonnegative("grace", grace)
     seconds = _resolve_interrupt_grace(interrupt_grace)
-    stop = _signal_ladder!(kp.process; interrupt_grace = seconds, grace = grace)
-    job_id = _read_kit_job_id_for_reap(kp)
-    hosts = _read_kit_hosts_for_reap(kp)
+    stop = _signal_ladder!(detached.process; interrupt_grace = seconds, grace = grace)
+    job_id = _read_kit_job_id_for_reap(detached)
+    hosts = _read_kit_hosts_for_reap(detached)
     _reap_tagged_workers!(job_id, hosts)
-    kp.kind === :go && _reap_local_go_slots_for_roots!(
-        _kit_sidecar_dirs(kp.output_dir, kp.log_dir; run_dir = kp.run_dir),
+    detached.kind === :go && _reap_local_go_slots_for_roots!(
+        _kit_sidecar_dirs(detached.output_dir, detached.log_dir; run_dir = detached.run_dir),
     )
-    return _persist_stop(wait(kp), stop; run_dir = kp.run_dir)
+    return _persist_stop(wait(detached), stop; run_dir = detached.run_dir)
 end
 
 """
-    terminate_run!(output_dir; grace=10, interrupt_grace=nothing, log_dir=nothing, kind=:go) -> DistSSHJobResult
+    cancel!(run_dir::AbstractString; kind=:go, grace=10, interrupt_grace=nothing, log_dir=nothing) -> DistSSHJobResult
 
-Like [`terminate!`](@ref) after losing [`DetachedProcess`](@ref): read `kit.pid` /
+Like [`cancel!`](@ref) on a directory after losing [`DetachedProcess`](@ref): read `kit.pid` /
 `kit.job` / `kit.hosts` under `output_dir`. `interrupt_grace` is the same
 SIGINT stage, including the 30 second default and
 `DISTSSH_WAIT_SIGINT_GRACE` in this process. `kind` is only used when
@@ -2503,8 +2503,8 @@ synthetic result. `run.toml` is stamped in the kit run directory named by
 `kit.run_dir` next to `kit.pid`, or in `output_dir` when that directory
 already holds this package's `run.toml`.
 """
-function terminate_run!(
-        output_dir::AbstractString;
+function cancel!(
+        run_dir::AbstractString;
         grace::Real = 10,
         interrupt_grace::Union{Nothing, Real} = nothing,
         log_dir::Union{Nothing, AbstractString} = nothing,
@@ -2513,7 +2513,7 @@ function terminate_run!(
     _require_nonnegative("grace", grace)
     seconds = _resolve_interrupt_grace(interrupt_grace)
     _require_execute_kind!(kind)
-    d = canonical_local_path(output_dir)
+    d = canonical_local_path(run_dir)
     rec = _read_kit_pid_record(d)
     stop = nothing
     if rec !== nothing && kit_pid_file_running(d)

@@ -74,7 +74,7 @@ function go_main()::Cint
                 unsafe_expose_port = get(parsed, :unsafe_expose_port, missing),
                 unsafe_all_to_all = get(parsed, :unsafe_all_to_all, missing),
                 repeat = get(kw, :repeat, nothing),
-                run_id = get(parsed, :run_id, nothing),
+                ship_id = get(parsed, :ship_id, nothing),
                 remote = get(parsed, :deploy_root, nothing),
                 hint_surface = :cli,
                 original_args = original_args,

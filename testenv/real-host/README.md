@@ -93,7 +93,7 @@ julia --project=. --startup-file=no -m DistSSHRun hostinfo --verbose --hosts "$H
 
 ## 3. `setup ship-tree`
 
-Ship the **current repo** (`.`) into `runs/<run_id>/src/` under `ROOT`.
+Ship the **current repo** (`.`) into `ships/<ship_id>/src/` under `ROOT`.
 
 ```bash
 julia --project=. --startup-file=no -m DistSSHRun setup ship-tree \
@@ -105,10 +105,10 @@ must type `ship-tree`. A non-interactive run that does not answer prints
 `Cancelled.` and does not transfer (the process can still exit 0). `--yes`
 does not authorize `setup delete` or `setup prune`.
 
-**Success:** exit 0 and a line `ship-tree complete`. The following `Next:` lines name the run id (`runs/<id>/src`). The kit writes `last-ship.toml` beside this checkout for the same deploy root, so later steps can omit `--run-id` if you keep this tree and `ROOT` unchanged. `content_tree_hash` is the `hash=` value printed before the transfer when the confirm text is shown; with `--yes` that line is omitted and the hash is in the setup log under `.distssh/setup/`.
+**Success:** exit 0 and a line `ship-tree complete`. The following `Next:` lines name the ship id (`ships/<id>/src`). The kit writes `last-ship.toml` beside this checkout for the same deploy root, so later steps can omit `--ship-id` if you keep this tree and `ROOT` unchanged. `content_tree_hash` is the `hash=` value printed before the transfer when the confirm text is shown; with `--yes` that line is omitted and the hash is in the setup log under `.distssh/setup/`.
 
-Copy the **run id** from the log if you need it explicitly (timestamp-style
-directory name under `runs/`).
+Copy the **ship id** from the log if you need it explicitly (timestamp-style
+directory name under `ships/`).
 
 ## 4. `setup instantiate`
 
@@ -118,7 +118,7 @@ julia --project=. --startup-file=no -m DistSSHRun setup instantiate \
 ```
 
 If you shipped from a different deploy root or cleared `last-ship.toml`, add
-`--run-id ID` matching the ship step.
+`--ship-id ID` matching the ship step.
 
 **Success:** exit 0; remote project deps resolve on each host.
 
@@ -131,7 +131,7 @@ julia --project=. --startup-file=no -m DistSSHRun doctor --deploy \
   --deploy-root "$ROOT" --verbose --hosts "$HOSTS"
 ```
 
-Add `--run-id ID` when `last-ship.toml` does not match this pass.
+Add `--ship-id ID` when `last-ship.toml` does not match this pass.
 
 **Success:** exit 0; deploy prerequisites pass on each host.
 

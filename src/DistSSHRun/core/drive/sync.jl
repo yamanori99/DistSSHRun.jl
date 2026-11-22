@@ -7,14 +7,14 @@ Sync local project to SSH hosts (call explicitly; go/drive do not call this by d
 
 - `mode=:git_sync` — push the local branch to origin, then check out that commit on each remote as a detached HEAD. Does not run `git pull`. Requires an existing clone at `session.remote`; on a new target run `setup!(session, :git_clone; repo=...)` first. A dirty tree is refused unless `allow_dirty=true` (CLI `setup git-sync --skip-git-guard`; deploy record `dirty=true`).
 - `mode=:ship_tree` — pack the project (each directory's `.gitignore`) into a tar and extract under
-  `runs/<run_id>/src/`.
+  `ships/<ship_id>/src/`.
 
 API calls do not prompt. The setup CLI prompts unless `--yes`.
 
 Also available as `setup!(session, :ship_tree)` / `setup!(session, :git_sync)`.
 
 Returns [`SyncResult`](@ref). For `:ship_tree`, [`result_content_tree_hash`](@ref)
-and [`result_remote_run_id`](@ref) read that ship. Other modes return `nothing`.
+and [`result_ship_id`](@ref) read that ship. Other modes return `nothing`.
 """
 function sync!(
         session::DistSSHSession;
@@ -96,7 +96,7 @@ function _sync_result_from_ship(raw::ShipTreeResult)::SyncResult
             true, HostResult[];
             ok = false,
             content_tree_hash = raw.content_tree_hash,
-            run_id = raw.run_id,
+            ship_id = raw.ship_id,
         )
     end
     failed = count(hr -> !hr.ok, raw.host_results)
@@ -104,6 +104,6 @@ function _sync_result_from_ship(raw::ShipTreeResult)::SyncResult
         false, raw.host_results;
         ok = failed == 0,
         content_tree_hash = raw.content_tree_hash,
-        run_id = raw.run_id,
+        ship_id = raw.ship_id,
     )
 end

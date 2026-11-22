@@ -17,9 +17,9 @@ using Test
         @test occursin("fish and csh are unsupported", text)
         @test occursin("backslashes inside single quotes", text)
         @test occursin("must not start with '-'", text)
-        @test occursin("--run-id", text)
+        @test occursin("--ship-id", text)
         @test occursin("Lexical latest is not used", text)
-        @test !occursin("latest runs/<run_id>/src", text)
+        @test !occursin("latest runs/<ship_id>/src", text)
         @test occursin("Ship creates a missing remote_root", text)
         @test occursin("setup remote-root still requires an absolute", text)
         @test occursin("--deploy-root", text)
@@ -222,6 +222,16 @@ using Test
         @test occursin("help setup", err.msg)
         @test !occursin("--help", err.msg)
     end
+    let err_old = try
+            parse_setup_args(["instantiate", "--run-id", "20260101T000000Z-aaaaaa", "host1"])
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err_old isa ArgumentError
+        @test occursin("--ship-id", err_old.msg)
+        @test !occursin("unknown setup option", err_old.msg)
+    end
     let err = try
             parse_setup_args(["--help", "--not-a-flag"])
             error("expected ArgumentError")
@@ -305,11 +315,11 @@ using Test
         @test r.hosts == ["host1"]
     end
     let r = parse_setup_args(
-            ["instantiate", "--deploy-root", "/tmp/App.jl", "--run-id", "20260101T000000Z-aaaaaa", "h1"]
+            ["instantiate", "--deploy-root", "/tmp/App.jl", "--ship-id", "20260101T000000Z-aaaaaa", "h1"]
         )
         @test r.mode == :instantiate
         @test r.deploy_root == "/tmp/App.jl"
-        @test r.run_id == "20260101T000000Z-aaaaaa"
+        @test r.ship_id == "20260101T000000Z-aaaaaa"
     end
     let r = parse_setup_args(["--deploy-root", "/tmp/App.jl", "check", "h1"])
         @test r.mode == :check

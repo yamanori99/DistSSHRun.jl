@@ -999,8 +999,8 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     if sel !== nothing
         selection["source_kind"] = String(sel.source_kind)
         selection["deploy_root"] = sel.deploy_root
-        if sel.run_id !== nothing
-            selection["run_id"] = sel.run_id
+        if sel.ship_id !== nothing
+            selection["ship_id"] = sel.ship_id
         end
         if sel.content_tree_hash !== nothing
             selection["content_tree_hash"] = sel.content_tree_hash
@@ -1140,33 +1140,33 @@ function _blank_ship_string(value::Union{Nothing, AbstractString})::Union{Nothin
 end
 
 """
-    result_remote_run_id(result) -> Union{Nothing, String}
+    result_ship_id(result) -> Union{Nothing, String}
 
-Remote `runs/<run_id>/` id from this run's controller `run.toml`
-(`provenance.selection.run_id`), or `nothing` when neither a ship nor an active
+Remote `ships/<ship_id>/` id from this run's controller `run.toml`
+(`provenance.selection.ship_id`), or `nothing` when neither a ship nor an active
 snapshot selection recorded one.
 
 Schema stays 1. An absent or empty key means not recorded. This is not
 `DISTSSH_RUN_DIR`. `result` is a [`DriveResult`](@ref), [`GoResult`](@ref),
 or [`DistSSHJobResult`](@ref). A run that selected an existing completed
 snapshot (without shipping in-process) may still record that snapshot's
-`run_id`.
+`ship_id`.
 
 A [`SyncResult`](@ref) from `setup!` / `sync!` with `:ship_tree`, and a
-[`ShipTreeResult`](@ref) from [`ship_tree!`](@ref), return that remote `run_id`.
+[`ShipTreeResult`](@ref) from [`ship_tree!`](@ref), return that remote `ship_id`.
 Any other [`SyncResult`](@ref) returns `nothing`.
 """
-function result_remote_run_id(
+function result_ship_id(
         result::Union{DriveResult, GoResult, DistSSHJobResult},
     )::Union{Nothing, String}
-    return _result_selection_string(result, "run_id")
+    return _result_selection_string(result, "ship_id")
 end
 
-function result_remote_run_id(result::SyncResult)::Union{Nothing, String}
-    return _blank_ship_string(result.run_id)
+function result_ship_id(result::SyncResult)::Union{Nothing, String}
+    return _blank_ship_string(result.ship_id)
 end
 
-function result_remote_run_id(result::ShipTreeResult)::Union{Nothing, String}
-    return _blank_ship_string(result.run_id)
+function result_ship_id(result::ShipTreeResult)::Union{Nothing, String}
+    return _blank_ship_string(result.ship_id)
 end
-public result_remote_run_id
+public result_ship_id

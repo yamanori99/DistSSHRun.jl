@@ -15,7 +15,7 @@ function show_doctor_requirements(; io::IO = stdout)
         io,
         "  $(cli_m()) doctor",
         "  $(cli_m_project()) doctor --deploy host1 host2",
-        "  $(cli_m_project()) doctor --deploy --run-id ID host1",
+        "  $(cli_m_project()) doctor --deploy --ship-id ID host1",
     )
     print_help_blank(io)
     print_help_section("Options"; io = io)
@@ -23,7 +23,7 @@ function show_doctor_requirements(; io::IO = stdout)
         io,
         "  --deploy             required: full deploy prerequisite check",
         "  --deploy-root PATH   same as setup (remote deployment root)",
-        "  --run-id ID          runs/<ID>/ under that root",
+        "  --ship-id ID          ships/<ID>/ under that root",
         "  --julia PATH         remote Julia (default: auto / JULIA_DISTRIBUTED_EXE)",
         "  --ignore-julia-version  warn on Julia skew instead of failing",
         "  $(KIT_QUIET_FLAG_HELP)",
@@ -44,9 +44,9 @@ function parse_doctor_args(args::Vector{String}; env::ProcessEnv = snapshot_proc
     _reject_unknown_cli_options(
         args,
         "doctor";
-        valued = (DEPLOY_ROOT_FLAG, "--run-id", "--julia"),
+        valued = (DEPLOY_ROOT_FLAG, "--ship-id", "--julia"),
         known = (
-            "--deploy", "--ignore-julia-version",
+            "--deploy", "--ignore-julia-version", "--run-id",
             "-h", "--help", "--",
         ),
         bare_dash = true,
@@ -55,7 +55,7 @@ function parse_doctor_args(args::Vector{String}; env::ProcessEnv = snapshot_proc
     deploy = false
     julia_path = get(env, "JULIA_DISTRIBUTED_EXE", "auto")
     deploy_root = nothing
-    run_id = nothing
+    ship_id = nothing
     hosts = String[]
     show_help = false
     ignore_julia_version = false
@@ -86,9 +86,11 @@ function parse_doctor_args(args::Vector{String}; env::ProcessEnv = snapshot_proc
                 deploy_root, _take_deploy_root!(c), "doctor",
             )
         elseif arg == "--run-id"
+            reject_legacy_run_cli_flag!(arg, "doctor")
+        elseif arg == "--ship-id"
             raw = String(strip(cli_take_value!(c, arg)))
-            isempty(raw) && throw(ArgumentError("--run-id needs a non-empty id"))
-            run_id = raw
+            isempty(raw) && throw(ArgumentError("--ship-id needs a non-empty id"))
+            ship_id = raw
         elseif arg == "--julia"
             julia_path = cli_take_value!(c, arg)
         elseif arg == "--ignore-julia-version"
@@ -112,7 +114,7 @@ function parse_doctor_args(args::Vector{String}; env::ProcessEnv = snapshot_proc
         deploy = deploy,
         julia_path = julia_path,
         deploy_root = deploy_root,
-        run_id = run_id,
+        ship_id = ship_id,
         hosts = hosts,
         show_help = show_help,
         ignore_julia_version = ignore_julia_version,

@@ -377,7 +377,7 @@ end
         @test occursin("if ! printf \"%s\\n\" \"\$_f\" > \"\$_mark\"", owned_sh)
         mktempdir() do d
             root = joinpath(d, "app")
-            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            leaf = joinpath(root, "ships", "20260101T000000Z-abcd")
             mkpath(joinpath(leaf, "src"))
             write(
                 joinpath(leaf, "run.toml"),
@@ -595,7 +595,7 @@ end
             )
             mkpath(joinpath(root, "src"))
             write(joinpath(root, "src", "run.toml"), "name = \"job\"\n")
-            ship = joinpath(root, "runs", "20260101T000000Z-abcd", "src", "src")
+            ship = joinpath(root, "ships", "20260101T000000Z-abcd", "src", "src")
             mkpath(ship)
             write(joinpath(ship, "run.toml"), "name = \"job\"\n")
             err = IOBuffer()
@@ -616,10 +616,30 @@ end
         end
     end
 
+    @testset "delete shell refuses an unowned runs leaf stamp" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            mkpath(joinpath(leaf, "src"))
+            write(
+                joinpath(leaf, "run.toml"),
+                "schema = 1\nwriter = \"Other 9.9.9\"\nkind = \"ship\"\n"
+            )
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(pipeline(`sh -c $(DistSSHRun._remote_delete_shell(root))`; stdout = devnull, stderr = err));
+                wait = true
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isdir(leaf)
+        end
+    end
+
     @testset "delete shell refuses a stamp path with a newline" begin
         mktempdir() do d
             root = joinpath(d, "app")
-            weird = joinpath(root, "runs", "id\nleaf")
+            weird = joinpath(root, "ships", "id\nleaf")
             mkpath(weird)
             write(joinpath(weird, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
             err = IOBuffer()
@@ -636,14 +656,14 @@ end
     @testset "delete shell refuses a star-newline leaf even with decoy stamps" begin
         mktempdir() do d
             root = joinpath(d, "app")
-            leaf = joinpath(root, "runs", "*\n*")
+            leaf = joinpath(root, "ships", "*\n*")
             mkpath(leaf)
             write(
                 joinpath(leaf, "run.toml"),
                 "schema = 1\nwriter = \"Other 1.0\"\nkind = \"ship\"\n"
             )
-            # Line-splitting this path yields `<root>/runs/*` and `*/run.toml`.
-            write(joinpath(root, "runs", "*"), DistSSHRun._ship_run_leaf_stamp_toml())
+            # Line-splitting this path yields `<root>/ships/*` and `*/run.toml`.
+            write(joinpath(root, "ships", "*"), DistSSHRun._ship_run_leaf_stamp_toml())
             cwd = joinpath(d, "cwd")
             mkpath(joinpath(cwd, "*"))
             write(joinpath(cwd, "*", "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
@@ -668,7 +688,7 @@ end
     @testset "delete shell rejects unclosed quotes and brackets" begin
         mktempdir() do d
             root = joinpath(d, "app")
-            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            leaf = joinpath(root, "ships", "20260101T000000Z-abcd")
             mkpath(leaf)
             owned = DistSSHRun._ship_run_leaf_stamp_toml()
             for extra in (
@@ -716,7 +736,7 @@ end
     @testset "delete shell refuses a non-regular run.toml" begin
         mktempdir() do d
             root = joinpath(d, "app")
-            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            leaf = joinpath(root, "ships", "20260101T000000Z-abcd")
             mkpath(leaf)
             mkdir(joinpath(leaf, "run.toml"))
             err = IOBuffer()
@@ -736,7 +756,7 @@ end
         end
         mktempdir() do d
             root = joinpath(d, "app")
-            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            leaf = joinpath(root, "ships", "20260101T000000Z-abcd")
             mkpath(leaf)
             run(`mkfifo $(joinpath(leaf, "run.toml"))`)
             err = IOBuffer()
@@ -886,7 +906,7 @@ end
         mktempdir() do d
             gitroot = joinpath(d, "Repo")
             app = joinpath(gitroot, "App")
-            leaf = joinpath(app, "runs", "20260101T000000Z-abcd")
+            leaf = joinpath(app, "ships", "20260101T000000Z-abcd")
             mkpath(leaf)
             write(joinpath(leaf, "run.toml"), "name = \"job\"\n")
             err = IOBuffer()
@@ -922,7 +942,7 @@ end
         mktempdir() do d
             gitroot = joinpath(d, "Repo")
             app = joinpath(gitroot, "App")
-            decoy = joinpath(gitroot, "runs", "20260101T000000Z-abcd")
+            decoy = joinpath(gitroot, "ships", "20260101T000000Z-abcd")
             mkpath(decoy)
             write(joinpath(decoy, "run.toml"), "name = \"job\"\n")
             proc = run(
@@ -942,7 +962,7 @@ end
             gitroot = joinpath(d, "Repo")
             app = joinpath(d, "OtherApp")
             mkpath(gitroot)
-            leaf = joinpath(app, "runs", "20260101T000000Z-abcd")
+            leaf = joinpath(app, "ships", "20260101T000000Z-abcd")
             mkpath(leaf)
             write(joinpath(leaf, "run.toml"), "name = \"job\"\n")
             proc = run(
@@ -964,13 +984,14 @@ end
     @testset "delete shell ignores a project run.toml under the shipped src tree" begin
         delete_sh = DistSSHRun._remote_delete_shell("/tmp/app")
         @test occursin("-mindepth 2 -maxdepth 2", delete_sh)
-        @test occursin("""_dsk_first_unowned_stamp "\$_root" ship""", delete_sh)
+        @test occursin("""_dsk_first_unowned_stamp "\$_root" "\$_layout\"""", delete_sh)
+        @test occursin("for _layout in ships runs", delete_sh)
         prune_sh = DistSSHRun._prune_remote_shell("/tmp/app")
         @test occursin("""_bad=\$(_dsk_first_unowned_stamp "\$_child")""", prune_sh)
-        @test !occursin("""_dsk_first_unowned_stamp "\$_child" ship""", prune_sh)
+        @test !occursin("""_dsk_first_unowned_stamp "\$_child" ships""", prune_sh)
         mktempdir() do d
             root = joinpath(d, "app")
-            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            leaf = joinpath(root, "ships", "20260101T000000Z-abcd")
             mkpath(joinpath(leaf, "src", "src"))
             write(joinpath(leaf, "src", "run.toml"), "name = \"job\"\n")
             write(joinpath(leaf, "src", "src", "run.toml"), "name = \"job\"\n")
@@ -990,7 +1011,7 @@ end
         end
         mktempdir() do d
             root = joinpath(d, "app")
-            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            leaf = joinpath(root, "ships", "20260101T000000Z-abcd")
             mkpath(joinpath(leaf, "src", "src"))
             write(joinpath(leaf, "src", "src", "run.toml"), "name = \"job\"\n")
             proc = run(
@@ -1008,7 +1029,7 @@ end
         end
         mktempdir() do d
             root = joinpath(d, "app")
-            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            leaf = joinpath(root, "ships", "20260101T000000Z-abcd")
             mkpath(joinpath(leaf, "src"))
             write(joinpath(leaf, "src", "run.toml"), "name = \"job\"\n")
             write(
@@ -1060,7 +1081,7 @@ end
     @testset "delete shell still fails closed when the ship-leaf scan errors" begin
         mktempdir() do d
             root = joinpath(d, "app")
-            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            leaf = joinpath(root, "ships", "20260101T000000Z-abcd")
             mkpath(leaf)
             write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
             fake = joinpath(d, "bin")
@@ -1125,7 +1146,7 @@ end
         end
     end
 
-    @testset "delete shell refuses a symlink runs directory" begin
+    @testset "delete shell refuses a symlink ships directory" begin
         mktempdir() do d
             root = joinpath(d, "app")
             store = joinpath(d, "run_store")
@@ -1133,7 +1154,7 @@ end
             mkpath(root)
             mkpath(leaf)
             write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
-            symlink(store, joinpath(root, "runs"))
+            symlink(store, joinpath(root, "ships"))
             err = IOBuffer()
             proc = run(
                 ignorestatus(
@@ -1148,13 +1169,13 @@ end
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test isdir(leaf)
-            @test islink(joinpath(root, "runs"))
+            @test islink(joinpath(root, "ships"))
             @test isfile(joinpath(leaf, "run.toml"))
         end
         mktempdir() do d
             root = joinpath(d, "app")
             mkpath(root)
-            symlink(joinpath(d, "missing_store"), joinpath(root, "runs"))
+            symlink(joinpath(d, "missing_store"), joinpath(root, "ships"))
             err = IOBuffer()
             proc = run(
                 ignorestatus(
@@ -1168,16 +1189,16 @@ end
             )
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
-            @test islink(joinpath(root, "runs"))
+            @test islink(joinpath(root, "ships"))
             @test isdir(root)
         end
         mktempdir() do d
             root = joinpath(d, "app")
             leaf = joinpath(root, "run_store", "20260101T000000Z-abcd")
-            mkpath(joinpath(root, "runs"))
+            mkpath(joinpath(root, "ships"))
             mkpath(leaf)
             write(joinpath(leaf, "run.toml"), "name = \"job\"\n")
-            symlink(leaf, joinpath(root, "runs", "20260101T000000Z-abcd"))
+            symlink(leaf, joinpath(root, "ships", "20260101T000000Z-abcd"))
             err = IOBuffer()
             proc = run(
                 ignorestatus(
@@ -1192,7 +1213,7 @@ end
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test isdir(leaf)
-            @test islink(joinpath(root, "runs", "20260101T000000Z-abcd"))
+            @test islink(joinpath(root, "ships", "20260101T000000Z-abcd"))
             @test isfile(joinpath(leaf, "run.toml"))
         end
     end
@@ -1200,7 +1221,7 @@ end
     @testset "ownership scans refuse a symlinked run.toml" begin
         mktempdir() do d
             root = joinpath(d, "app")
-            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            leaf = joinpath(root, "ships", "20260101T000000Z-abcd")
             mkpath(joinpath(leaf, "src"))
             outside = joinpath(d, "stamp.toml")
             write(outside, DistSSHRun._ship_run_leaf_stamp_toml())
@@ -1224,7 +1245,7 @@ end
         end
         mktempdir() do d
             root = joinpath(d, "app")
-            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            leaf = joinpath(root, "ships", "20260101T000000Z-abcd")
             mkpath(leaf)
             symlink(joinpath(d, "missing.toml"), joinpath(leaf, "run.toml"))
             err = IOBuffer()

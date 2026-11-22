@@ -85,11 +85,11 @@ if !isdefined(@__MODULE__, :_ssh_e2e_enabled)
         return nothing
     end
 
-    # Latest `runs/*/src` on `host` (docker SSH `-F`, not kit `ssh_opts`).
+    # Latest `ships/*/src` on `host` (docker SSH `-F`, not kit `ssh_opts`).
     function _ssh_e2e_work_root(host::AbstractString, remote_root::AbstractString)::String
         proc, out = _ssh_e2e_ssh(
             host,
-            "ls -1d $(remote_root)/runs/*/src 2>/dev/null | sort | tail -n 1"
+            "ls -1d $(remote_root)/ships/*/src 2>/dev/null | sort | tail -n 1"
         )
         s = strip(out)
         proc.exitcode == 0 && !isempty(s) && return s

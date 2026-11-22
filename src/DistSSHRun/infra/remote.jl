@@ -67,7 +67,7 @@ function _pkill_remote_julia_workers!(host::String)::Bool
     return true
 end
 
-# Visible on worker / go-slot argv so `pkill -f` can be run-scoped (see `terminate!`).
+# Visible on worker / go-slot argv so `pkill -f` can be run-scoped (see `cancel!`).
 const KIT_JOB_CMDLINE_MARK::String = "distsshkit-job:"
 
 """`DISTSSH_JOB_ID` if set and non-empty. Restricted charset for `pkill -f`."""

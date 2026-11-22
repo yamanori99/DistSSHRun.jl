@@ -30,6 +30,7 @@ const RUN_JOB_COMMANDS = (:go, :drive)
 """Legacy CLI spellings → current flag (no aliases at runtime)."""
 const LEGACY_CLI_FLAGS = Dict{String, String}(
     "--unsafe-heterogeneous" => "--unsafe-skip-env-digests",
+    "--run-id" => "--ship-id",
 )
 
 function _bool_env(name::AbstractString; env::ProcessEnv)::Union{Nothing, Bool}

@@ -17,8 +17,8 @@ public SetupWarning
 """Outcome of `sync!` (rsync or git sync). `cancelled` is set when a confirm prompt is aborted.
 
 `warnings` is empty except for `setup!(session, :check)`, which records each warning it printed.
-[`result_content_tree_hash`](@ref) and [`result_remote_run_id`](@ref) read the
-ship hash and remote `run_id` from a `:ship_tree` result, and return `nothing`
+[`result_content_tree_hash`](@ref) and [`result_ship_id`](@ref) read the
+ship hash and remote `ship_id` from a `:ship_tree` result, and return `nothing`
 for any other mode. Fields are not API.
 """
 struct SyncResult
@@ -27,16 +27,16 @@ struct SyncResult
     cancelled::Bool
     warnings::Vector{SetupWarning}
     content_tree_hash::Union{Nothing, String}
-    run_id::Union{Nothing, String}
+    ship_id::Union{Nothing, String}
     function SyncResult(
             ok::Bool,
             hosts::Vector{HostResult},
             cancelled::Bool,
             warnings::Vector{SetupWarning} = SetupWarning[],
             content_tree_hash::Union{Nothing, String} = nothing,
-            run_id::Union{Nothing, String} = nothing,
+            ship_id::Union{Nothing, String} = nothing,
         )
-        return new(ok, hosts, cancelled, warnings, content_tree_hash, run_id)
+        return new(ok, hosts, cancelled, warnings, content_tree_hash, ship_id)
     end
 end
 
@@ -204,7 +204,7 @@ Convert with [`kit_run_result`](@ref).
 `hosts` is post-run collect ([`HostRunResult`](@ref)); empty for `go`, hung
 `wait`, or a `drive` that never collected.
 
-`stop` is the [`terminate!`](@ref) / [`terminate_run!`](@ref) ladder outcome.
+`stop` is the [`cancel!`](@ref) ladder outcome.
 `nothing` on a run that was not stopped that way. `:within_grace` means one
 SIGINT was sent and the process was gone before SIGTERM, so workers had that
 `interrupt_grace` window. `:sigterm` and `:sigkill` mean that window ended
@@ -217,7 +217,7 @@ there too. Writer `major.minor` must match this package. An unknown `stop` strin
 `run_dir` is this run's `DISTSSH_RUN_DIR` when one is known. Read it
 with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
 `run.toml` from it. [`result_content_tree_hash`](@ref) and
-[`result_remote_run_id`](@ref) read `provenance.selection` in that file.
+[`result_ship_id`](@ref) read `provenance.selection` in that file.
 Result fields and positional constructors are not API. Result structs are
 not a stable serialization format. `serialize` and JLD2 of a result are
 unsupported. The supported record is `kit.result`.
@@ -300,7 +300,7 @@ the order results were collected. Empty when no host-collection step ran
 `run_dir` is this run's `DISTSSH_RUN_DIR` when the driver allocated one.
 Read it with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
 `run.toml` from it. [`result_content_tree_hash`](@ref) and
-[`result_remote_run_id`](@ref) read `provenance.selection` in that file.
+[`result_ship_id`](@ref) read `provenance.selection` in that file.
 
 Result fields and positional constructors are not API. Result structs are
 not a stable serialization format. `serialize` and JLD2 of a result are
@@ -396,7 +396,7 @@ mutable struct PipelineConfig
     package::Union{Nothing, String}
     julia::Union{Nothing, String}
     head_workers::Union{Nothing, Int}
-    run_id::Union{Nothing, String}
+    ship_id::Union{Nothing, String}
     best_effort::Bool
     process_env::ProcessEnv
     isolated::Bool
@@ -422,7 +422,7 @@ function PipelineConfig(;
         log_dir::Union{Nothing, AbstractString} = nothing,
         package::Union{Nothing, AbstractString} = nothing,
         julia::Union{Nothing, AbstractString} = nothing,
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         best_effort::Bool = false,
         process_env::ProcessEnv = snapshot_process_env(),
         isolated::Bool = false,
@@ -447,7 +447,7 @@ function PipelineConfig(;
     else
         String(julia)
     end
-    snap = run_id === nothing ? nothing : validate_run_id(run_id)
+    snap = ship_id === nothing ? nothing : validate_ship_id(ship_id)
     return PipelineConfig(
         canonical_local_path(project),
         String[String(t) for t in workers],
@@ -610,12 +610,12 @@ function SyncResult(
         ok::Union{Nothing, Bool} = nothing,
         warnings::Vector{SetupWarning} = SetupWarning[],
         content_tree_hash::Union{Nothing, String} = nothing,
-        run_id::Union{Nothing, String} = nothing,
+        ship_id::Union{Nothing, String} = nothing,
     )
     if ok === nothing
         ok = !cancelled && all(hr.ok for hr in host_results)
     end
     return SyncResult(
-        ok, host_results, cancelled, warnings, content_tree_hash, run_id,
+        ok, host_results, cancelled, warnings, content_tree_hash, ship_id,
     )
 end

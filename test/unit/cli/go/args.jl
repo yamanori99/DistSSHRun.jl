@@ -166,7 +166,7 @@ using Test
         @test err_ship isa ArgumentError
         @test occursin("go: --ship-tree was removed", err_ship.msg)
         @test occursin("setup ship-tree", err_ship.msg)
-        @test occursin("--run-id", err_ship.msg)
+        @test occursin("--ship-id", err_ship.msg)
         DistSSHRun.DistSSHBase.with_cli_entry(:DistSSHQueue) do
             qerr = try
                 parse_go_args(["--ship-tree", "1*h1", "job.jl"])
@@ -252,6 +252,20 @@ using Test
             ["--gb-per-worker", "1.5", "parent", "job.jl"]
         )
         @test_throws ArgumentError parse_go_args(["--julia"])
+        let r = parse_go_args(["--ship-id", "20260101T000000Z-aaaaaa", "--head-slots", "1", "job.jl"])
+            @test r.ship_id == "20260101T000000Z-aaaaaa"
+        end
+        let err_old = try
+                parse_go_args(["--run-id", "20260101T000000Z-aaaaaa", "--head-slots", "1", "job.jl"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test err_old isa ArgumentError
+            @test occursin("DSSH-E001", err_old.msg)
+            @test occursin("--ship-id", err_old.msg)
+            @test !occursin("unknown option", err_old.msg)
+        end
     end
 
     @testset "--repeat" begin
@@ -273,8 +287,8 @@ using Test
         @test !occursin("--skip-sync", txt)
         @test !occursin("--ship-tree", txt)
         @test occursin("setup ship-tree", txt)
-        @test occursin("--run-id", txt)
-        @test occursin("runs/<ID>/src", txt)
+        @test occursin("--ship-id", txt)
+        @test occursin("ships/<ID>/src", txt)
         @test occursin("--hosts", txt)
         @test occursin("--repeat", txt)
         @test occursin("--unsafe-skip-env-digests", txt)

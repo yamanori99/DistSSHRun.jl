@@ -1,4 +1,4 @@
-# Long enough for E2E to kill or terminate! a detached SSH drive.
+# Long enough for E2E to kill or cancel! a detached SSH drive.
 using Distributed
 
 function main()

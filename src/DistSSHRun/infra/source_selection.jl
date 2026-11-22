@@ -1,23 +1,23 @@
 # Explicit source selection, local ship record, and host validation.
-# Run IDs are remote `runs/<run_id>/` leaves under the resolved deploy root.
+# Ship IDs are remote `ships/<ship_id>/` leaves under the resolved deploy root.
 
 const _LAST_SHIP_WRITER_FIX = """
 Rewrite or delete the file under `.distssh/` (legacy `last-snapshot.toml` is not read).
-Ship again, or pass an explicit run id instead of the convenience record."""
+Ship again, or pass an explicit ship id instead of the convenience record."""
 const _SHIP_RECORD_NAME = "last-ship.toml"
 const _SHIP_RECORD_LOCK = ReentrantLock()
 
 """Resolved source for preparation, execution, and collect path mapping."""
 struct SourceSelection
     source_kind::Symbol
-    run_id::Union{Nothing, String}
+    ship_id::Union{Nothing, String}
     deploy_root::String
     work_root::String
     content_tree_hash::Union{Nothing, String}
     hosts::Vector{String}
     function SourceSelection(
             source_kind::Symbol,
-            run_id::Union{Nothing, String},
+            ship_id::Union{Nothing, String},
             deploy_root::AbstractString,
             work_root::AbstractString,
             content_tree_hash::Union{Nothing, String},
@@ -32,7 +32,7 @@ struct SourceSelection
         end
         return new(
             source_kind,
-            run_id,
+            ship_id,
             String(deploy_root),
             String(work_root),
             content_tree_hash,
@@ -45,7 +45,7 @@ public SourceSelection
 function Base.show(io::IO, sel::SourceSelection)
     print(io, "SourceSelection(")
     print(io, "source_kind=", repr(sel.source_kind))
-    print(io, ", run_id=", repr(sel.run_id))
+    print(io, ", ship_id=", repr(sel.ship_id))
     print(io, ", deploy_root=", repr(sel.deploy_root))
     print(io, ", work_root=", repr(sel.work_root))
     print(io, ", content_tree_hash=", repr(sel.content_tree_hash))
@@ -60,11 +60,11 @@ function _valid_content_tree_hash(hash::AbstractString)::Bool
     return occursin(_CONTENT_TREE_HASH_RE, String(hash))
 end
 
-function _ship_run_src_logical(deploy_root::AbstractString, run_id::AbstractString)::String
-    return _posix_join(String(deploy_root), "runs", validate_run_id(run_id), "src")
+function _ship_run_src_logical(deploy_root::AbstractString, ship_id::AbstractString)::String
+    return _posix_join(String(deploy_root), "ships", validate_ship_id(ship_id), "src")
 end
 
-"""Relative project directory inside `runs/<id>/src`. `"."` is the tar root."""
+"""Relative project directory inside `ships/<id>/src`. `"."` is the tar root."""
 function _ship_project_rel(project_rel::AbstractString)::String
     rel = replace(String(project_rel), '\\' => '/')
     rel == "." && return rel
@@ -85,16 +85,16 @@ end
 
 function _ship_run_project_logical(
         deploy_root::AbstractString,
-        run_id::AbstractString,
+        ship_id::AbstractString,
         project_rel::AbstractString,
     )::String
-    src = _ship_run_src_logical(deploy_root, run_id)
+    src = _ship_run_src_logical(deploy_root, ship_id)
     rel = _ship_project_rel(project_rel)
     return rel == "." ? src : _posix_join(src, rel)
 end
 
-function _ship_run_leaf_logical(deploy_root::AbstractString, run_id::AbstractString)::String
-    return _posix_join(String(deploy_root), "runs", validate_run_id(run_id))
+function _ship_run_leaf_logical(deploy_root::AbstractString, ship_id::AbstractString)::String
+    return _posix_join(String(deploy_root), "ships", validate_ship_id(ship_id))
 end
 
 function _ship_record_dir(env_dir::AbstractString)::String
@@ -156,8 +156,8 @@ function _read_last_ship_record_at(path::AbstractString)::Union{Nothing, Dict{St
         ),
     )
     out = Dict{String, Any}(String(k) => v for (k, v) in raw)
-    rid = get(out, "run_id", nothing)
-    rid isa AbstractString || throw(ArgumentError("last-ship record is missing run_id"))
+    rid = get(out, "ship_id", nothing)
+    rid isa AbstractString || throw(ArgumentError("last-ship record is missing ship_id"))
     return out
 end
 
@@ -202,25 +202,25 @@ Write the local last-ship convenience record under `.distssh/last-ship.toml`.
 
 Keyed by local package `env_dir` and the resolved deployment root. Stores the
 successful host aliases from this ship. Another local deployer can overwrite
-this file between commands; pass the returned run id instead of rereading it in
+this file between commands; pass the returned ship id instead of rereading it in
 programmatic workflows. Does not detect local source changes.
 """
 function write_last_ship_record!(
         env_dir::AbstractString,
         deploy_root::AbstractString,
         hosts::AbstractVector{<:AbstractString},
-        run_id::AbstractString;
+        ship_id::AbstractString;
         content_tree_hash::Union{Nothing, AbstractString} = nothing,
         project_rel::Union{Nothing, AbstractString} = nothing,
     )::String
-    rid = validate_run_id(run_id)
+    rid = validate_ship_id(ship_id)
     aliases = _sorted_host_aliases(hosts)
     isempty(aliases) && throw(ArgumentError("last-ship record needs at least one host"))
     data = Dict{String, Any}(
         "writer" => run_record_writer(),
         "deploy_root" => _normalize_deploy_root(deploy_root),
         "hosts" => aliases,
-        "run_id" => rid,
+        "ship_id" => rid,
         "written_at" => Dates.format(Dates.now(Dates.UTC), dateformat"yyyy-mm-ddTHH:MM:SS") * "Z",
     )
     rel = _ship_project_rel(something(project_rel, "."))
@@ -273,7 +273,7 @@ end
 
 Call after a successful `:delete`, `:git_clone`, `:git_sync`, or `:git_pull` so a later
 instantiate / check / go / drive can select a git checkout at that root. Does
-not delete remote `runs/<id>/` leaves. An explicit `--run-id` still works.
+not delete remote `ships/<id>/` leaves. An explicit `--ship-id` still works.
 Also clears this process's ship cache when it targeted the same deploy root.
 `/srv/app` and `/srv/app/` are the same root.
 """
@@ -389,9 +389,9 @@ end
 function _probe_ship_run_complete(
         host::AbstractString,
         deploy_root::AbstractString,
-        run_id::AbstractString,
+        ship_id::AbstractString,
     )::NamedTuple
-    rid = validate_run_id(run_id)
+    rid = validate_ship_id(ship_id)
     abs_root = try
         _probe_expanded_remote_root(host, deploy_root)
     catch e
@@ -404,7 +404,7 @@ function _probe_ship_run_complete(
             project_rel = nothing,
         )
     end
-    leaf = _posix_join(abs_root, "runs", rid)
+    leaf = _posix_join(abs_root, "ships", rid)
     src = _posix_join(leaf, "src")
     stamp = _posix_join(leaf, "run.toml")
     script = _ship_run_complete_probe_script(leaf, src, stamp)
@@ -493,9 +493,9 @@ end
 function _validate_ship_run_on_hosts!(
         hosts::AbstractVector{<:AbstractString},
         deploy_root::AbstractString,
-        run_id::AbstractString,
+        ship_id::AbstractString,
     )
-    rid = validate_run_id(run_id)
+    rid = validate_ship_id(ship_id)
     isempty(hosts) && throw(_selection_error("source selection needs at least one host"))
     hash = nothing
     project_rel = nothing
@@ -562,7 +562,7 @@ function _validate_git_on_hosts!(
         _selection_error(
             "no completed ship selection and deploy root has no Project.toml on: " *
                 join(missing, ", ") *
-                ". Pass --run-id ID after setup ship-tree, or deploy a git checkout.",
+                ". Pass --ship-id ID after setup ship-tree, or deploy a git checkout.",
         ),
     )
     return nothing
@@ -571,7 +571,7 @@ end
 """
 Resolve the remote project work root for `hosts` under `deploy_root`.
 
-`run_id` is an explicit run ID (never falls back). When omitted, a local
+`ship_id` is an explicit run ID (never falls back). When omitted, a local
 last-ship record may supply the ID. Otherwise a git checkout at the deploy
 root is used when every host has `Project.toml` there. Lexical latest
 `runs/*/src` is not consulted.
@@ -580,15 +580,15 @@ function resolve_source_selection(
         hosts::AbstractVector{<:AbstractString},
         deploy_root::AbstractString,
         local_project::AbstractString;
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         skip_local_record::Bool = false,
         skip_deploy_record::Bool = false,
     )::SourceSelection
     deploy = String(deploy_root)
     host_list = String[String(h) for h in hosts]
     env = resolve_pkg_env(local_project)
-    if run_id !== nothing
-        rid = validate_run_id(run_id)
+    if ship_id !== nothing
+        rid = validate_ship_id(ship_id)
         checked = _validate_ship_run_on_hosts!(host_list, deploy, rid)
         if !skip_deploy_record
             try
@@ -617,36 +617,36 @@ function resolve_source_selection(
     end
     rec = skip_local_record ? nothing : read_last_ship_record(env.env_dir)
     if rec !== nothing && _record_matches_selection(rec, deploy, host_list)
-        rid_raw = get(rec, "run_id", nothing)
+        rid_raw = get(rec, "ship_id", nothing)
         rid_raw isa AbstractString || throw(
             _selection_error(
-                "local last-ship record is missing run_id; pass --run-id ID",
+                "local last-ship record is missing ship_id; pass --ship-id ID",
             ),
         )
-        rid = validate_run_id(rid_raw)
+        rid = validate_ship_id(rid_raw)
         checked = _validate_ship_run_on_hosts!(host_list, deploy, rid)
         hash = checked.hash
         stored_hash = get(rec, "content_tree_hash", nothing)
         stored = stored_hash isa AbstractString ? strip(String(stored_hash)) : ""
         isempty(stored) && throw(
             _selection_error(
-                "local last-ship record has no content_tree_hash; pass --run-id ID",
+                "local last-ship record has no content_tree_hash; pass --ship-id ID",
             ),
         )
         _valid_content_tree_hash(stored) || throw(
             _selection_error(
-                "local last-ship record content_tree_hash is not a 40-digit git-sha1 value; pass --run-id ID",
+                "local last-ship record content_tree_hash is not a 40-digit git-sha1 value; pass --ship-id ID",
             ),
         )
         stored == hash || throw(
             _selection_error(
-                "local last-ship record content_tree_hash $(stored) does not match remote $(hash); pass --run-id ID",
+                "local last-ship record content_tree_hash $(stored) does not match remote $(hash); pass --ship-id ID",
             ),
         )
         stored_rel = get(rec, "project_rel", ".")
         stored_rel isa AbstractString || throw(
             _selection_error(
-                "local last-ship record project_rel is not a relative directory; pass --run-id ID",
+                "local last-ship record project_rel is not a relative directory; pass --ship-id ID",
             ),
         )
         try
@@ -654,13 +654,13 @@ function resolve_source_selection(
         catch
             throw(
                 _selection_error(
-                    "local last-ship record project_rel is not a relative directory; pass --run-id ID",
+                    "local last-ship record project_rel is not a relative directory; pass --ship-id ID",
                 ),
             )
         end
         String(stored_rel) == checked.project_rel || throw(
             _selection_error(
-                "local last-ship record project_rel $(stored_rel) does not match remote $(checked.project_rel); pass --run-id ID",
+                "local last-ship record project_rel $(stored_rel) does not match remote $(checked.project_rel); pass --ship-id ID",
             ),
         )
         return SourceSelection(
@@ -684,7 +684,7 @@ function resolve_source_selection(
                     !_hosts_covered(String[String(h) for h in stored_hosts], host_list)
                 throw(
                     _selection_error(
-                        "local last-ship record hosts $(stored_hosts) do not cover $(host_list); pass --run-id ID",
+                        "local last-ship record hosts $(stored_hosts) do not cover $(host_list); pass --ship-id ID",
                     ),
                 )
             end
@@ -709,7 +709,7 @@ function _controller_collect_source()
     raw = read_kit_run_toml(rd)
     raw === nothing && throw(
         _selection_error(
-            "controller run.toml at $(path) is unreadable; pass --run-id ID (legacy metadata cannot recover the original source)",
+            "controller run.toml at $(path) is unreadable; pass --ship-id ID (legacy metadata cannot recover the original source)",
         ),
     )
     _kit_run_toml_owned(raw) || throw(
@@ -721,7 +721,7 @@ function _controller_collect_source()
     if !(prov isa AbstractDict)
         throw(
             _selection_error(
-                "controller run.toml has no provenance.selection; pass --run-id ID (legacy metadata cannot recover the original source)",
+                "controller run.toml has no provenance.selection; pass --ship-id ID (legacy metadata cannot recover the original source)",
             ),
         )
     end
@@ -732,14 +732,14 @@ function _controller_collect_source()
     if !(selection isa AbstractDict)
         throw(
             _selection_error(
-                "controller run.toml has no provenance.selection; pass --run-id ID (legacy metadata cannot recover the original source)",
+                "controller run.toml has no provenance.selection; pass --ship-id ID (legacy metadata cannot recover the original source)",
             ),
         )
     end
     kind_s = get(selection, "source_kind", nothing)
     deploy = get(selection, "deploy_root", nothing)
     work = get(selection, "work_root", nothing)
-    rid_raw = get(selection, "run_id", nothing)
+    rid_raw = get(selection, "ship_id", nothing)
     hash_raw = get(selection, "content_tree_hash", nothing)
     source_kind = if kind_s isa AbstractString && String(kind_s) == "git"
         :git
@@ -749,13 +749,13 @@ function _controller_collect_source()
         :ship
     end
     rid = if rid_raw isa AbstractString && !isempty(strip(String(rid_raw)))
-        validate_run_id(rid_raw)
+        validate_ship_id(rid_raw)
     else
         nothing
     end
     source_kind === :ship && rid === nothing && throw(
         _selection_error(
-            "controller provenance.selection has no run_id; pass --run-id ID (legacy metadata cannot recover the original source)",
+            "controller provenance.selection has no ship_id; pass --ship-id ID (legacy metadata cannot recover the original source)",
         ),
     )
     deploy_s = deploy isa AbstractString && !isempty(strip(String(deploy))) ?
@@ -766,7 +766,7 @@ function _controller_collect_source()
         h = String(hash_raw)
         _valid_content_tree_hash(h) || throw(
             _selection_error(
-                "controller provenance.selection content_tree_hash is not a 40-digit git-sha1 value; pass --run-id ID",
+                "controller provenance.selection content_tree_hash is not a 40-digit git-sha1 value; pass --ship-id ID",
             ),
         )
         h
@@ -775,7 +775,7 @@ function _controller_collect_source()
     end
     return (
         source_kind = source_kind,
-        run_id = rid,
+        ship_id = rid,
         deploy_root = deploy_s,
         work_root = work_s,
         content_tree_hash = hash_s,
@@ -786,7 +786,7 @@ end
 function _collect_source_plan(
         explicit::Union{Nothing, AbstractString},
     )::NamedTuple{
-        (:run_id, :skip_local_record, :deploy_root, :content_tree_hash),
+        (:ship_id, :skip_local_record, :deploy_root, :content_tree_hash),
         Tuple{
             Union{Nothing, String},
             Bool,
@@ -794,24 +794,24 @@ function _collect_source_plan(
             Union{Nothing, String},
         },
     }
-    snap = explicit === nothing ? nothing : validate_run_id(explicit)
+    snap = explicit === nothing ? nothing : validate_ship_id(explicit)
     src = _controller_collect_source()
     src === nothing && return (
-        run_id = snap,
+        ship_id = snap,
         skip_local_record = false,
         deploy_root = nothing,
         content_tree_hash = nothing,
     )
     if snap !== nothing
-        if src.run_id !== nothing && String(src.run_id) != snap
+        if src.ship_id !== nothing && String(src.ship_id) != snap
             throw(
                 _selection_error(
-                    "controller provenance run_id $(src.run_id) does not match --run-id $(snap)",
+                    "controller provenance ship_id $(src.ship_id) does not match --ship-id $(snap)",
                 ),
             )
         end
         return (
-            run_id = snap,
+            ship_id = snap,
             skip_local_record = true,
             deploy_root = src.deploy_root,
             content_tree_hash = src.content_tree_hash,
@@ -819,14 +819,14 @@ function _collect_source_plan(
     end
     if src.source_kind === :git
         return (
-            run_id = nothing,
+            ship_id = nothing,
             skip_local_record = true,
             deploy_root = src.deploy_root,
             content_tree_hash = src.content_tree_hash,
         )
     end
     return (
-        run_id = src.run_id,
+        ship_id = src.ship_id,
         skip_local_record = true,
         deploy_root = src.deploy_root,
         content_tree_hash = src.content_tree_hash,

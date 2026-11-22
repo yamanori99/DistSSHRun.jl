@@ -47,7 +47,7 @@ on the default thread.
 
 If the controller dies while self-exit is off, workers may keep running
 until Distributed tears down the session or you stop them. With
-`DISTSSH_JOB_ID` set, `terminate!` / `terminate_run!` can reap tagged
+`DISTSSH_JOB_ID` set, `cancel!` can reap tagged
 workers on the hosts listed in `kit.hosts`. A machine-wide sweep remains
 `setup cleanup` (kills every `julia.*--worker` on listed hosts; not
 run-scoped).
@@ -85,7 +85,7 @@ project directory are not used. No git binary is run. The tar root is that
 project directory when every path dependency stays inside it. A relative
 path dependency outside it, or a workspace member, is shipped under the
 common ancestor so the relative path still resolves. The recorded project
-path is `runs/<run_id>/src/` plus that relative directory. An absolute
+path is `ships/<ship_id>/src/` plus that relative directory. An absolute
 `[sources]` path, or a layout that would root the tar at `$HOME` or `/`,
 is an error. A parent `.gitignore` does not drop a declared path dependency.
 Files that dependency's own `.gitignore` excludes are left out. A workspace
@@ -111,8 +111,8 @@ Ship skips that directory by name; git still tracks it if you add it.
 `ship_send_list(root)` is that path list for the directory it is
 given. It is public and is not exported. `git_send_list` remains the git
 list for git-clone, git-sync, and git-pull. Extract is into
-`<remote_root>/runs/<run_id>/src/` (`run_id` is UTC plus 6 hex). The same leaf also gets an empty
-`<remote_root>/runs/<run_id>/out/`. A repeated host is refused. A missing
+`<remote_root>/ships/<ship_id>/src/` (`ship_id` is UTC plus 6 hex). The same leaf also gets an empty
+`<remote_root>/ships/<ship_id>/out/`. A repeated host is refused. A missing
 `remote_root` is created when safe: a `~/…` layout may create components
 under the remote home with mode `700`; an absolute path requires its parent
 and creates only the final component (same rule as `setup remote-root`).
@@ -125,14 +125,14 @@ create leaves the safe directory. Run-time `sync=` on
 `go!` / `drive!` / `pipeline!` / detached `execute!` is an error; deploy with
 [`sync!`](@ref) / [`setup!`](@ref) or CLI `setup` first. Ship with
 `setup!` / `setup ship-tree`, including one outside script as `extra_files`
-/ `--extra-file`, then `execute!(…; run_id=id)` or `go` / `drive --run-id ID`
+/ `--extra-file`, then `execute!(…; ship_id=id)` or `go` / `drive --ship-id ID`
 with that same local script. The remote command is
 [`remote_script_path`](@ref DistSSHRun.remote_script_path) (`_distsshrun_external/<basename>` under the
 selected project). The `go` / `drive` CLI does not take `--ship-tree`: run
 `setup ship-tree`, then `setup instantiate`, then `go` / `drive` with
-`--run-id ID`.
+`--ship-id ID`.
 Later `setup instantiate` / `doctor --deploy` / `go` / `drive` select a
-shipped run with `--run-id ID` (or `run_id=` on `setup!` / `go!` / `drive!`),
+shipped run with `--ship-id ID` (or `ship_id=` on `setup!` / `go!` / `drive!`),
 else the local `.distssh/last-ship.toml` written after a
 successful ship, else a git checkout that has `Project.toml` at the deploy
 root on every host. A successful delete / git-clone / git-sync / git-pull
@@ -151,15 +151,15 @@ or legacy leaves are not selectable. Collect recovery with
 newer last-ship record. A recorded `content_tree_hash` there must match
 the selected remote stamp. A local last-ship record without a matching
 40-digit hash is not used. `doctor --deploy` still prints SSH diagnostics
-when selection cannot probe, then fails closed if the run id is invalid. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
+when selection cannot probe, then fails closed if the ship id is invalid. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
 `pack_ship_tree`, `pack_shipment`, and `ship_project_to_dest` send the same
 verified tar as worker ship to a caller-chosen remote directory (DistSSHQueue
-can call this for client→qhost staging). They do not create `runs/`, write Run
+can call this for client→qhost staging). They do not create `ships/`, write Run
 `run.toml`, or instantiate. Pass an explicit `transfer_id` when the consumer
 needs a stage job id in `shipment.toml`; use `ShipmentReceipt.content_tree_hash`
 as the shipped-tree id (not lexical-latest under the stage parent).
 `ship_tree!(project, hosts, deploy_root)` packs with `DistSSHShip.pack_tree`
-(declared-input omission and warnings), ships into `runs/<run_id>/src/`, then
+(declared-input omission and warnings), ships into `ships/<ship_id>/src/`, then
 deletes the temporary pack directory. `ship_tree!(pack, hosts, deploy_root)`
 sends an existing [`Shipment`](@ref DistSSHRun.DistSSHShip.Shipment) without repacking or
 deleting it (a pack from a project with declared inputs is refused; use the
@@ -178,18 +178,18 @@ directory with mode `700`. Group and other write are cleared again after
 `DISTRIBUTED_REMOTE_PROJECT_ROOT` are not a source for this command.
 Confirmation is required unless `-y` is used.
 The directory must be owned by the SSH user and must not be group-writable
-or world-writable. No marker file is written, and `runs/` is not created.
+or world-writable. No marker file is written, and `ships/` is not created.
 Controller provenance lives under `DISTSSH_RUN_DIR/run.toml`
 (`writer = "DistSSHRun x.y.z"`; readers require the same `major.minor`). When the run that wrote
 this file shipped a tree, `provenance.selection` records `content_tree_hash`
-(`git-sha1`) and `run_id` (the remote `runs/<run_id>/` leaf). An absent
+(`git-sha1`) and `ship_id` (the remote `ships/<ship_id>/` leaf). An absent
 or empty key means that ship was not recorded. `result_content_tree_hash`
-and `result_remote_run_id` read those strings from a `DriveResult`,
+and `result_ship_id` read those strings from a `DriveResult`,
 `GoResult`, or `DistSSHJobResult`. They also read a `:ship_tree` `SyncResult`
 and a `ShipTreeResult`. A `SyncResult` from any other mode returns `nothing`
 for both. `result_run_dir` reads
 `DISTSSH_RUN_DIR` from those results and from `DetachedProcess`. Each remote
-`runs/<run_id>/` also gets a minimal `run.toml` with only `writer` and
+`ships/<ship_id>/` also gets a minimal `run.toml` with only `writer` and
 `kind = "ship"` so `setup delete` can refuse a Ship leaf
 that is not DistSSHRun-owned. That stamp is not controller provenance.
 `setup prune` searches `.distssh` (and legacy `.distsshkit`) candidates and applies the same
@@ -218,16 +218,16 @@ hashing for a ship finishes under `setup ship-tree` before selection.
 `outputs` is reserved and not written. There is no
 `run.private.toml`; public records keep relative paths and aliases only.
 
-`terminate!` and `terminate_run!` record how the stop ended. `DistSSHJobResult.stop`
+`cancel!` records how the stop ended. `DistSSHJobResult.stop`
 is `:within_grace` when the process exited after one SIGINT and before
 SIGTERM, `:sigterm` or `:sigkill` when that `interrupt_grace` window ended
 and the ladder escalated, and `:no_sigint` when `interrupt_grace` was 0.
 `nothing` means this call did not run the ladder. The same string is `stop`
 in `kit.result`. When the kit run directory already has this package's
-`run.toml`, `stop` is set there too. `terminate_run!` finds that directory
+`run.toml`, `stop` is set there too. `cancel!(run_dir)` finds that directory
 from `kit.run_dir` next to `kit.pid`. A `run.toml` in the artifact
 `output_dir` or log directory is left alone unless the supplied
-`output_dir` already holds this package's `run.toml`; `terminate_run!`
+`output_dir` already holds this package's `run.toml`; `cancel!(run_dir)`
 updates that file. `schema` stays 1. Read it from
 the return value or from `kit_result_from_dir` / `read_kit_run_toml`.
 
@@ -271,9 +271,9 @@ The default root is `--output-dir`, else
 (for example `data/sims`) are not collected unless
 `DISTRIBUTED_COLLECT_DIRS` lists those directories (colon-separated,
 relative to the project root or absolute). Example in the driver:
-`ENV["DISTRIBUTED_COLLECT_DIRS"] = "data/sims"`. A second `drive --run-id`
+`ENV["DISTRIBUTED_COLLECT_DIRS"] = "data/sims"`. A second `drive --ship-id`
 that does not rewrite those files prints `(nothing to collect)`. Use
-`drive --collect-missing ROOT HOST...` with `--run-id` to pull files that
+`drive --collect-missing ROOT HOST...` with `--ship-id` to pull files that
 already exist. A new `setup ship-tree` starts an empty tree; files left
 from an earlier ship do not carry over.
 
@@ -290,7 +290,7 @@ environment variables are not forwarded. Local `drive` workers may still
 see the controller process environment; do not rely on that.
 
 `.git` is not shipped. After `setup ship-tree`, the remote
-`runs/<run_id>/run.toml` (one directory above `src/`) records `run_id` and
+`ships/<ship_id>/run.toml` (one directory above `src/`) records `ship_id` and
 `content_tree_hash`. That file is the supported place for a worker-side
 script to read those values. A git walk from the deploy path can report
 some other repository.
@@ -302,9 +302,9 @@ some other repository.
 `DISTSSH_YES` do not authorize those two modes. Without that flag and
 without `-y`, the command still asks you to type `delete` or `prune`.
 
-`delete` also refuses when a present `runs/<run_id>/run.toml` under the
-deploy root is not DistSSHRun-owned, including a symlink `runs/` or a
-symlink directly under `runs/`. The confirmed path may be a git-work-tree
+`delete` also refuses when a present `ships/<ship_id>/run.toml` under the
+deploy root is not DistSSHRun-owned, including a symlink `ships/` or a
+symlink directly under `ships/`. The confirmed path may be a git-work-tree
 ancestor of that deploy root; the stamp check still uses the deploy root.
 `prune` uses the same ownership rule on `.distssh` and legacy `.distsshkit`
 candidates. A

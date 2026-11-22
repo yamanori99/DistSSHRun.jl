@@ -51,10 +51,11 @@ end
 @testset "detached job blob rejects legacy join keys" begin
     mktempdir() do d
         p = joinpath(d, "job.toml")
-        for (extra, needle) in (
-                ("require_all_hosts = true\n", "require_all_hosts"),
-                ("require_all_hosts = false\n", "best_effort = true"),
-                ("collect_best_effort = true\n", "collect_best_effort"),
+        for (extra, needle, hint) in (
+                ("require_all_hosts = true\n", "require_all_hosts", "best_effort"),
+                ("require_all_hosts = false\n", "best_effort = true", "best_effort"),
+                ("collect_best_effort = true\n", "collect_best_effort", "best_effort"),
+                ("run_id = \"20260101T000000Z-aaaaaa\"\n", "run_id", "ship_id"),
             )
             write(p, _job_blob_minimal_toml() * extra)
             err = try
@@ -66,7 +67,7 @@ end
             @test err isa ArgumentError
             msg = sprint(showerror, err)
             @test occursin(needle, msg)
-            @test occursin("best_effort", msg)
+            @test occursin(hint, msg)
             @test occursin("Rewrite", msg)
         end
     end

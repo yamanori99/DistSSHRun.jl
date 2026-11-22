@@ -11,14 +11,14 @@ function _clear_active_deploy_record!()
     return nothing
 end
 
-"""Clear in-memory deploy record unless it already matches explicit `run_id` (no last-ship lookup)."""
-function _clear_active_deploy_record_unless_run_id!(run_id::Union{Nothing, AbstractString})
-    if run_id isa AbstractString && !isempty(strip(run_id))
-        rid = validate_run_id(run_id)
+"""Clear in-memory deploy record unless it already matches explicit `ship_id` (no last-ship lookup)."""
+function _clear_active_deploy_record_unless_ship_id!(ship_id::Union{Nothing, AbstractString})
+    if ship_id isa AbstractString && !isempty(strip(ship_id))
+        rid = validate_ship_id(ship_id)
         rec = active_deploy_record()
         if rec isa AbstractDict
-            got = get(rec, "run_id", nothing)
-            if got isa AbstractString && validate_run_id(String(got)) == rid
+            got = get(rec, "ship_id", nothing)
+            if got isa AbstractString && validate_ship_id(String(got)) == rid
                 return nothing
             end
         end
@@ -86,7 +86,7 @@ function build_deploy_record(
         deploy_id::AbstractString,
         commit_sha::Union{Nothing, AbstractString} = nothing,
         dirty::Bool = false,
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         content_tree_hash::Union{Nothing, AbstractString} = nothing,
         project_rel::Union{Nothing, AbstractString} = nothing,
         content_file_digests::Union{Nothing, AbstractVector} = nothing,
@@ -108,8 +108,8 @@ function build_deploy_record(
     if commit_sha isa AbstractString && !isempty(strip(String(commit_sha)))
         data["commit_sha"] = String(commit_sha)
     end
-    if run_id isa AbstractString && !isempty(strip(String(run_id)))
-        data["run_id"] = validate_run_id(run_id)
+    if ship_id isa AbstractString && !isempty(strip(String(ship_id)))
+        data["ship_id"] = validate_ship_id(ship_id)
     end
     if content_tree_hash isa AbstractString && !isempty(strip(String(content_tree_hash)))
         h = String(content_tree_hash)
@@ -172,15 +172,7 @@ function _parse_deploy_record_body(body::AbstractString)::Union{Nothing, Dict{St
         mode isa AbstractString && !isempty(strip(String(mode))) || return nothing
         deploy_id = get(raw, "deploy_id", nothing)
         deploy_id isa AbstractString && !isempty(strip(String(deploy_id))) || return nothing
-        out = Dict{String, Any}(raw)
-        rid = get(out, "run_id", nothing)
-        if !(rid isa AbstractString && !isempty(strip(String(rid))))
-            legacy = get(out, "snapshot_id", nothing)
-            if legacy isa AbstractString && !isempty(strip(String(legacy)))
-                out["run_id"] = String(strip(legacy))
-            end
-        end
-        return out
+        return Dict{String, Any}(raw)
     catch
         return nothing
     end
@@ -221,7 +213,7 @@ function _deploy_records_equivalent(a::AbstractDict, b::AbstractDict)::Bool
         "dirty",
         "manifest_hash",
         "local_path",
-        "run_id",
+        "ship_id",
         "content_tree_hash",
         "project_rel",
     )
@@ -389,7 +381,7 @@ function write_deploy_record_to_hosts!(
         deploy_id::AbstractString,
         commit_sha::Union{Nothing, AbstractString} = nothing,
         dirty::Bool = false,
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         content_tree_hash::Union{Nothing, AbstractString} = nothing,
         project_rel::Union{Nothing, AbstractString} = nothing,
         content_file_digests::Union{Nothing, AbstractVector} = nothing,
@@ -403,7 +395,7 @@ function write_deploy_record_to_hosts!(
         deploy_id = deploy_id,
         commit_sha = commit_sha,
         dirty = dirty,
-        run_id = run_id,
+        ship_id = ship_id,
         content_tree_hash = content_tree_hash,
         project_rel = project_rel,
         content_file_digests = content_file_digests,
@@ -500,21 +492,21 @@ function _selection_from_deploy_record(
     )::SourceSelection
     mode_s = String(get(rec, "mode", ""))
     if mode_s == "ship-tree"
-        rid_raw = get(rec, "run_id", nothing)
-        if !(rid_raw isa AbstractString)
-            rid_raw = get(rec, "snapshot_id", nothing)
-        end
-        rid_raw isa AbstractString || throw(
-            _selection_error("deploy record is missing run_id; pass --run-id ID"),
+        haskey(rec, "snapshot_id") && throw(
+            _selection_error("deploy record snapshot_id was removed; use ship_id or pass --ship-id ID"),
         )
-        rid = validate_run_id(rid_raw)
+        rid_raw = get(rec, "ship_id", nothing)
+        rid_raw isa AbstractString || throw(
+            _selection_error("deploy record is missing ship_id; pass --ship-id ID"),
+        )
+        rid = validate_ship_id(rid_raw)
         checked = _validate_ship_run_on_hosts!(host_list, deploy, rid)
         stored_hash = get(rec, "content_tree_hash", nothing)
         if stored_hash isa AbstractString && !isempty(strip(String(stored_hash)))
             stored = strip(String(stored_hash))
             stored == checked.hash || throw(
                 _selection_error(
-                    "deploy record content_tree_hash $(stored) does not match remote $(checked.hash); pass --run-id ID",
+                    "deploy record content_tree_hash $(stored) does not match remote $(checked.hash); pass --ship-id ID",
                 ),
             )
         end
@@ -531,7 +523,7 @@ function _selection_from_deploy_record(
         _validate_git_on_hosts!(host_list, deploy)
         return SourceSelection(:git, nothing, deploy, deploy, nothing, host_list)
     end
-    throw(_selection_error("deploy record mode $(repr(mode_s)) is not recognized; pass --run-id ID"))
+    throw(_selection_error("deploy record mode $(repr(mode_s)) is not recognized; pass --ship-id ID"))
 end
 
 function _warn_deploy_staleness!(
@@ -593,7 +585,7 @@ function _log_deploy_record_fields!(rec::Union{Nothing, AbstractDict})
     writeln_field("Deploy mode", mode)
     haskey(rec, "deploy_id") && writeln_field("Deploy id", String(rec["deploy_id"]))
     haskey(rec, "commit_sha") && writeln_field("Deployed commit", String(rec["commit_sha"]))
-    haskey(rec, "run_id") && writeln_field("Deployed run", String(rec["run_id"]))
+    haskey(rec, "ship_id") && writeln_field("Deployed ship", String(rec["ship_id"]))
     haskey(rec, "content_tree_hash") && writeln_field("Deployed tree", String(rec["content_tree_hash"]))
     get(rec, "dirty", false) == true && writeln_field("Deployed dirty", "true")
     return nothing
@@ -612,7 +604,7 @@ function _deploy_record_for_provenance(rec::Union{Nothing, AbstractDict})::Union
             "project_hash",
             "local_path",
             "timestamp",
-            "run_id",
+            "ship_id",
             "content_tree_hash",
             "project_rel",
             "content_file_digests",
@@ -671,7 +663,7 @@ function commit_deploy_record_after_ship!(
         hosts::AbstractVector{<:AbstractString},
         deploy_root::AbstractString,
         project::AbstractString,
-        run_id::AbstractString,
+        ship_id::AbstractString,
         content_tree_hash::AbstractString;
         project_rel::AbstractString = ".",
         content_file_digests::Union{Nothing, AbstractVector} = nothing,
@@ -683,8 +675,8 @@ function commit_deploy_record_after_ship!(
         deploy_root,
         project,
         :ship_tree;
-        deploy_id = String(run_id),
-        run_id = run_id,
+        deploy_id = String(ship_id),
+        ship_id = ship_id,
         content_tree_hash = content_tree_hash,
         project_rel = project_rel,
         content_file_digests = content_file_digests,

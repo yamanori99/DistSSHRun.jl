@@ -181,7 +181,7 @@ function setup_cli_via_bang!(
                 session,
                 mode;
                 julia = opts.julia_path,
-                run_id = opts.run_id,
+                ship_id = opts.ship_id,
             )
         else
             run_setup_bang_mode!(session, mode; julia = opts.julia_path)
@@ -199,13 +199,13 @@ function setup_cli_via_bang!(
         sel = active_source_selection()
         if sel !== nothing
             path_flag = _cli_deploy_root_flag(opts.deploy_root)
-            rid = sel.run_id
+            rid = sel.ship_id
             if rid isa AbstractString && !isempty(rid)
                 kit_println(
-                    "  Next: $(cli_m()) setup instantiate --run-id $rid$path_flag",
+                    "  Next: $(cli_m()) setup instantiate --ship-id $rid$path_flag",
                 )
                 kit_println(
-                    "        $(cli_m()) doctor --deploy --run-id $rid$path_flag",
+                    "        $(cli_m()) doctor --deploy --ship-id $rid$path_flag",
                 )
             elseif sel.work_root isa AbstractString
                 flag = _cli_deploy_root_flag(sel.work_root)

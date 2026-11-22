@@ -1,49 +1,49 @@
-# Remote run leaf: `<remote_root>/runs/<run_id>/` with extract target `src/`.
+# Remote ship leaf: `<remote_root>/ships/<ship_id>/` with extract target `src/`.
 
-const _RUN_ID_PATTERN = r"^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{6}$"
+const _SHIP_ID_PATTERN = r"^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{6}$"
 
 const RSYNC_REMOVED_MSG =
     "--rsync was removed in 0.2.0; use setup ship-tree. Each directory's .gitignore under the ship root is the filter. A gitignored LocalPreferences.toml needs !LocalPreferences.toml. Declared inputs do not ship."
 
-function allocate_remote_run_id()::String
+function allocate_remote_ship_id()::String
     stamp = Dates.format(Dates.now(Dates.UTC), dateformat"yyyymmddTHHMMSS") * "Z"
     hex = bytes2hex(rand(UInt8, 3))
     return string(stamp, "-", hex)
 end
 
 """
-    validate_run_id(run_id) -> String
+    validate_ship_id(ship_id) -> String
 
-Validate a remote `runs/<run_id>/` leaf id: `YYYYMMDDTHHMMSSZ-xxxxxx` (6 hex)
+Validate a remote `ships/<ship_id>/` leaf id: `YYYYMMDDTHHMMSSZ-xxxxxx` (6 hex)
 and a single safe path component (no `/`, `\\`, `.`, or `..`).
 """
-function validate_run_id(run_id::AbstractString)::String
-    s = String(run_id)
+function validate_ship_id(ship_id::AbstractString)::String
+    s = String(ship_id)
     (occursin('/', s) || occursin('\\', s) || occursin('\0', s) || s == "." || s == "..") &&
         throw(
         ArgumentError(
-            "run_id must be a single path component matching YYYYMMDDTHHMMSSZ-xxxxxx, got $(repr(s))",
+            "ship_id must be a single path component matching YYYYMMDDTHHMMSSZ-xxxxxx, got $(repr(s))",
         ),
     )
-    occursin(_RUN_ID_PATTERN, s) || throw(
+    match(_SHIP_ID_PATTERN, s) === nothing && throw(
         ArgumentError(
-            "run_id must match YYYYMMDDTHHMMSSZ-xxxxxx (6 hex), got $(repr(s))",
+            "ship_id must match YYYYMMDDTHHMMSSZ-xxxxxx (6 hex), got $(repr(s))",
         ),
     )
     return s
 end
-public validate_run_id
+public validate_ship_id
 
-function remote_runs_dir(remote_root::AbstractString)::String
-    return joinpath(String(remote_root), "runs")
+function remote_ships_dir(remote_root::AbstractString)::String
+    return joinpath(String(remote_root), "ships")
 end
 
-function remote_run_leaf(remote_root::AbstractString, run_id::AbstractString)::String
-    return joinpath(remote_runs_dir(remote_root), validate_run_id(run_id))
+function remote_ship_leaf(remote_root::AbstractString, ship_id::AbstractString)::String
+    return joinpath(remote_ships_dir(remote_root), validate_ship_id(ship_id))
 end
 
-function remote_run_src(remote_root::AbstractString, run_id::AbstractString)::String
-    return joinpath(remote_run_leaf(remote_root, run_id), "src")
+function remote_ship_src(remote_root::AbstractString, ship_id::AbstractString)::String
+    return joinpath(remote_ship_leaf(remote_root, ship_id), "src")
 end
 
 """Reject `/` and a host's home after expansion. `abs_root` is already absolute."""
