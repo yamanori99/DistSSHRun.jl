@@ -105,28 +105,26 @@ function collect_source_files(repo::AbstractString)::Vector{Tuple{String, String
     return rows
 end
 
+function package_src_dir(package::String)::String
+    return package == "DistSSHRun" ? "src" : joinpath("lib", package, "src")
+end
+
 function area_label(package::String, pkg_rel::AbstractString)::String
     entry = entry_basename(package)
     pkg_rel == entry && return entry
-    if package == "DistSSHRun"
-        if startswith(pkg_rel, "cli/")
-            return occursin(r"^cli/[^/]+/_using\.jl$", pkg_rel) ? "cli/" : "cli/"
-        elseif startswith(pkg_rel, "DistSSHRun/")
-            rest = pkg_rel[(length("DistSSHRun/") + 1):end]
-            parts = split(rest, '/'; limit = 2)
-            if length(parts) == 1
-                return "DistSSHRun/(root files)"
-            end
-            return "DistSSHRun/$(parts[1])/"
-        end
-    else
-        parts = split(pkg_rel, '/')
-        if length(parts) == 1
-            return "(root files)"
-        end
-        return string(parts[1], "/")
+    if package == "DistSSHRun" && startswith(pkg_rel, "cli/")
+        return "cli/"
     end
-    return "(root files)"
+    d = dirname(pkg_rel)
+    if package == "DistSSHRun" && startswith(d, "DistSSHRun/")
+        d = d[(length("DistSSHRun/") + 1):end]
+    elseif package == "DistSSHRun" && startswith(pkg_rel, "DistSSHRun/")
+        d = ""
+    end
+    if isempty(d) || d == "."
+        return "(root files)"
+    end
+    return endswith(d, "/") ? d : string(d, "/")
 end
 
 function count_code_lines(path::AbstractString)::Int
@@ -361,9 +359,10 @@ function compute_churn(repo::AbstractString = REPO_ROOT; now::DateTime = Dates.n
         stale_d = 0
         last = nothing
         root_list = String[]
-        if occursin("(root files)", area)
+        if area == "(root files)"
+            pkg_src = joinpath(repo, package_src_dir(pkg))
             for p in paths
-                push!(root_list, relpath(p, pkg == "DistSSHRun" ? joinpath(repo, "src") : joinpath(repo, "lib", pkg, "src")))
+                push!(root_list, relpath(p, pkg_src))
             end
             sort!(root_list)
         end

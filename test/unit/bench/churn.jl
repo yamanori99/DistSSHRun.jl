@@ -90,6 +90,8 @@ end
     @testset "area labels" begin
         @test ChurnCompute.area_label("DistSSHRun", "DistSSHRun.jl") == "DistSSHRun.jl"
         @test ChurnCompute.area_label("DistSSHRun", "cli/go/_using.jl") == "cli/"
+        @test ChurnCompute.area_label("DistSSHRun", "DistSSHRun/core/drive/run.jl") == "core/drive/"
+        @test ChurnCompute.area_label("DistSSHRun", "DistSSHRun/drive.jl") == "(root files)"
         @test ChurnCompute.area_label("DistSSHBase", "ssh/foo.jl") == "ssh/"
         @test ChurnCompute.area_label("DistSSHBase", "tool.jl") == "(root files)"
     end

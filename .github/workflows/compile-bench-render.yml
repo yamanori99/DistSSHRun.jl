@@ -10,20 +10,16 @@ on:
       - bench/compile/report.jl
       - bench/compile/charts.jl
       - bench/compile/churn_*.jl
-      - bench/compile/churn_render.sh
       - bench/compile/Project.toml
       - .github/compile-bench-render.sh
-      - .github/source-churn-bench.sh
       - .github/workflows/compile-bench-render.yml
   pull_request:
     paths:
       - bench/compile/report.jl
       - bench/compile/charts.jl
       - bench/compile/churn_*.jl
-      - bench/compile/churn_render.sh
       - bench/compile/Project.toml
       - .github/compile-bench-render.sh
-      - .github/source-churn-bench.sh
       - .github/workflows/compile-bench-render.yml
   workflow_dispatch:
 
@@ -54,10 +50,12 @@ jobs:
           BENCH_PUSH: "0"
         run: bash .github/compile-bench-render.sh
       - name: Render source churn
-        env:
-          BENCH_TOKEN: ${{ github.token }}
-          BENCH_PUSH: "0"
-        run: bash .github/source-churn-bench.sh
+        run: |
+          set -euo pipefail
+          julia --startup-file=no --project=bench/compile -e 'using Pkg; Pkg.instantiate()'
+          out="${RUNNER_TEMP}/churn-preview"
+          rm -rf "$out"
+          julia --startup-file=no --project=bench/compile bench/compile/churn_render.jl --out-dir "$out"
 
   publish:
     name: Render bench-data
@@ -88,5 +86,43 @@ jobs:
       - name: Render source churn
         env:
           BENCH_TOKEN: ${{ github.token }}
-          BENCH_PUSH: "1"
-        run: bash .github/source-churn-bench.sh
+        run: |
+          set -euo pipefail
+          julia --startup-file=no --project=bench/compile -e 'using Pkg; Pkg.instantiate()'
+          dest="${RUNNER_TEMP}/bench-data"
+          rm -rf "$dest"
+          url="https://github.com/${GITHUB_REPOSITORY}.git"
+          basic="$(printf 'x-access-token:%s' "$BENCH_TOKEN" | base64 | tr -d '\n')"
+          echo "::add-mask::${basic}"
+          auth=(-c "http.extraheader=AUTHORIZATION: basic ${basic}")
+          net=(-c http.connectTimeout=10 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=30)
+          rc=0
+          git "${net[@]}" "${auth[@]}" ls-remote --exit-code --heads "$url" bench-data >/dev/null || rc=$?
+          if [ "$rc" = "2" ]; then
+            git "${net[@]}" "${auth[@]}" clone --branch main --single-branch "$url" "$dest"
+            git -C "$dest" checkout --orphan bench-data
+            git -C "$dest" rm -rf . >/dev/null 2>&1 || true
+          elif [ "$rc" != "0" ]; then
+            exit "$rc"
+          else
+            git "${net[@]}" "${auth[@]}" clone --branch bench-data --single-branch "$url" "$dest"
+          fi
+          git -C "$dest" config http.extraheader "AUTHORIZATION: basic ${basic}"
+          julia --startup-file=no --project=bench/compile bench/compile/churn_render.jl \
+            --out-dir "$dest/churn" --append-readme "$dest/README.md"
+          git -C "$dest" config user.name "github-actions[bot]"
+          git -C "$dest" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$dest" add README.md churn/
+          if git -C "$dest" diff --cached --quiet; then
+            echo "bench-data churn unchanged"
+            exit 0
+          fi
+          git -C "$dest" commit -m "Render source churn."
+          for attempt in 1 2 3 4 5 6; do
+            if git "${net[@]}" -C "$dest" push origin HEAD:bench-data; then
+              exit 0
+            fi
+            git "${net[@]}" -C "$dest" pull --rebase origin bench-data || { git -C "$dest" rebase --abort || true; exit 1; }
+            [ "$attempt" -lt 6 ] && sleep "$attempt"
+          done
+          git "${net[@]}" -C "$dest" push origin HEAD:bench-data
