@@ -1388,8 +1388,21 @@ function self_test_body_main()
     ok2 && die("self-test: short skip must fail closed")
     judge_norm = strip(read(`bash -c 'id=test-unit; norm=${id//-/_}; var=RESULT_${norm}; export RESULT_test_unit=success; echo ${!var:-missing}'`, String))
     judge_norm == "success" || die("self-test: judge result normalization $(judge_norm)")
-    judge_self = strip(read(`$(joinpath(@__DIR__, "..", "gate", "judge_self_test.sh"))`, String))
-    judge_self == "ok" || die("self-test: judge_self_test $(judge_self)")
+    judge_script = joinpath(@__DIR__, "..", "gate", "judge_self_test.sh")
+    judge_buf = IOBuffer()
+    judge_proc = run(pipeline(`$judge_script`, stdout = judge_buf, stderr = judge_buf), wait = true)
+    judge_self = String(take!(judge_buf))
+    if !success(judge_proc)
+        for line in split(strip(judge_self), '\n'; keepempty = false)
+            startswith(line, "FAIL  ") && die("self-test: judge_self_test $(line)")
+        end
+        die("self-test: judge_self_test exit $(judge_proc.exitcode)")
+    end
+    judge_lines = split(strip(judge_self), '\n'; keepempty = false)
+    isempty(judge_lines) && die("self-test: judge_self_test no output")
+    for line in judge_lines
+        startswith(line, "ok  ") || die("self-test: judge_self_test unexpected line $(line)")
+    end
     length(GATE_LINT_NAMES) == 15 || die("self-test: GATE_LINT_NAMES $(length(GATE_LINT_NAMES))")
     "all" in GATE_LINT_NAMES && die("self-test: all is not a per-mode name")
     lint_sh = read(joinpath(@__DIR__, "..", "gate", "lint.sh"), String)
