@@ -1445,6 +1445,8 @@ function self_test_body_main()
     any(occursin("HEAD abc: passed", n) for n in notes) || die("self-test: testing head")
     shaped = "## Testing\n\nmacOS arm64, Julia 1.13.4.\n\n`./scripts/check.sh`\n\n```text\nHEAD abc: passed\n```\n"
     isempty(testing_shape_notes(shaped, "abc")) || die("self-test: testing shape without git")
+    win = "## Testing\n\nWindows x86_64, Julia 1.13.4.\n\n`./scripts/check.sh`\n\n```text\nHEAD abc: passed\n```\n"
+    isempty(testing_shape_notes(win, "abc")) || die("self-test: testing shape Windows")
     banned_hit("# until later") == "until" || die("self-test: until phrase $(repr(banned_hit("# until later")))")
     println("self-test: passed")
     return 0
@@ -1743,7 +1745,14 @@ function testing_section_text(body::AbstractString)
 end
 
 function testing_has_env_markers(text::AbstractString)
-    return occursin(r"(?i)macos|darwin|linux|ubuntu|wsl|julia|windows|freebsd|openbsd", text)
+    return occursin(r"(?i)\bjulia\b", text)
+end
+
+function testing_has_env_line(text::AbstractString)
+    return occursin(
+        r"(?im)^[^\n]*\b(arm64|aarch64|x86_64|x64|amd64|i686|riscv64)\b[^\n]*\bjulia\b[^\n]*\.",
+        text,
+    )
 end
 
 function has_generative_tool_line(body::AbstractString)
@@ -2713,7 +2722,7 @@ function testing_shape_notes(body::AbstractString, head::AbstractString)
     notes = String[]
     testing_section_present(body) || return notes
     txt = testing_section_text(body)
-    env = occursin(r"(?im)(macos|darwin|linux|ubuntu|wsl).*(arm64|aarch64|x86_64|x64|amd64).*(julia).*\.", txt)
+    env = testing_has_env_line(txt)
     cmd = occursin(r"`[^`]+`", txt)
     fence = occursin(r"(?m)^```text\s*$", txt)
     if !(env && cmd && fence)
