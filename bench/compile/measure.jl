@@ -157,6 +157,25 @@ function name_in_signature(signature::AbstractString, qualified::AbstractString)
     return occursin(Regex(string(parts[1]) * "\\." * fname * "(?![A-Za-z0-9_])"), signature)
 end
 
+"""Per-command `missed`: legacy samples store a name vector; new samples store `missed_count` only."""
+function read_missed_count(cmd::AbstractDict)::Int
+    name = string(get(cmd, "name", ""))
+    has_list = haskey(cmd, "missed")
+    has_count = haskey(cmd, "missed_count")
+    if has_list && has_count
+        error("command $name: both missed and missed_count")
+    end
+    if has_count
+        return Int(cmd["missed_count"])
+    end
+    if has_list
+        val = cmd["missed"]
+        val isa AbstractVector || error("command $name: missed must be a vector")
+        return length(val)
+    end
+    error("command $name: missing missed or missed_count")
+end
+
 function missed_functions(rows, package::String, defined::Vector{String})::Vector{String}
     missed = String[]
     prefix = package * "."
@@ -265,7 +284,7 @@ function trace_summary(
         "buckets" => buckets,
         "top" => top,
         "methods" => methods,
-        "missed" => missed_functions(rows, package, defined),
+        "missed_count" => length(missed_functions(rows, package, defined)),
     )
 end
 
