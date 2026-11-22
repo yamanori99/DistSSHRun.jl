@@ -902,6 +902,7 @@ using Dates
                 """
             )
             _sync_test_project_manifest!(app)
+            _ensure_test_job_lists_distsshrun!(app)
             snap_id = "20260101T000000Z-aaaaaa"
             parent = DistSSHRun.run_identity(app)
             digests = Any[

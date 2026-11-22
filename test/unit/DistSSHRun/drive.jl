@@ -1114,6 +1114,7 @@ end
                 write(path, replace(read(path, String), "path = \"$bar\"" => "path = \"../Bar\""))
             end
             _sync_test_project_manifest!(app)
+            _ensure_test_job_lists_distsshrun!(app)
             @test occursin("path = \"../Bar\"", read(joinpath(app, "Project.toml"), String))
             snap_id = "20260101T000000Z-aaaaaa"
             parent = DistSSHRun.run_identity(app)

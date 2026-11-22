@@ -71,7 +71,7 @@ if !isdefined(@__MODULE__, :_write_host_project!)
             ispath(src) || continue
             cp(src, joinpath(proj, name); force = true)
         end
-        _sync_test_project_manifest!(proj)
+        _develop_distsshrun_into_job!(proj)
         return nothing
     end
 

@@ -281,8 +281,7 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
         _with_tempdir() do tmp
             proj = joinpath(tmp, "proj")
             mkpath(proj)
-            write(joinpath(proj, "Project.toml"), "name = \"BindGateApi\"\n")
-            _sync_test_project_manifest!(proj)
+            _write_test_job_with_distsshrun!(proj; name = "BindGateApi")
             script = joinpath(proj, "job.jl")
             write(script, "map(identity, 1:2)\n")
             bindir = joinpath(tmp, "bin")
