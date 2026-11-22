@@ -73,6 +73,7 @@ export RESULT_runic=success
 export RESULT_diff_lint_self_test=skipped
 export RESULT_jetls=success
 export RESULT_aqua=success
+export RESULT_fix_tests_on_base=skipped
 export_judge_skipped
 
 export DETECT_HEAVY=false
@@ -115,3 +116,11 @@ if ! "${JUDGE}" >/dev/null 2>&1; then
   fail_scenario "unknown event: downstream runs"
 fi
 pass_scenario "unknown event: downstream runs"
+
+export DETECT_FIX_TITLE=false
+unset RESULT_fix_tests_on_base
+if "${JUDGE}" >/dev/null 2>&1; then
+  fail_scenario "missing RESULT_fix_tests_on_base fails gate"
+fi
+export RESULT_fix_tests_on_base=skipped
+pass_scenario "missing RESULT_fix_tests_on_base fails gate"
