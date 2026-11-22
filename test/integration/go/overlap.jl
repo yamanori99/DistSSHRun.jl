@@ -6,8 +6,7 @@ using Test
 
 @testset "local slots overlap" begin
     _with_tempdir() do proj
-        write(joinpath(proj, "Project.toml"), "name = \"GoOverlap\"\n")
-        _sync_test_project_manifest!(proj)
+        _write_test_job_with_distsshrun!(proj; name = "GoOverlap")
         script = joinpath(proj, "sleep_mark.jl")
         write(
             script, """
@@ -34,8 +33,7 @@ end
 
 @testset "repeat=2 matches --local-slots 2 (local overlap)" begin
     _with_tempdir() do proj
-        write(joinpath(proj, "Project.toml"), "name = \"GoRepeatOverlap\"\n")
-        _sync_test_project_manifest!(proj)
+        _write_test_job_with_distsshrun!(proj; name = "GoRepeatOverlap")
         script = joinpath(proj, "sleep_mark.jl")
         write(
             script, """
@@ -64,8 +62,7 @@ end
 
 @testset "output_dir batch root (local:1)" begin
     _with_tempdir() do proj
-        write(joinpath(proj, "Project.toml"), "name = \"GoOutputDir\"\n")
-        _sync_test_project_manifest!(proj)
+        _write_test_job_with_distsshrun!(proj; name = "GoOutputDir")
         script = joinpath(proj, "job.jl")
         write(
             script, """
@@ -90,8 +87,7 @@ end
 # `output_dir` is orthogonal to `collect_spec=false` (skip collect).
 @testset "output_dir with collect_spec=false" begin
     _with_tempdir() do proj
-        write(joinpath(proj, "Project.toml"), "name = \"GoOutputDirSkip\"\n")
-        _sync_test_project_manifest!(proj)
+        _write_test_job_with_distsshrun!(proj; name = "GoOutputDirSkip")
         script = joinpath(proj, "job.jl")
         write(
             script, """

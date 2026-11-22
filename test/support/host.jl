@@ -2,27 +2,35 @@ if !isdefined(@__MODULE__, :_write_host_project!)
 
     # `Pkg.is_manifest_current` must be `true` before drive/go verification.
     # Job env that passes drive/go DistSSHRun verification (resolve + instantiate).
+    # Align the job Manifest with the in-process DistSSHRun (dev tree or registry copy).
+    function _develop_distsshrun_into_job!(proj::AbstractString)
+        proj = abspath(string(proj))
+        run_root = pkgdir(DistSSHRun)
+        julia = _julia_exe()
+        cmd = setenv(
+            `$julia --startup-file=no --project=$proj -e "using Pkg; Pkg.develop(path=$(repr(run_root))); Pkg.instantiate()"`,
+            _child_julia_env(),
+        )
+        proc, combined = _run_subprocess(cmd)
+        _assert_proc_ok(proc, combined; label = "Pkg.develop DistSSHRun into test job")
+        return nothing
+    end
+
     function _ensure_test_job_lists_distsshrun!(proj::AbstractString)
         proj = abspath(string(proj))
         pf = joinpath(proj, "Project.toml")
         isfile(pf) || return nothing
         raw = read(pf, String)
-        occursin("DistSSHRun", raw) && return nothing
-        dep = "DistSSHRun = \"b568025c-2759-4ef1-8b14-17d00e2cd000\""
-        if occursin("[deps]", raw)
-            raw = replace(raw, "[deps]" => "[deps]\n    $dep")
-        else
-            raw = raw * "\n[deps]\n    $dep\n"
+        if !occursin("DistSSHRun", raw)
+            dep = "DistSSHRun = \"b568025c-2759-4ef1-8b14-17d00e2cd000\""
+            if occursin("[deps]", raw)
+                raw = replace(raw, "[deps]" => "[deps]\n    $dep")
+            else
+                raw = raw * "\n[deps]\n    $dep\n"
+            end
+            write(pf, raw)
         end
-        write(pf, raw)
-        _sync_test_project_manifest!(proj)
-        julia = _julia_exe()
-        cmd = setenv(
-            `$julia --startup-file=no --project=$proj -e "using Pkg; Pkg.instantiate()"`,
-            _child_julia_env(),
-        )
-        proc, combined = _run_subprocess(cmd)
-        _assert_proc_ok(proc, combined; label = "Pkg.instantiate ensure DistSSHRun")
+        _develop_distsshrun_into_job!(proj)
         return nothing
     end
 
@@ -36,14 +44,7 @@ if !isdefined(@__MODULE__, :_write_host_project!)
             DistSSHRun = "b568025c-2759-4ef1-8b14-17d00e2cd000"
             """,
         )
-        _sync_test_project_manifest!(proj)
-        julia = _julia_exe()
-        cmd = setenv(
-            `$julia --startup-file=no --project=$proj -e "using Pkg; Pkg.instantiate()"`,
-            _child_julia_env(),
-        )
-        proc, combined = _run_subprocess(cmd)
-        _assert_proc_ok(proc, combined; label = "Pkg.instantiate test job DistSSHRun")
+        _develop_distsshrun_into_job!(proj)
         return nothing
     end
 
@@ -79,7 +80,8 @@ if !isdefined(@__MODULE__, :_write_host_project!)
             proj,
             name::String;
             uuid::Union{Nothing, String} = nothing,
-            extra_toml::String = ""
+            extra_toml::String = "",
+            with_distsshrun::Bool = true,
         )
         proj = abspath(string(proj))
         uuid_line = uuid === nothing ? "" : "uuid = \"$(uuid)\"\n"
@@ -91,6 +93,7 @@ if !isdefined(@__MODULE__, :_write_host_project!)
         mkpath(src)
         write(joinpath(src, "$(name).jl"), "module $(name)\nend\n")
         _sync_test_project_manifest!(proj)
+        with_distsshrun && _ensure_test_job_lists_distsshrun!(proj)
         return nothing
     end
 

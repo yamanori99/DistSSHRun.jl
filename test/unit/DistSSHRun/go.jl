@@ -534,7 +534,7 @@ using Dates
     @testset "job_id slot programfile + ARGS" begin
         DistSSHRun.reset_launch_rank_plan!([1])
         _with_tempdir() do d
-            write(joinpath(d, "Project.toml"), "[deps]\n")
+            _write_test_job_with_distsshrun!(d; name = "JobIdSlot")
             mark = joinpath(d, "RAN")
             argsf = joinpath(d, "ARGS")
             envf = joinpath(d, "ENVJOB")

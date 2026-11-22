@@ -113,8 +113,7 @@ const _CLI_BIND_FAKE_SSH =
         _with_tempdir() do tmp
             proj = joinpath(tmp, "proj")
             mkpath(proj)
-            write(joinpath(proj, "Project.toml"), "name = \"CliBindEntry\"\n")
-            _sync_test_project_manifest!(proj)
+            _write_test_job_with_distsshrun!(proj; name = "CliBindEntry")
             script = joinpath(proj, "job.jl")
             write(script, "map(identity, 1:2)\n")
             bindir, logp = _recording_ssh_bin(tmp)

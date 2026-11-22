@@ -746,7 +746,6 @@ end
         snap() = Dict(k => get(ENV, k, nothing) for k in keys)
         _mktemp_host() do proj
             _write_host_project!(proj, "DriveFrame")
-            _ensure_test_job_lists_distsshrun!(proj)
             projfile = joinpath(proj, "Project.toml")
             saved_raw = Base.ACTIVE_PROJECT[]
             try
@@ -866,7 +865,6 @@ end
 
         _with_tempdir() do tmp
             _write_host_project!(tmp, "DriveKitHosts213")
-            _ensure_test_job_lists_distsshrun!(tmp)
             out = joinpath(tmp, "out")
             log = joinpath(tmp, "log")
             mkpath(out)
@@ -1051,7 +1049,6 @@ end
             )
             _mktemp_host() do proj
                 _write_host_project!(proj, "HostsKeep")
-                _ensure_test_job_lists_distsshrun!(proj)
                 got = withenv(
                     ssh_base...,
                     "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/tmp/distsshkit-remote\nbad"
@@ -1067,7 +1064,6 @@ end
 
             _mktemp_host() do proj
                 _write_host_project!(proj, "HostsDrop")
-                _ensure_test_job_lists_distsshrun!(proj)
                 got = withenv(
                     ssh_base...,
                     "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/tmp/distsshkit-remote"
@@ -1165,7 +1161,6 @@ end
     @testset "run_id records verified-against-run-id when deploy record matches" begin
         _with_tempdir() do proj
             _write_host_project!(proj, "RunIdProv")
-            _ensure_test_job_lists_distsshrun!(proj)
             script = joinpath(proj, "job.jl")
             write(script, "1\n")
             rid = "20260101T000000Z-aaaaaa"
@@ -1230,7 +1225,6 @@ end
     @testset "drive! isolated and reuse_main API" begin
         _with_tempdir() do proj
             _write_host_project!(proj, "DrvIsoApi")
-            _ensure_test_job_lists_distsshrun!(proj)
             session = DistSSHRun.DistSSHSession(
                 project = proj,
                 workers = String["1*host1"],

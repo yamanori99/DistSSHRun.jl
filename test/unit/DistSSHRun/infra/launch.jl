@@ -372,15 +372,13 @@ using TOML
     )
 
     _with_tempdir() do proj
-        write(joinpath(proj, "Project.toml"), "name = \"VerifyGate\"\n")
-        _sync_test_project_manifest!(proj)
+        _write_test_job_with_distsshrun!(proj; name = "VerifyGate")
         ident = DistSSHRun.run_identity(proj)
         @test !isempty(ident["manifest.sha256"])
     end
 
     _with_tempdir() do proj
-        write(joinpath(proj, "Project.toml"), "name = \"ShaJob\"\n")
-        _sync_test_project_manifest!(proj)
+        _write_test_job_with_distsshrun!(proj; name = "ShaJob")
         ident = DistSSHRun.run_identity(proj)
         @test ident["manifest.sha256"] == DistSSHRun.file_sha256(joinpath(proj, "Manifest.toml"))
         @test ident["project.sha256"] == DistSSHRun.file_sha256(joinpath(proj, "Project.toml"))
@@ -436,7 +434,15 @@ using TOML
         vers = DistSSHRun._distssh_versions_from_manifest(man)
         @test vers["DistSSHRun"] == "0.1.16"
         @test vers["DistSSHKit"] == "0.9.0"
-        write(joinpath(proj, "Project.toml"), "name = \"Fmt2Job\"\n")
+        write(
+            joinpath(proj, "Project.toml"),
+            """
+            name = \"Fmt2Job\"
+            [deps]
+            DistSSHRun = \"b568025c-2759-4ef1-8b14-17d00e2cd000\"
+            DistSSHKit = \"ceec0504-c968-4be5-b215-667cae0e8f81\"
+            """
+        )
         old = Base.active_project()
         try
             Pkg.activate(proj; io = devnull)
@@ -455,8 +461,7 @@ using TOML
 
     @testset "go parent slot probes sysimage from --julia binary" begin
         _with_tempdir() do proj
-            write(joinpath(proj, "Project.toml"), "name = \"GoSlotSys\"\n")
-            _sync_test_project_manifest!(proj)
+            _write_test_job_with_distsshrun!(proj; name = "GoSlotSys")
             bin = DistSSHRun.pin_local_julia(joinpath(Sys.BINDIR, "julia"))
             local_id = DistSSHRun._go_local_slot_identity(proj, bin)
             img, def = DistSSHRun._local_julia_sysimage_identity(bin)
@@ -470,7 +475,14 @@ using TOML
     end
 
     _with_tempdir() do proj
-        write(joinpath(proj, "Project.toml"), "name = \"VerMan\"\n")
+        write(
+            joinpath(proj, "Project.toml"),
+            """
+            name = \"VerMan\"
+            [deps]
+            DistSSHRun = \"b568025c-2759-4ef1-8b14-17d00e2cd000\"
+            """
+        )
         write(
             joinpath(proj, "Manifest.toml"), """
             julia_version = "1.12.0"
@@ -534,8 +546,7 @@ using TOML
 
     @testset "worker snapshot loads SHA without DistSSHRun on worker" begin
         _with_tempdir() do proj
-            write(joinpath(proj, "Project.toml"), "name = \"ShaSnap\"\n")
-            _sync_test_project_manifest!(proj)
+            _write_test_job_with_distsshrun!(proj; name = "ShaSnap")
             worker_mod = Module()
             old = Base.active_project()
             try
@@ -668,7 +679,7 @@ end
 @testset "read-only worker project precompile warns and launch continues" begin
     julia = joinpath(Sys.BINDIR, Base.julia_exename())
     _with_tempdir() do proj
-        write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+        _write_test_job_with_distsshrun!(proj; name = "Tmp")
         chmod(proj, 0o555)
         added = Int[]
         try
