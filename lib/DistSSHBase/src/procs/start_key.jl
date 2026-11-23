@@ -4,7 +4,9 @@ function _linux_proc_start_key(pid::Integer)::Union{Nothing, String}
     isfile(path) || return nothing
     s = try
         read(path, String)
-    catch
+    catch e
+        e isa InterruptException && rethrow()
+        @debug "process_start_key: /proc starttime unread" pid = Int(pid) exception = (e, catch_backtrace())
         return nothing
     end
     r = findlast(')', s)
@@ -33,7 +35,9 @@ function process_start_key(pid::Integer)::Union{Nothing, String}
             strip(read(`/bin/ps -o lstart= -p $(Int(pid))`, String))
         end
         return isempty(s) ? nothing : s
-    catch
+    catch e
+        e isa InterruptException && rethrow()
+        @debug "process_start_key: ps lstart unread" pid = Int(pid) exception = (e, catch_backtrace())
         return nothing
     end
 end
