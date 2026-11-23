@@ -60,6 +60,7 @@
           - "demos/**"
           - "test/unit/**"
           - "test/integration/**"
+          - "test/tty/**"
           - ".gitattributes"
           - ".gitignore"
           - ".git-blame-ignore-revs"

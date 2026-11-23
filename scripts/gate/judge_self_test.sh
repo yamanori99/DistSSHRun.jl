@@ -35,8 +35,8 @@ chmod +x "${ROOT}/scripts/gate/workflow_cache_verify.sh"
 pass_scenario "workflow_cache_verify"
 
 SKIP_JOBS=(
-  test-unit test-integration test-coverage test-macos-unit test-macos-integration test-wsl
-  test-1-14-pre-unit test-1-14-pre-integration test-1-14-pre-macos-unit test-1-14-pre-macos-integration
+  test-unit test-integration test-tty test-coverage test-macos-unit test-macos-integration test-macos-tty test-wsl
+  test-1-14-pre-unit test-1-14-pre-integration test-1-14-pre-tty test-1-14-pre-macos-unit test-1-14-pre-macos-integration test-1-14-pre-macos-tty
   test-nightly registry-install pkgeval
   base-test-ubuntu base-test-macos base-test-wsl
   up-test-ubuntu up-test-macos up-test-wsl
@@ -56,8 +56,8 @@ export_judge_skipped() {
 
 export_heavy_pr_core_success() {
   local id norm
-  for id in test-unit test-integration test-macos-unit test-macos-integration registry-install \
-    test-1-14-pre-unit test-1-14-pre-integration; do
+  for id in test-unit test-integration test-tty test-macos-unit test-macos-integration test-macos-tty registry-install \
+    test-1-14-pre-unit test-1-14-pre-integration test-1-14-pre-tty; do
     norm="${id//-/_}"
     export "RESULT_${norm}=success"
   done
@@ -91,6 +91,7 @@ export DETECT_EVENT=schedule
 export RESULT_downstream=failure
 export RESULT_test_1_14_pre_macos_unit=success
 export RESULT_test_1_14_pre_macos_integration=success
+export RESULT_test_1_14_pre_macos_tty=success
 out="$("${JUDGE}" 2>&1)" || ec=$?
 ec="${ec:-0}"
 grep -Fq 'downstream failed (non-blocking report)' <<<"${out}" || fail_scenario "schedule: downstream failure non-blocking"
@@ -105,6 +106,7 @@ export RESULT_downstream=skipped
 export_heavy_pr_core_success
 export RESULT_test_1_14_pre_macos_unit=skipped
 export RESULT_test_1_14_pre_macos_integration=skipped
+export RESULT_test_1_14_pre_macos_tty=skipped
 out="$("${JUDGE}" 2>&1)" || true
 grep -Fq 'allowed skip test-1-14-pre-macos-unit' <<<"${out}" || fail_scenario "pr heavy: macOS 1.14-pre skipped"
 pass_scenario "pr heavy: macOS 1.14-pre skipped"

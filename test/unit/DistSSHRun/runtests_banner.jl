@@ -14,8 +14,15 @@ const _RUNTESTS_SRC = read(joinpath(_test_root(), "runtests.jl"), String)
         withenv(clear...) do
             all = _runtest_include_paths(_RUNTESTS_SRC)
             selected = _runtest_selected_files(_RUNTESTS_SRC)
-            @test selected == all
+            @test selected == filter(p -> !startswith(p, "tty/"), all)
+            @test any(p -> startswith(p, "tty/"), all)
             @test length(selected) > 0
+        end
+        withenv(merge(clear, Dict("DISTSSH_TEST_GROUP" => "all"))...) do
+            got = _runtest_selected_files(_RUNTESTS_SRC)
+            want = _runtest_include_paths(_RUNTESTS_SRC)
+            @test issetequal(got, want)
+            @test length(got) > 0 && length(got) >= length(want) && length(want) >= length(got)
         end
     end
 
@@ -28,6 +35,11 @@ const _RUNTESTS_SRC = read(joinpath(_test_root(), "runtests.jl"), String)
                 @test all(x -> startswith(x, "integration/"), integ)
                 @test length(unit) > length(integ) || length(integ) > 0
                 @test length(unit) < length(_runtest_include_paths(_RUNTESTS_SRC))
+            end
+            withenv(merge(clear, Dict("DISTSSH_TEST_GROUP" => "tty"))...) do
+                tty = _runtest_selected_files(_RUNTESTS_SRC)
+                @test all(x -> startswith(x, "tty/"), tty)
+                @test !isempty(tty)
             end
         end
     end

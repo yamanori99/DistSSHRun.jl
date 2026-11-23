@@ -2,7 +2,8 @@ using Test
 
 # Pseudo-TTY (`script`) coverage for `drive` at the TTY default
 # (`:progress`). Reuses `test/support/progress_tty.jl`. Setup/up/go TTY cases
-# stay in `integration/setup/progress_tty.jl`.
+# stay in `tty/setup/progress_tty.jl`. Not part of default `Pkg.test()`;
+# run with `DISTSSH_TEST_GROUP=tty`.
 
 @testset "TTY progress keeps drive lines" begin
     function sh_quote(s::AbstractString)

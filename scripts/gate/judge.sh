@@ -116,13 +116,17 @@ if [[ "${heavy}" == true ]]; then
   judge aqua ""
   judge test-unit ""
   judge test-integration ""
+  judge test-tty ""
   judge test-macos-unit ""
   judge test-macos-integration ""
+  judge test-macos-tty ""
   judge registry-install ""
   judge test-1-14-pre-unit ""
   judge test-1-14-pre-integration ""
+  judge test-1-14-pre-tty ""
   judge_macos_1_14_pre test-1-14-pre-macos-unit
   judge_macos_1_14_pre test-1-14-pre-macos-integration
+  judge_macos_1_14_pre test-1-14-pre-macos-tty
   if [[ "${coverage}" == true ]]; then
     judge test-coverage ""
   else
@@ -143,21 +147,25 @@ if [[ "${heavy}" == true ]]; then
 elif [[ "${precheck}" == true ]]; then
   judge jetls ""
   judge aqua ""
-  for id in test-unit test-integration test-macos-unit test-macos-integration \
-    registry-install test-1-14-pre-unit test-1-14-pre-integration test-coverage pkgeval; do
+  for id in test-unit test-integration test-tty test-macos-unit test-macos-integration \
+    test-macos-tty registry-install test-1-14-pre-unit test-1-14-pre-integration \
+    test-1-14-pre-tty test-coverage pkgeval; do
     judge "${id}" "${heavy_off}"
   done
   judge_macos_1_14_pre test-1-14-pre-macos-unit
   judge_macos_1_14_pre test-1-14-pre-macos-integration
+  judge_macos_1_14_pre test-1-14-pre-macos-tty
   judge test-wsl "${heavy_off}"
   judge test-nightly "${heavy_off}"
 else
-  for id in jetls aqua test-unit test-integration test-macos-unit test-macos-integration \
-    registry-install test-1-14-pre-unit test-1-14-pre-integration test-coverage pkgeval; do
+  for id in jetls aqua test-unit test-integration test-tty test-macos-unit test-macos-integration \
+    test-macos-tty registry-install test-1-14-pre-unit test-1-14-pre-integration \
+    test-1-14-pre-tty test-coverage pkgeval; do
     judge "${id}" "${heavy_off}"
   done
   judge_macos_1_14_pre test-1-14-pre-macos-unit
   judge_macos_1_14_pre test-1-14-pre-macos-integration
+  judge_macos_1_14_pre test-1-14-pre-macos-tty
   judge test-wsl "${heavy_off}"
   judge test-nightly "${heavy_off}"
 fi

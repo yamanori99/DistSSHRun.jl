@@ -117,19 +117,27 @@ if !isdefined(@__MODULE__, :_tty_strip_ansi)
     end
 
     # Assert payload lines are not glued to the bar and have no post-payload redraw.
+    # Fixed `@test` count (not one per captured line): redraw volume must not
+    # change the suite total (#541 / #577).
     function _assert_tty_progress_payload(raw::AbstractString; hosts::Vector{String} = String[])
         lines = _tty_lines(raw)
+        glued = String[]
+        bad_indent = String[]
         for line in lines
             if _tty_payload_line(line)
-                @test !_tty_bar_line(line)
-                @test !occursin("[K", line)
-                @test !any(c -> occursin(c, line), "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
-                @test !occursin("━", line)
+                if _tty_bar_line(line) ||
+                        occursin("[K", line) ||
+                        any(c -> occursin(c, line), "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏") ||
+                        occursin("━", line)
+                    push!(glued, String(line))
+                end
             end
-            if _tty_fail_or_warn_line(line)
-                @test startswith(line, "  ")
+            if _tty_fail_or_warn_line(line) && !startswith(line, "  ")
+                push!(bad_indent, String(line))
             end
         end
+        @test glued == String[]
+        @test bad_indent == String[]
         # No cursor-up bar redraw after the last payload line in the byte stream.
         payload_keys = (
             "✗",
@@ -154,15 +162,17 @@ if !isdefined(@__MODULE__, :_tty_strip_ansi)
                 last_payload = at
             end
         end
-        if last_payload !== nothing
+        after_ok = if last_payload === nothing
+            true
+        else
             after = SubString(raw, nextind(raw, last(last_payload)))
-            @test !occursin(r"\e\[[0-9]*A", after)
+            !occursin(r"\e\[[0-9]*A", after)
         end
+        @test after_ok
         if length(hosts) > 1
             fail_lines = filter(l -> occursin("✗", l) && !_tty_bar_line(l), lines)
-            for host in hosts
-                @test any(l -> occursin(host, l), fail_lines)
-            end
+            missing = String[h for h in hosts if !any(l -> occursin(h, l), fail_lines)]
+            @test missing == String[]
             # Host name only in the Time table is a failure (already covered by
             # requiring each host on a fail line above).
         end
