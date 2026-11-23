@@ -73,7 +73,7 @@ function _parse_output_lock(text::AbstractString)
         occursin('=', fields[key]) && return nothing
     end
     idv = fields["id"]
-    if !isempty(idv) && !occursin(r"^[A-Za-z0-9._:@+-]+$", idv)
+    if !isempty(idv) && match(r"^[A-Za-z0-9._:@+-]+$", idv) === nothing
         return nothing
     end
     pid = tryparse(Int, fields["pid"])
@@ -218,7 +218,7 @@ function _leaf_job_id(name::AbstractString)::Union{Nothing, String}
     job = m.captures[1]
     job === nothing && return nothing
     job = String(job)
-    occursin(r"^[A-Za-z0-9._:@+-]+$", job) || return nothing
+    match(r"^[A-Za-z0-9._:@+-]+$", job) === nothing && return nothing
     return job
 end
 
