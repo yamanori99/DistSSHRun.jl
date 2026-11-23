@@ -402,16 +402,10 @@ function _block_this_thread_sigint!()
 end
 
 function _main_sigint_handler(_signum::Cint)::Cvoid
-    # The drive thread is the only one with SIGINT unblocked, so this runs
-    # there. A safepoint spin never polls libuv: throw into that task.
-    # A different task (Distributed's reader) gets the event-loop wake instead.
-    target = _MAIN_SIGINT_TASK[]
-    if target isa Task && current_task() === target
-        # The singleton pointer is one load out; a fresh exception is the
-        # object `jl_throw` expects, and a safepoint spin can catch it.
-        ccall(:jl_throw, Union{}, (Any,), InterruptException())
-        return
-    end
+    # Async-signal-safe: wake the event loop only. `jl_throw` from a signal
+    # handler is not safe (same class as `jl_exit`); under load the drive task
+    # can be in a sigatomic region and a throw leaves cleanup hung. Delivery
+    # goes through `_deliver_main_sigint` on the AsyncCondition.
     handle = _MAIN_HANDLE[]
     handle == C_NULL && return
     ccall(:uv_async_send, Cint, (Ptr{Cvoid},), handle)
@@ -445,7 +439,7 @@ function _install_main_task_sigint!()
         _MAIN_SIGINT_TASK[] = nothing
         _MAIN_SIGINT_ASYNC[] = nothing
         close(cond)
-        return nothing
+        error("signal(SIGINT) failed while installing the drive interrupt handler")
     end
     _JULIA_SIGINT_HANDLER[] = old
     _MAIN_SIGINT_INSTALLED[] = true

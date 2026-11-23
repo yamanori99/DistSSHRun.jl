@@ -39,7 +39,11 @@ end
         sleep(2)
         kill(proc, Base.SIGINT)
         stopped = timedwait(() -> !process_running(proc), 60.0; pollint = 0.5)
-        stopped === :ok || kill(proc, Base.SIGKILL)
+        if stopped !== :ok && process_running(proc)
+            kill(proc, Base.SIGUSR1)
+            timedwait(() -> !process_running(proc), 2.0; pollint = 0.05)
+            process_running(proc) && kill(proc, Base.SIGKILL)
+        end
         wait(proc)
         combined = fetch(reader)
         if proc.exitcode != 130 || occursin("TaskFailedException", combined) || !isfile(restore)
@@ -91,7 +95,13 @@ end
             kill(proc, Base.SIGINT)
         end
         stopped = timedwait(() -> !process_running(proc), 30.0; pollint = 0.05)
-        stopped === :ok || kill(proc, Base.SIGKILL)
+        if stopped !== :ok && process_running(proc)
+            # Linux Julia dumps every thread on SIGUSR1. Capture that before
+            # SIGKILL so a hung first SIGINT leaves a backtrace in the log.
+            kill(proc, Base.SIGUSR1)
+            timedwait(() -> !process_running(proc), 2.0; pollint = 0.05)
+            process_running(proc) && kill(proc, Base.SIGKILL)
+        end
         wait(proc)
         wait(reader)
         combined = String(acc)
