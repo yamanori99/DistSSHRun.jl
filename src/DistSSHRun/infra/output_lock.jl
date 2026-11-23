@@ -266,8 +266,8 @@ function _output_lock_shell_helpers()::String
       if [ -r "/proc/\${_pid}/stat" ]; then
         _cur=\$(awk '$awk' "/proc/\${_pid}/stat") || return 1
       else
-        if [ -x /bin/ps ]; then _ps=/bin/ps; else _ps=ps; fi
-        _cur=\$(\$_ps -o lstart= -p "\$_pid" 2>/dev/null) || return 1
+        [ -x /bin/ps ] || return 1
+        _cur=\$(/bin/ps -o lstart= -p "\$_pid" 2>/dev/null) || return 1
         _cur=\$(printf '%s' "\$_cur" | sed 's/^[[:space:]]*//;s/[[:space:]]*\$//')
       fi
       [ -n "\$_cur" ] || return 1
@@ -320,7 +320,7 @@ function _output_lock_shell_helpers()::String
       _alive=0
       if kill -0 "\$_pid" 2>/dev/null; then _alive=1; fi
       if [ -d "/proc/\$_pid" ]; then _alive=1; fi
-      if ps -p "\$_pid" >/dev/null 2>&1; then _alive=1; fi
+      if /bin/ps -p "\$_pid" >/dev/null 2>&1; then _alive=1; fi
       [ "\$_alive" = 1 ] || return 1
       _probe_hex=\$(_distssh_start_hex "\$_pid") || return 0
       [ -n "\$_probe_hex" ] || return 0

@@ -42,7 +42,7 @@ end
 """
     kit_process_start_key(pid) -> Union{Nothing,String}
 
-Identity of this OS pid's start (Linux `/proc` starttime, else `ps -o lstart=`).
+Identity of this OS pid's start (Linux `/proc` starttime, else `/bin/ps -o lstart=`).
 `nothing` if the pid is gone, unreadable, or Windows.
 """
 function kit_process_start_key(pid::Integer)::Union{Nothing, String}
@@ -51,10 +51,9 @@ function kit_process_start_key(pid::Integer)::Union{Nothing, String}
     if isfile(string("/proc/", Int(pid), "/stat"))
         return _linux_proc_start_key(pid)
     end
-    # A child can run with `PATH` emptied (TTY progress). `ps` is still /bin/ps.
-    ps = isfile("/bin/ps") ? "/bin/ps" : "ps"
+    isfile("/bin/ps") || return nothing
     try
-        s = strip(read(`$ps -o lstart= -p $(Int(pid))`, String))
+        s = strip(read(`/bin/ps -o lstart= -p $(Int(pid))`, String))
         return isempty(s) ? nothing : s
     catch
         return nothing
