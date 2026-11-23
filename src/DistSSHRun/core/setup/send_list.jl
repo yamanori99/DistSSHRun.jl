@@ -271,6 +271,7 @@ function _pull_tar_tree!(
         local_root::AbstractString;
         julia_bin::AbstractString,
         allow_external_symlinks::Bool = false,
+        drop_rels::AbstractVector{<:AbstractString} = String[],
     )
     tmp = mktempdir()
     try
@@ -279,7 +280,9 @@ function _pull_tar_tree!(
             julia_bin = julia_bin,
             allow_external_symlinks = allow_external_symlinks,
         )
-        _copy_pulled_rels!(tmp, local_root, _extracted_rel_paths(tmp))
+        drop = Set(String.(drop_rels))
+        rels = String[r for r in _extracted_rel_paths(tmp) if !(r in drop)]
+        _copy_pulled_rels!(tmp, local_root, rels)
     finally
         rm(tmp; force = true, recursive = true)
     end

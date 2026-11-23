@@ -1029,6 +1029,64 @@ end
             @test occursin("live lock", String(take!(err)))
             @test isdir(miss)
             release()
+            untagged = joinpath(
+                root, ".distssh", "go", "job_20200101T000000Z_report_20260803T134428Z",
+            )
+            mkpath(untagged)
+            write(joinpath(untagged, "keep.txt"), "x")
+            proc_u = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root; id = "report_20260803T134428Z"))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc_u.exitcode == 0
+            @test isdir(untagged)
+            @test isfile(joinpath(untagged, "keep.txt"))
+            drive = joinpath(root, ".distssh", "drive")
+            mkpath(drive)
+            write(joinpath(drive, "keep.txt"), "x")
+            release_d = DistSSHRun.output_dir_lock!(drive)
+            err_d = IOBuffer()
+            proc_d = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = err_d,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc_d.exitcode != 0
+            @test occursin("live lock", String(take!(err_d)))
+            @test isdir(drive)
+            @test isfile(joinpath(drive, "keep.txt"))
+            release_d()
+            stuck = joinpath(root, ".distssh", "go", "job_20200101T000000Z_stuck")
+            mkpath(stuck)
+            write(joinpath(stuck, "keep.txt"), "x")
+            parent = joinpath(root, ".distssh", "go")
+            chmod(parent, 0o555)
+            err_r = IOBuffer()
+            proc_r = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = err_r,
+                    ),
+                );
+                wait = true,
+            )
+            chmod(parent, 0o755)
+            @test proc_r.exitcode != 0
+            @test occursin("could not remove a leaf", String(take!(err_r)))
+            @test isdir(stuck)
         end
         mktempdir() do d
             root = joinpath(d, "app")

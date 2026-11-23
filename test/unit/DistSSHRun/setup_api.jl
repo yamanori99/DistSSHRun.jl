@@ -234,6 +234,26 @@ using Test
             @test !isdir(live)
         end
 
+        _with_tempdir() do proj
+            untagged = joinpath(
+                proj, ".distssh", "go", "job_20200101T000000Z_report_20260803T134428Z",
+            )
+            tagged = joinpath(proj, ".distssh", "go", "job_20260803T134428Z_exp1")
+            mkpath(untagged)
+            mkpath(tagged)
+            write(joinpath(untagged, "keep.txt"), "x")
+            @test DistSSHRun._leaf_job_id(basename(untagged)) === nothing
+            @test DistSSHRun._leaf_job_id(basename(tagged)) == "exp1"
+            n_untagged = DistSSHRun.prune_kit_leaf_dirs!(proj; id = "report_20260803T134428Z")
+            @test n_untagged == 0
+            @test isdir(untagged)
+            @test isfile(joinpath(untagged, "keep.txt"))
+            n_tagged = DistSSHRun.prune_kit_leaf_dirs!(proj; id = "exp1")
+            @test n_tagged == 1
+            @test !isdir(tagged)
+            @test isdir(untagged)
+        end
+
         _with_fake_remotes() do state_dir
             _with_tempdir() do proj
                 host = "host1"

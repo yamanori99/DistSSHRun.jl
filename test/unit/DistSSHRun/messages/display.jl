@@ -720,7 +720,31 @@ using Test
                 write(zz, "writer=$(DistSSHRun._output_lock_writer())\nhost=$(host)\npid=1\nstart=zz\nid=\n")
                 @test DistSSHRun._parse_output_lock(read(zz, String)) === nothing
                 @test_throws ArgumentError DistSSHRun.output_dir_lock!(tmp)
-                @test isfile(zz)
+            end
+            _with_tempdir() do tmp
+                bad = joinpath(tmp, ".distssh.lock")
+                host = DistSSHRun._output_lock_host()
+                write(bad, "writer=$(DistSSHRun._output_lock_writer())\nhost=$(host)\npid=1\nstart=aa\nid=bad=value\n")
+                @test DistSSHRun._parse_output_lock(read(bad, String)) === nothing
+                @test_throws ArgumentError DistSSHRun.output_dir_lock!(tmp)
+                @test isfile(bad)
+            end
+            _with_tempdir() do tmp
+                leaf = joinpath(tmp, ".distssh", "go", "job_20200101T000000Z")
+                mkpath(leaf)
+                write(joinpath(leaf, "keep.txt"), "x")
+                fifo = joinpath(leaf, ".distssh.lock")
+                run(`mkfifo $fifo`)
+                err = try
+                    DistSSHRun.prune_kit_leaf_dirs!(tmp)
+                    nothing
+                catch e
+                    e
+                end
+                @test err isa ArgumentError
+                @test isdir(leaf)
+                @test isfile(joinpath(leaf, "keep.txt"))
+                rm(fifo; force = true)
             end
             _with_tempdir() do tmp
                 foreign = joinpath(tmp, ".distssh.lock")
@@ -774,8 +798,15 @@ using Test
                         all(!isempty, texts) && break
                         sleep(0.05)
                     end
+                    timed_out = !all(!isempty, texts)
+                    if timed_out
+                        for p in procs
+                            process_running(p) && kill(p)
+                        end
+                    end
                     write(hold, "1")
                     foreach(wait, procs)
+                    @test !timed_out
                     @test count(==("WIN"), texts) == 1
                     @test count(==("LOSE"), texts) == 3
                 finally
@@ -798,6 +829,23 @@ using Test
                 wait(reenter)
                 @test reenter.exitcode == 0
                 @test isfile(joinpath(tmp, ".distssh.lock"))
+            end
+            _with_tempdir() do tmp
+                mkdir(joinpath(tmp, ".distssh.lock"))
+                helpers = DistSSHRun._output_lock_hold_shell_helpers()
+                dir_q = DistSSHRun.posix_quote(tmp)
+                held = run(
+                    ignorestatus(
+                        pipeline(
+                            `bash -c $(helpers * "_distssh_hold_lock $dir_q ''")`;
+                            stdout = devnull,
+                            stderr = devnull,
+                        ),
+                    );
+                    wait = true,
+                )
+                @test held.exitcode != 0
+                @test isdir(joinpath(tmp, ".distssh.lock"))
             end
             _with_tempdir() do tmp
                 helpers = DistSSHRun._output_lock_hold_shell_helpers()

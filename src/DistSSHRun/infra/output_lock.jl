@@ -69,6 +69,9 @@ function _parse_output_lock(text::AbstractString)
     isempty(fields["host"]) && return nothing
     isempty(fields["start"]) && return nothing
     _output_lock_start_hex_ok(fields["start"]) || return nothing
+    for key in ("host", "pid", "start", "id")
+        occursin('=', fields[key]) && return nothing
+    end
     pid = tryparse(Int, fields["pid"])
     (pid === nothing || pid <= 0) && return nothing
     DistSSHBase.record_writer_minor_match(
@@ -188,11 +191,18 @@ function output_dir_lock!(
     throw(ArgumentError("output lock: could not create $(lock_path)"))
 end
 
-"""Job id suffix of a `<stem>_<YYYYMMDDTHHMMSSZ>[_<job_id>]` leaf, else `nothing`."""
+"""Job id after the last `_<YYYYMMDDTHHMMSSZ>_` in a leaf name, else `nothing`.
+
+A name that ends on that timestamp has no job id. An earlier timestamp in the
+stem is not an id.
+"""
 function _leaf_job_id(name::AbstractString)::Union{Nothing, String}
-    m = match(r"^.*_[0-9]{8}T[0-9]{6}Z_(.+)$", String(name))
+    m = match(r"^.*_[0-9]{8}T[0-9]{6}Z(?:_(.*))?$", String(name))
     m === nothing && return nothing
-    job = String(something(m.captures[1], ""))
+    job = m.captures[1]
+    job === nothing && return nothing
+    job = String(job)
+    isempty(job) && return nothing
     try
         return _parse_kit_job_id(job)
     catch e
@@ -210,15 +220,20 @@ function _output_lock_prune_block(
     host = _output_lock_host()
     skip_path = skip === nothing ? nothing : String(skip)
     locks = String[]
+    function _note_lock!(path::AbstractString)
+        path in locks && return nothing
+        push!(locks, path)
+        return nothing
+    end
     direct = joinpath(dir, _OUTPUT_LOCK_NAME)
-    isfile(direct) && push!(locks, direct)
-    for (root, _, files) in walkdir(String(dir))
-        _OUTPUT_LOCK_NAME in files || continue
-        path = joinpath(root, _OUTPUT_LOCK_NAME)
-        path in locks || push!(locks, path)
+    (ispath(direct) || islink(direct)) && _note_lock!(direct)
+    for (root, dirs, files) in walkdir(String(dir))
+        _OUTPUT_LOCK_NAME in files && _note_lock!(joinpath(root, _OUTPUT_LOCK_NAME))
+        _OUTPUT_LOCK_NAME in dirs && _note_lock!(joinpath(root, _OUTPUT_LOCK_NAME))
     end
     for path in locks
         skip_path !== nothing && path == skip_path && continue
+        (islink(path) || !isfile(path)) && return "refusing to prune live lock $(path)"
         raw = try
             read(path, String)
         catch
@@ -270,9 +285,19 @@ function _output_lock_shell_helpers()::String
       _host=\$(sed -n 's/^host=//p' "\$_f")
       _pid=\$(sed -n 's/^pid=//p' "\$_f")
       _start=\$(sed -n 's/^start=//p' "\$_f")
+      _idv=\$(sed -n 's/^id=//p' "\$_f")
       [ -n "\$_writer" ] && [ -n "\$_host" ] && [ -n "\$_pid" ] && [ -n "\$_start" ] || return 1
+      case "\$_pid" in
+        ''|*[!0-9]*|0*) return 1 ;;
+      esac
+      case "\$_host" in
+        *"="*) return 1 ;;
+      esac
       case "\$_start" in
         *[!0-9a-f]*) return 1 ;;
+      esac
+      case "\$_idv" in
+        *"="*) return 1 ;;
       esac
       [ \$((\${#_start} % 2)) -eq 0 ] || return 1
       return 0
@@ -296,16 +321,24 @@ function _output_lock_shell_helpers()::String
       if [ -d "/proc/\$_pid" ]; then _alive=1; fi
       if ps -p "\$_pid" >/dev/null 2>&1; then _alive=1; fi
       [ "\$_alive" = 1 ] || return 1
-      _hex=\$(_distssh_start_hex "\$_pid") || return 0
-      [ -n "\$_hex" ] || return 0
-      [ "\$_hex" = "\$_start" ] && return 0
+      _probe_hex=\$(_distssh_start_hex "\$_pid") || return 0
+      [ -n "\$_probe_hex" ] || return 0
+      [ "\$_probe_hex" = "\$_start" ] && return 0
       return 1
     }
     _distssh_tree_blocks() {
       _root=\$1
+      _skip=\$2
+      if find "\$_root" -name .distssh.lock -print0 2>/dev/null | od -An -tx1 | grep -q 0a; then
+        return 0
+      fi
+      if [ -n "\$(find "\$_root" -name .distssh.lock ! -type f 2>/dev/null)" ]; then
+        return 0
+      fi
       _list=\$(find "\$_root" -name .distssh.lock -type f 2>/dev/null) || return 0
       [ -n "\$_list" ] || return 1
       _any=\$(printf '%s\\n' "\$_list" | while IFS= read -r _f; do
+        [ -n "\$_skip" ] && [ "\$_f" = "\$_skip" ] && continue
         if _distssh_one_blocks "\$_f"; then
           printf x
           break
@@ -351,9 +384,14 @@ function _output_lock_hold_shell_helpers()::String
             rm -f "\$_tmp"
             return 1
           }
+          _base=\$(basename "\$_tmp")
           if ln "\$_tmp" "\$_dir/.distssh.lock" 2>/dev/null; then
             rm -f "\$_tmp"
-            return 0
+            if [ -f "\$_dir/.distssh.lock" ]; then
+              return 0
+            fi
+            rm -f "\$_dir/.distssh.lock/\$_base"
+            return 1
           fi
           rm -f "\$_tmp"
           return 1
@@ -361,16 +399,16 @@ function _output_lock_hold_shell_helpers()::String
         _distssh_hold_lock() {
           _dir=\$1
           _id=\$2
-          mkdir -p "\$_dir" || exit 1
-          _hex=\$(_distssh_start_hex \$\$) || exit 1
-          [ -n "\$_hex" ] || exit 1
+          [ -d "\$_dir" ] || return 1
+          _hex=\$(_distssh_start_hex \$\$) || return 1
+          [ -n "\$_hex" ] || return 1
           _me=\$(hostname)
-          [ -n "\$_me" ] || exit 1
+          [ -n "\$_me" ] || return 1
           _writer=$writer_q
           _distssh_write_lock "\$_dir" "\$_id" "\$_writer" "\$_me" "\$_hex" && return 0
           _lf="\$_dir/.distssh.lock"
-          [ -f "\$_lf" ] || exit 1
-          _distssh_lock_complete "\$_lf" || exit 1
+          [ -f "\$_lf" ] || return 1
+          _distssh_lock_complete "\$_lf" || return 1
           _hpid=\$(sed -n 's/^pid=//p' "\$_lf")
           _hstart=\$(sed -n 's/^start=//p' "\$_lf")
           _hhost=\$(sed -n 's/^host=//p' "\$_lf")
@@ -378,13 +416,13 @@ function _output_lock_hold_shell_helpers()::String
           if [ "\$_hpid" = "\$\$" ] && [ "\$_hstart" = "\$_hex" ] && [ "\$_hhost" = "\$_me" ] && [ "\$_hwriter" = "\$_writer" ]; then
             return 0
           fi
+          _obs=\$(cat "\$_lf") || return 1
           if _distssh_one_blocks "\$_lf"; then
             printf 'output lock held by pid %s on %s\\n' "\$_hpid" "\$_hhost" >&2
-            exit 1
+            return 1
           fi
-          _obs=\$(cat "\$_lf") || exit 1
-          _distssh_unlink_if_same "\$_lf" "\$_obs" || exit 1
-          _distssh_write_lock "\$_dir" "\$_id" "\$_writer" "\$_me" "\$_hex" || exit 1
+          _distssh_unlink_if_same "\$_lf" "\$_obs" || return 1
+          _distssh_write_lock "\$_dir" "\$_id" "\$_writer" "\$_me" "\$_hex" || return 1
           return 0
         }
         """

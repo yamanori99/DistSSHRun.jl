@@ -208,7 +208,7 @@ function _prune_remote_shell(
     return """
     # DISTSSH_INTERNAL_PRUNE_LEAVES
     $(_remote_run_toml_owned_check_sh())
-    $(_output_lock_shell_helpers())
+    $(_output_lock_hold_shell_helpers())
     root=$pq
     older=$older_q
     id=$idq
@@ -241,6 +241,11 @@ function _prune_remote_shell(
       fi
       base=\$(basename "\$_child")
       if [ -n "\$id" ]; then
+        case "\$base" in
+          *_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z)
+            return 0
+            ;;
+        esac
         _job=\$(printf '%s\\n' "\$base" | sed -n 's/.*_[0-9]\\{8\\}T[0-9]\\{6\\}Z_//p')
         [ -n "\$_job" ] || return 0
         [ "\$_job" = "\$id" ] || return 0
@@ -334,13 +339,27 @@ function _prune_remote_shell(
       rm -f "\$_distssh_victims" "\$_distssh_refused"
       exit 1
     fi
+    _distssh_rm_fail=0
     while IFS= read -r _child; do
       [ -d "\$_child" ] || continue
       if _distssh_tree_blocks "\$_child"; then
         printf '%s\\n' "\$_child" >> "\$_distssh_refused"
         continue
       fi
-      rm -rf "\$_child"
+      if ! _distssh_hold_lock "\$_child" ""; then
+        printf '%s\\n' "\$_child" >> "\$_distssh_refused"
+        continue
+      fi
+      _self="\$_child/.distssh.lock"
+      _mine=\$(cat "\$_self" 2>/dev/null) || _mine=
+      if _distssh_tree_blocks "\$_child" "\$_self"; then
+        [ -n "\$_mine" ] && _distssh_unlink_if_same "\$_self" "\$_mine"
+        printf '%s\\n' "\$_child" >> "\$_distssh_refused"
+        continue
+      fi
+      if ! rm -rf "\$_child"; then
+        _distssh_rm_fail=1
+      fi
     done < "\$_distssh_victims"
     rm -f "\$_distssh_victims"
     if [ -s "\$_distssh_refused" ]; then
@@ -351,5 +370,9 @@ function _prune_remote_shell(
       exit 1
     fi
     rm -f "\$_distssh_refused"
+    if [ "\$_distssh_rm_fail" = 1 ]; then
+      printf 'refusing to prune: could not remove a leaf\\n' >&2
+      exit 1
+    fi
     """
 end
