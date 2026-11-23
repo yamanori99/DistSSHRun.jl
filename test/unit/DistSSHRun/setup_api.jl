@@ -268,6 +268,17 @@ using Test
             @test occursin("symlink leaf", err_link.msg)
             @test islink(linked)
             @test !isfile(joinpath(outside, ".distssh.lock"))
+            spaced = joinpath(proj, ".distssh", "go", "job_20200101T000000Z_exp1")
+            mkpath(spaced)
+            DistSSHRun.prune_kit_leaves(
+                String[], "~/App.jl", proj; confirm = false, id = " exp1 ",
+            )
+            @test !isdir(spaced)
+            nasty = "release' \$(echo pwned) ~"
+            @test DistSSHRun._prune_remote_shell("~/App.jl"; id = nasty) isa String
+            @test_throws ArgumentError DistSSHRun.prune_kit_leaves(
+                String[], "~/App.jl", proj; confirm = false, id = nasty,
+            )
         end
 
         _with_fake_remotes() do state_dir

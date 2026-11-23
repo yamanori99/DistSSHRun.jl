@@ -135,6 +135,7 @@ function prune_kit_leaves(
     )::NamedTuple
     remote_path = _checked_remote_dest(remote_path)
     _refuse_depot_target(remote_path)
+    id = id === nothing ? nothing : _parse_kit_job_id(String(id))
     if confirm
         cancelled = with_kit_progress_suspended() do
             print_err("  This will DELETE .distssh (and legacy .distsshkit) go/drive/setup/runs leaves.\n")
@@ -206,7 +207,9 @@ function _prune_remote_shell(
     pq = _remote_shell_path_word(remote_path)
     # `$pq` is its own word, same as delete. Do not paste it into double quotes.
     older = older_days === nothing ? "" : string(Int(older_days))
-    idn = id === nothing ? "" : _parse_kit_job_id(String(id))
+    # Quote the given text. `prune_kit_leaves` parses a job id first.
+    # ShellCheck feeds this builder values that are not job ids.
+    idn = id === nothing ? "" : String(id)
     idq = posix_quote(idn)
     older_q = posix_quote(older)
     return """

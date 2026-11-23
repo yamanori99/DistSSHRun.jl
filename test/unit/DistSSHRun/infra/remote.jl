@@ -1063,7 +1063,7 @@ end
             proc_sp = run(
                 ignorestatus(
                     pipeline(
-                        `sh -c $(DistSSHRun._prune_remote_shell(root; id = " exp1 "))`;
+                        `sh -c $(DistSSHRun._prune_remote_shell(root; id = DistSSHRun._parse_kit_job_id(" exp1 ")))`;
                         stdout = devnull,
                         stderr = devnull,
                     ),
