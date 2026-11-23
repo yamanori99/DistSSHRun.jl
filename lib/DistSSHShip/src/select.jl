@@ -1,12 +1,6 @@
 # File selection under one directory. `.gitignore` via GitIgnore.jl, plus the
 # ship excludes `.git` and state dirs (`.distssh`, legacy `.distsshkit`) by name. The git index is not read,
 # so a force-added file that `.gitignore` names is not selected.
-# GitIgnore is loaded on first use, not at module import.
-
-const _GITIGNORE_PKG = Base.PkgId(
-    Base.UUID("a0010394-fc0d-43eb-a3e0-33caa976912f"),
-    "GitIgnore",
-)
 
 const _PROJECTISH_NAMES = (
     "Project.toml",
@@ -20,10 +14,6 @@ const SHIP_FILE_WARN_BYTES = 50 * 1024 * 1024
 const SHIP_WARN_TOTAL_BYTES_DEFAULT = 100 * 1024 * 1024
 const _SHIP_WARN_FILE_ENV = "DISTSSH_SHIP_WARN_FILE_BYTES"
 const _SHIP_WARN_TOTAL_ENV = "DISTSSH_SHIP_WARN_TOTAL_BYTES"
-
-function _gitignore_mod()
-    return Base.require(_GITIGNORE_PKG)
-end
 
 function _reject_newline(rel::AbstractString)
     occursin('\n', rel) || return nothing
@@ -144,9 +134,8 @@ end
 function gitignore_paths(root::AbstractString)::Vector{String}
     root_c = canonical_local_path(root)
     _assert_gitignore_rules_for_dir!(root_c)
-    GitIgnore = _gitignore_mod()
     # When `.shipignore` exists, it will fully replace `.gitignore` for ship here (same syntax).
-    matcher = Base.invokelatest(GitIgnore.IgnoreMatcher, root_c; excludes = false)
+    matcher = GitIgnore.IgnoreMatcher(root_c; excludes = false)
     out = String[]
     stack = String[root_c]
     while !isempty(stack)
@@ -165,7 +154,7 @@ function gitignore_paths(root::AbstractString)::Vector{String}
             rel = relpath(child, root_c)
             _reject_backslash(rel, root_c)
             is_dir = isdir(child) && !islink(child)
-            Base.invokelatest(GitIgnore.isignored, matcher, rel, is_dir) && continue
+            GitIgnore.isignored(matcher, rel, is_dir) && continue
             _reject_newline(rel)
             push!(out, rel)
             is_dir && push!(stack, child)
@@ -181,10 +170,9 @@ function path_ignored(root::AbstractString, rel::AbstractString, is_dir::Bool)::
     shown = String(rel)
     _reject_backslash(shown, root_c)
     _assert_gitignore_rules_for_rel!(root_c, shown)
-    GitIgnore = _gitignore_mod()
     # When `.shipignore` exists, it will fully replace `.gitignore` for ship here (same syntax).
-    matcher = Base.invokelatest(GitIgnore.IgnoreMatcher, root_c; excludes = false)
-    return Base.invokelatest(GitIgnore.isignored, matcher, shown, is_dir)
+    matcher = GitIgnore.IgnoreMatcher(root_c; excludes = false)
+    return GitIgnore.isignored(matcher, shown, is_dir)
 end
 
 function _with_parents(rels::Vector{String})::Vector{String}
