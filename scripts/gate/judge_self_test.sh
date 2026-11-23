@@ -83,6 +83,7 @@ export_heavy_pr_core_success() {
   export RESULT_test_wsl=skipped
   export RESULT_test_nightly=skipped
   export RESULT_pkgeval=skipped
+  export RESULT_lint_change_guard=success
 }
 
 export DETECT_E2E=false
@@ -96,6 +97,7 @@ export DETECT_COVERAGE=false
 export RESULT_detect=success
 export RESULT_runic=success
 export RESULT_diff_lint_self_test=skipped
+export RESULT_lint_change_guard=skipped
 export RESULT_jetls=success
 export RESULT_aqua=success
 export RESULT_fix_tests_on_base=skipped
