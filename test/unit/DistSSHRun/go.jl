@@ -920,37 +920,42 @@ using Dates
             digests = Any[
                 Dict{String, Any}("path" => "Project.toml", "blob" => parent["project.sha256"]),
             ]
-            DistSSHRun._set_active_deploy_record!(
-                DistSSHRun.build_deploy_record(
-                    app,
-                    :ship_tree;
-                    deploy_id = snap_id,
-                    ship_id = snap_id,
-                    content_file_digests = digests,
+            prev_rec = DistSSHRun.active_deploy_record()
+            try
+                DistSSHRun._set_active_deploy_record!(
+                    DistSSHRun.build_deploy_record(
+                        app,
+                        :ship_tree;
+                        deploy_id = snap_id,
+                        ship_id = snap_id,
+                        content_file_digests = digests,
+                    )
                 )
-            )
-            script = joinpath(app, "job.jl")
-            write(script, "println(\"SNAPSHOT_SIBLING_OK\")\n")
-            plain = redirect_stdout(devnull) do
-                DistSSHRun.go!(
-                    script, String[]; head_slots = 1,
-                    project = app, quiet = true
+                script = joinpath(app, "job.jl")
+                write(script, "println(\"SNAPSHOT_SIBLING_OK\")\n")
+                plain = redirect_stdout(devnull) do
+                    DistSSHRun.go!(
+                        script, String[]; head_slots = 1,
+                        project = app, quiet = true
+                    )
+                end
+                @test plain.ok
+                result = redirect_stdout(devnull) do
+                    DistSSHRun.go!(
+                        script, String[]; head_slots = 1,
+                        project = app,
+                        ship_id = snap_id,
+                        quiet = true
+                    )
+                end
+                @test result.ok
+                @test occursin(
+                    "SNAPSHOT_SIBLING_OK",
+                    read(joinpath(result.output_dir, _go_local_slot_label(), "julia.stdout.log"), String)
                 )
+            finally
+                DistSSHRun._set_active_deploy_record!(prev_rec)
             end
-            @test plain.ok
-            result = redirect_stdout(devnull) do
-                DistSSHRun.go!(
-                    script, String[]; head_slots = 1,
-                    project = app,
-                    ship_id = snap_id,
-                    quiet = true
-                )
-            end
-            @test result.ok
-            @test occursin(
-                "SNAPSHOT_SIBLING_OK",
-                read(joinpath(result.output_dir, _go_local_slot_label(), "julia.stdout.log"), String)
-            )
         end
     end
 

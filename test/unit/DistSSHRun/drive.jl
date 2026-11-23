@@ -1189,41 +1189,46 @@ end
             digests = Any[
                 Dict{String, Any}("path" => "Project.toml", "blob" => parent["project.sha256"]),
             ]
-            DistSSHRun._set_active_deploy_record!(
-                DistSSHRun.build_deploy_record(
-                    app,
-                    :ship_tree;
-                    deploy_id = snap_id,
-                    ship_id = snap_id,
-                    content_file_digests = digests,
+            prev_rec = DistSSHRun.active_deploy_record()
+            try
+                DistSSHRun._set_active_deploy_record!(
+                    DistSSHRun.build_deploy_record(
+                        app,
+                        :ship_tree;
+                        deploy_id = snap_id,
+                        ship_id = snap_id,
+                        content_file_digests = digests,
+                    )
                 )
-            )
-            script = joinpath(app, "job.jl")
-            marker = joinpath(root, "RAN")
-            write(script, "write($(repr(marker)), \"yes\")\n")
-            result = redirect_stdout(devnull) do
-                mktemp() do err_path, err_io
-                    inner = redirect_stderr(err_io) do
-                        DistSSHRun.drive!(
-                            script, String[]; head_workers = 1,
-                            project = app,
-                            ship_id = snap_id,
-                            quiet = true,
-                            enable_log = false,
-                            reuse_main = true
-                        )
+                script = joinpath(app, "job.jl")
+                marker = joinpath(root, "RAN")
+                write(script, "write($(repr(marker)), \"yes\")\n")
+                result = redirect_stdout(devnull) do
+                    mktemp() do err_path, err_io
+                        inner = redirect_stderr(err_io) do
+                            DistSSHRun.drive!(
+                                script, String[]; head_workers = 1,
+                                project = app,
+                                ship_id = snap_id,
+                                quiet = true,
+                                enable_log = false,
+                                reuse_main = true
+                            )
+                        end
+                        flush(err_io)
+                        err = read(err_path, String)
+                        @test !occursin("heartbeat", lowercase(err))
+                        @test !isdefined(Main, :stop_heartbeat_monitor)
+                        @test !isdefined(Main, :start_heartbeat_monitor)
+                        return inner
                     end
-                    flush(err_io)
-                    err = read(err_path, String)
-                    @test !occursin("heartbeat", lowercase(err))
-                    @test !isdefined(Main, :stop_heartbeat_monitor)
-                    @test !isdefined(Main, :start_heartbeat_monitor)
-                    return inner
                 end
+                @test result.ok
+                @test result.exit_code == 0
+                @test isfile(marker)
+            finally
+                DistSSHRun._set_active_deploy_record!(prev_rec)
             end
-            @test result.ok
-            @test result.exit_code == 0
-            @test isfile(marker)
         end
     end
 
@@ -1237,17 +1242,18 @@ end
             digests = Any[
                 Dict{String, Any}("path" => "Project.toml", "blob" => parent["project.sha256"]),
             ]
-            DistSSHRun._set_active_deploy_record!(
-                DistSSHRun.build_deploy_record(
-                    proj,
-                    :ship_tree;
-                    deploy_id = rid,
-                    ship_id = rid,
-                    content_file_digests = digests,
-                )
-            )
+            prev_rec = DistSSHRun.active_deploy_record()
             DistSSHRun.set_kit_verbosity!(:quiet)
             try
+                DistSSHRun._set_active_deploy_record!(
+                    DistSSHRun.build_deploy_record(
+                        proj,
+                        :ship_tree;
+                        deploy_id = rid,
+                        ship_id = rid,
+                        content_file_digests = digests,
+                    )
+                )
                 result = DistSSHRun.drive!(
                     script, String[]; head_workers = 1,
                     project = proj,
@@ -1260,6 +1266,7 @@ end
                 env = get(prov, "environment", nothing)
                 @test env["verification"] == "verified-against-run-id"
             finally
+                DistSSHRun._set_active_deploy_record!(prev_rec)
                 DistSSHRun.set_kit_verbosity!(:progress)
             end
         end

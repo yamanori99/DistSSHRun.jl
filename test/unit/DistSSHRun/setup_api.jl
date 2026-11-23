@@ -14,6 +14,8 @@ using Test
         _with_tempdir() do state_dir
             old_proj = get(ENV, "DISTSSH_PROJECT_ROOT", nothing)
             old_remote = get(ENV, "DISTSSH_REMOTE_PROJECT_ROOT", nothing)
+            prev_sel = DistSSHRun.active_source_selection()
+            prev_rec = DistSSHRun.active_deploy_record()
             try
                 withenv(_fake_setup_remote_env(state_dir)...) do
                     _apply_quiet_setup_session!()
@@ -26,6 +28,8 @@ using Test
                     end
                 end
             finally
+                DistSSHRun._set_active_selection!(prev_sel)
+                DistSSHRun._set_active_deploy_record!(prev_rec)
                 if old_proj === nothing
                     delete!(ENV, "DISTSSH_PROJECT_ROOT")
                 else
