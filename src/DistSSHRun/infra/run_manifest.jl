@@ -45,11 +45,10 @@ end
 """Same leaf with `-<time_ns>` before a trailing job id, or at the end when there is none."""
 function _collision_run_leaf(dir::AbstractString)::String
     suffix = "-" * string(time_ns())
-    m = match(r"^(.*_[0-9]{8}T[0-9]{6}Z)(_[A-Za-z0-9._:@+-]+)?$", String(dir))
-    m === nothing && return String(dir) * suffix
-    idpart = m.captures[2]
-    idpart === nothing && return String(dir) * suffix
-    return String(m.captures[1]) * suffix * String(idpart)
+    raw = String(dir)
+    m = match(r"^(.*_[0-9]{8}T[0-9]{6}Z)(_[A-Za-z0-9._:@+-]+)$", raw)
+    m === nothing && return raw * suffix
+    return string(m.captures[1], suffix, m.captures[2])
 end
 
 """
