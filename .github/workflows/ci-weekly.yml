@@ -35,10 +35,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/pkg-test
 
   test-macos:
@@ -52,10 +51,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/pkg-test
 
   test-wsl:
@@ -132,11 +130,10 @@ jobs:
         if: ${{ !matrix.slot.wsl }}
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         if: ${{ !matrix.slot.wsl }}
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Pkg.test
         if: ${{ !matrix.slot.wsl }}
         run: julia --project=lib/DistSSHUp -e 'using Pkg; Pkg.test()'
@@ -184,11 +181,10 @@ jobs:
         if: ${{ !matrix.slot.wsl }}
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         if: ${{ !matrix.slot.wsl }}
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Pkg.test
         if: ${{ !matrix.slot.wsl }}
         run: julia --project=lib/DistSSHShip -e 'using Pkg; Pkg.test()'
@@ -232,11 +228,10 @@ jobs:
         if: ${{ !matrix.slot.wsl }}
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         if: ${{ !matrix.slot.wsl }}
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Pkg.test
         if: ${{ !matrix.slot.wsl }}
         run: julia --project=lib/DistSSHHeartbeat -e 'using Pkg; Pkg.test()'
@@ -285,11 +280,10 @@ jobs:
         if: ${{ !matrix.slot.wsl }}
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         if: ${{ !matrix.slot.wsl }}
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Pkg.test
         if: ${{ !matrix.slot.wsl }}
         run: julia --project=lib/DistSSHBase -e 'using Pkg; Pkg.test()'
@@ -307,10 +301,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "~1.14.0-0"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/pkg-test
 
   test-nightly:
@@ -326,10 +319,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "nightly"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/pkg-test
 
   test-1-14-pre-macos:
@@ -344,10 +336,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "~1.14.0-0"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/pkg-test
 
   test-nightly-macos:
@@ -362,10 +353,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "nightly"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/pkg-test
 
   test-1-14-pre-wsl:
@@ -441,10 +431,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/jetls-check
         with:
           files: ${{ steps.files.outputs.list }}
@@ -460,10 +449,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Aqua.test_all (latest Aqua)
         run: ./.github/aqua-check.sh
 
@@ -479,10 +467,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "~1.14.0-0"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Aqua.test_all (latest Aqua)
         run: ./.github/aqua-check.sh
 
@@ -498,10 +485,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "nightly"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Aqua.test_all (latest Aqua)
         run: ./.github/aqua-check.sh
 
@@ -517,10 +503,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "~1.14.0-0"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Aqua.test_all (latest Aqua)
         run: ./.github/aqua-check.sh
 
@@ -536,10 +521,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "nightly"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Aqua.test_all (latest Aqua)
         run: ./.github/aqua-check.sh
 

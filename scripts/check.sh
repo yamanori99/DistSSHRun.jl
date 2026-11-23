@@ -399,10 +399,11 @@ if ((_behind > 40)) || ((_age > 48 * 3600)); then
   fi
 fi
 
-if git diff --name-only origin/main...HEAD | grep -q '^\.github/workflows/'; then
+if git diff --name-only origin/main...HEAD | grep -qE '^\.github/(workflows/|actions/julia-depot-cache/)'; then
+  gate_capture "workflow cache" "${ROOT}/scripts/gate/workflow_cache_verify.sh"
   gate_capture "workflow concurrency" "${ROOT}/scripts/gate/workflow_concurrency_verify.sh"
   if command -v actionlint >/dev/null 2>&1; then
-    gate_capture "actionlint" actionlint -ignore 'unexpected key "queue" for "concurrency"'
+    gate_capture "actionlint" actionlint -config-file "${ROOT}/.github/actionlint.yaml" -ignore 'unexpected key "queue" for "concurrency"' .github/workflows/*.yml
   else
     printf 'note: actionlint not found; workflows unchecked locally, CI will check\n'
   fi

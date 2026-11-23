@@ -95,7 +95,9 @@ jobs:
   # Linux E2E (1.13 required, 1.14-pre continue-on-error): path filter on PR /
   # main push; always on a version
   # increase and dispatch. JETLS uses one depot cache (restore all events;
-  # save main only; julia-actions/cache#236). JETLS 2026-11-23 supports 1.12.2 through
+  # save main only; julia-actions/cache#236). Julia Pkg caches use
+  # julia-depot-cache saves depot state on main push only (restore on all events).
+  # JETLS 2026-11-23 supports 1.12.2 through
   # 1.14. The required job is 1.13. The 1.14-pre job is continue-on-error
   # and is not a required check.
   detect:
@@ -311,10 +313,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/pkg-parallel-test
 
   test-integration:
@@ -334,10 +335,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/pkg-parallel-test
 
   test-coverage:
@@ -356,10 +356,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/pkg-test
         with:
           coverage: true
@@ -385,10 +384,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/pkg-parallel-test
 
   test-macos-integration:
@@ -408,10 +406,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/pkg-parallel-test
 
   test-wsl:
@@ -497,10 +494,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Public Run names in downstream src
         working-directory: DistSSHRun.jl
         env:
@@ -556,10 +552,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Pkg.test
         run: |
           if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ]; then
@@ -597,10 +592,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Pkg.test
         run: julia --project=lib/DistSSHShip -e 'using Pkg; Pkg.test()'
 
@@ -653,10 +647,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Pkg.test
         run: |
           if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ]; then
@@ -693,10 +686,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Pkg.test
         run: julia --project=lib/DistSSHHeartbeat -e 'using Pkg; Pkg.test()'
 
@@ -743,10 +735,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Pkg.test
         run: |
           if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ]; then
@@ -784,10 +775,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Pkg.test
         run: julia --project=lib/DistSSHUp -e 'using Pkg; Pkg.test()'
 
@@ -844,10 +834,9 @@ jobs:
           version: "1.13"
       - name: Julia ${{ steps.julia.outputs.version }}
         run: julia --version
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
         with:
           project: lib/DistSSHUp
@@ -881,10 +870,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Pkg.test
         run: |
           if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ]; then
@@ -921,10 +909,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Pkg.test
         run: julia --project=lib/DistSSHBase -e 'using Pkg; Pkg.test()'
 
@@ -979,10 +966,9 @@ jobs:
           version: "1.13"
       - name: Julia ${{ steps.julia.outputs.version }}
         run: julia --version
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
         with:
           project: lib/DistSSHBase
@@ -1019,10 +1005,9 @@ jobs:
           version: "1.13"
       - name: Julia ${{ steps.julia.outputs.version }}
         run: julia --version
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
         with:
           project: lib/DistSSHShip
@@ -1059,10 +1044,9 @@ jobs:
           version: "1.13"
       - name: Julia ${{ steps.julia.outputs.version }}
         run: julia --version
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
         with:
           project: lib/DistSSHHeartbeat
@@ -1103,10 +1087,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "~1.14.0-0"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/pkg-parallel-test
 
   test-1-14-pre-integration:
@@ -1124,10 +1107,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "~1.14.0-0"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/pkg-parallel-test
 
   test-1-14-pre-macos-unit:
@@ -1145,10 +1127,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "~1.14.0-0"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/pkg-parallel-test
 
   test-1-14-pre-macos-integration:
@@ -1166,10 +1147,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "~1.14.0-0"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/pkg-parallel-test
 
   test-nightly:
@@ -1187,10 +1167,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "nightly"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/pkg-test
 
   # The commit under test, installed the way General installs it:
@@ -1236,10 +1215,9 @@ jobs:
       - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: ./.github/actions/pkgeval
         with:
           package: DistSSHRun
@@ -1289,10 +1267,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: diff_lint.jl self-test
         run: |
           set -euo pipefail
@@ -1317,10 +1294,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Run added tests on HEAD src then merge-base src
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
@@ -1339,10 +1315,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Aqua.test_all (latest Aqua)
         run: ./.github/aqua-check.sh
 
@@ -1360,10 +1335,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "~1.14.0-0"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Aqua.test_all (latest Aqua)
         run: ./.github/aqua-check.sh
 
@@ -1381,10 +1355,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "nightly"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Aqua.test_all (latest Aqua)
         run: ./.github/aqua-check.sh
 
@@ -1445,7 +1418,7 @@ jobs:
             ~/.julia/registries
             ~/.julia/environments/apps
             ~/.julia/bin
-          key: jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-${{ hashFiles('Project.toml', 'test/Project.toml', 'bench/compile/Project.toml', 'lib/DistSSHBase/Project.toml', 'lib/DistSSHBase/test/Project.toml', 'lib/DistSSHUp/Project.toml', 'lib/DistSSHUp/test/Project.toml', 'lib/DistSSHShip/Project.toml', 'lib/DistSSHShip/test/Project.toml', 'lib/DistSSHHeartbeat/Project.toml', 'lib/DistSSHHeartbeat/test/Project.toml') }}
+          key: jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}
           restore-keys: |
             jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-
       - uses: ./.github/actions/jetls-check
@@ -1522,7 +1495,7 @@ jobs:
             ~/.julia/registries
             ~/.julia/environments/apps
             ~/.julia/bin
-          key: jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-${{ hashFiles('Project.toml', 'test/Project.toml', 'bench/compile/Project.toml', 'lib/DistSSHBase/Project.toml', 'lib/DistSSHBase/test/Project.toml', 'lib/DistSSHUp/Project.toml', 'lib/DistSSHUp/test/Project.toml', 'lib/DistSSHShip/Project.toml', 'lib/DistSSHShip/test/Project.toml', 'lib/DistSSHHeartbeat/Project.toml', 'lib/DistSSHHeartbeat/test/Project.toml') }}
+          key: jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}
           restore-keys: |
             jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-
       - uses: ./.github/actions/jetls-check
@@ -1564,10 +1537,9 @@ jobs:
       - name: Julia ${{ steps.julia.outputs.version }}
         run: julia --version
 
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
 
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
 
@@ -1612,10 +1584,9 @@ jobs:
       - name: Julia ${{ steps.julia.outputs.version }}
         run: julia --version
 
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
 
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
 
@@ -1737,10 +1708,9 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Install shellcheck
         run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
       - name: Runic pin

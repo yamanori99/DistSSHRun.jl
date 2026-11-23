@@ -1,0 +1,123 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+name: julia-depot-cache
+description: >-
+  Restore a Julia depot with actions/cache on every event; save only on push to
+  main (julia-actions/cache key and path layout, v3.5.0). Do not nest inside
+  another composite.
+
+inputs:
+  cache-name:
+    description: Cache key prefix (empty uses julia-cache;workflow=…;job=…).
+    required: false
+    default: ""
+  key-prefix:
+    description: Optional prefix before cache-name.
+    required: false
+    default: ""
+  include-matrix:
+    description: Include matrix values in the cache key.
+    required: false
+    default: "true"
+  depot:
+    description: Julia depot path (default ~/.julia).
+    required: false
+    default: ""
+  cache-artifacts:
+    description: Cache artifacts/.
+    required: false
+    default: "true"
+  cache-packages:
+    description: Cache packages/.
+    required: false
+    default: "true"
+  cache-registries:
+    description: Cache registries/ when absent locally.
+    required: false
+    default: "true"
+  cache-compiled:
+    description: Cache compiled/.
+    required: false
+    default: "true"
+  cache-scratchspaces:
+    description: Cache scratchspaces/.
+    required: false
+    default: "false"
+  cache-logs:
+    description: Cache logs/.
+    required: false
+    default: "true"
+  cache-objcache:
+    description: Cache LLVM objcache (depot cache/).
+    required: false
+    default: "true"
+  save-always:
+    description: Save on main push when the job failed (julia-actions/cache default).
+    required: false
+    default: "true"
+
+outputs:
+  cache-hit:
+    description: Exact cache key match on restore.
+    value: ${{ steps.depot-cache.outputs.cache-hit }}
+  cache-primary-key:
+    description: Primary cache key from restore.
+    value: ${{ steps.depot-cache.outputs.cache-primary-key }}
+
+runs:
+  using: composite
+  steps:
+    - id: prep
+      shell: bash
+      env:
+        DEPOT: ${{ inputs.depot }}
+        CACHE_NAME: ${{ inputs.cache-name }}
+        KEY_PREFIX: ${{ inputs.key-prefix }}
+        INCLUDE_MATRIX: ${{ inputs.include-matrix }}
+        CACHE_ARTIFACTS: ${{ inputs.cache-artifacts }}
+        CACHE_PACKAGES: ${{ inputs.cache-packages }}
+        CACHE_REGISTRIES: ${{ inputs.cache-registries }}
+        CACHE_COMPILED: ${{ inputs.cache-compiled }}
+        CACHE_SCRATCHSPACES: ${{ inputs.cache-scratchspaces }}
+        CACHE_LOGS: ${{ inputs.cache-logs }}
+        CACHE_OBJCACHE: ${{ inputs.cache-objcache }}
+        MATRIX_JSON: ${{ toJSON(matrix) }}
+        RUNNER_OS: ${{ runner.os }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        GITHUB_WORKFLOW: ${{ github.workflow }}
+        GITHUB_JOB: ${{ github.job }}
+      run: node "${GITHUB_ACTION_PATH}/compute.mjs"
+    - id: depot-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.prep.outputs.paths }}
+        key: ${{ steps.prep.outputs.cache-key }}
+        restore-keys: |
+          ${{ steps.prep.outputs.restore-key }}
+    - name: Ensure Julia depot exists
+      shell: bash
+      env:
+        DEPOT: ${{ steps.prep.outputs.depot }}
+      run: |
+        set -euo pipefail
+        mkdir -p "${DEPOT}"
+    - name: Update cached registries
+      if: steps.prep.outputs.cache-registries == 'true'
+      shell: bash
+      env:
+        DEPOT: ${{ steps.prep.outputs.depot }}
+      run: |
+        set -euo pipefail
+        registries="${DEPOT}/registries"
+        if [[ -d "${registries}" ]] && [[ -n "$(ls -A "${registries}" 2>/dev/null || true)" ]]; then
+          julia -e 'import Pkg; isdefined(Pkg, :Registry) && Pkg.Registry.update();'
+        fi
+    - name: Save Julia depot cache
+      if: >-
+        github.event_name == 'push' && github.ref == 'refs/heads/main'
+        && steps.depot-cache.outputs.cache-hit != 'true'
+        && (success() || inputs.save-always == 'true')
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.prep.outputs.paths }}
+        key: ${{ steps.depot-cache.outputs.cache-primary-key }}

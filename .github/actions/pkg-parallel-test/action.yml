@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-action.json
 name: pkg-parallel-test
-description: test/parallel.jl after the caller has run setup-julia and julia-actions/cache
+description: test/parallel.jl after the caller has run setup-julia and julia-depot-cache
 
 inputs:
   jobs:
