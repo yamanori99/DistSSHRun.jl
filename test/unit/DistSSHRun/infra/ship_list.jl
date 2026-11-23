@@ -681,9 +681,9 @@ end
                 plain = joinpath(tmp, "plain")
                 mkpath(plain)
                 for name in readdir(repo)
-                    name == ".git" && continue
-                    src = joinpath(repo, name)
-                    cp(src, joinpath(plain, name))
+                    if name != ".git"
+                        cp(joinpath(repo, name), joinpath(plain, name))
+                    end
                 end
                 listed = DistSSHRun.ship_send_list(repo)
                 @test listed == DistSSHRun.ship_send_list(plain)
