@@ -11,7 +11,7 @@ using Test
         script = joinpath(proj, "sleep_mark.jl")
         write(
             script, """
-            out = get(ENV, "DISTRIBUTED_OUTPUT_DIR", ".")
+            out = get(ENV, "DISTSSH_OUTPUT_DIR", ".")
             mkpath(out)
             write(joinpath(out, "t0.txt"), string(time()))
             sleep(0.6)
@@ -39,7 +39,7 @@ end
         script = joinpath(proj, "sleep_mark.jl")
         write(
             script, """
-            out = get(ENV, "DISTRIBUTED_OUTPUT_DIR", ".")
+            out = get(ENV, "DISTSSH_OUTPUT_DIR", ".")
             mkpath(out)
             write(joinpath(out, "t0.txt"), string(time()))
             sleep(0.6)
@@ -69,7 +69,7 @@ end
         script = joinpath(proj, "job.jl")
         write(
             script, """
-            out = get(ENV, "DISTRIBUTED_OUTPUT_DIR", ".")
+            out = get(ENV, "DISTSSH_OUTPUT_DIR", ".")
             mkpath(out)
             write(joinpath(out, "marker.txt"), "ok")
             """
@@ -95,7 +95,7 @@ end
         script = joinpath(proj, "job.jl")
         write(
             script, """
-            out = get(ENV, "DISTRIBUTED_OUTPUT_DIR", ".")
+            out = get(ENV, "DISTSSH_OUTPUT_DIR", ".")
             mkpath(out)
             write(joinpath(out, "marker.txt"), "ok")
             """

@@ -7,22 +7,22 @@ using Test
         mkpath(sd)
         out2 = joinpath(repo, "nested", "out2")
         withenv(
-            "DISTRIBUTED_COLLECT_DIRS" => "out1:$(out2)",
-            "DISTRIBUTED_OUTPUT_DIR" => joinpath(repo, "ignored")
+            "DISTSSH_COLLECT_DIRS" => "out1:$(out2)",
+            "DISTSSH_OUTPUT_DIR" => joinpath(repo, "ignored")
         ) do
             roots = DistSSHRun.distributed_collect_root_dirs(sd, repo)
             @test roots == String[abspath(joinpath(repo, "out1")), abspath(out2)]
         end
         withenv(
-            "DISTRIBUTED_COLLECT_DIRS" => "out1:out1",
-            "DISTRIBUTED_OUTPUT_DIR" => joinpath(repo, "ignored")
+            "DISTSSH_COLLECT_DIRS" => "out1:out1",
+            "DISTSSH_OUTPUT_DIR" => joinpath(repo, "ignored")
         ) do
             roots = DistSSHRun.distributed_collect_root_dirs(sd, repo)
             @test roots == String[abspath(joinpath(repo, "out1"))]
         end
         withenv(
-            "DISTRIBUTED_COLLECT_DIRS" => "",
-            "DISTRIBUTED_OUTPUT_DIR" => joinpath(repo, "solo")
+            "DISTSSH_COLLECT_DIRS" => "",
+            "DISTSSH_OUTPUT_DIR" => joinpath(repo, "solo")
         ) do
             @test DistSSHRun.distributed_collect_root_dirs(sd, repo) ==
                 String[abspath(joinpath(repo, "solo"))]
@@ -31,18 +31,18 @@ using Test
 
     _with_tempdir() do tmp
         default = joinpath(tmp, "output")
-        withenv("DISTRIBUTED_OUTPUT_DIR" => nothing) do
+        withenv("DISTSSH_OUTPUT_DIR" => nothing) do
             @test DistSSHRun.resolve_distributed_output_dir!(String[], default) == abspath(default)
-            @test ENV["DISTRIBUTED_OUTPUT_DIR"] == abspath(default)
+            @test ENV["DISTSSH_OUTPUT_DIR"] == abspath(default)
         end
 
         custom = joinpath(tmp, "custom")
-        withenv("DISTRIBUTED_OUTPUT_DIR" => custom) do
+        withenv("DISTSSH_OUTPUT_DIR" => custom) do
             @test DistSSHRun.resolve_distributed_output_dir!(String[], default) == abspath(custom)
         end
 
         from_args = joinpath(tmp, "from_args")
-        withenv("DISTRIBUTED_OUTPUT_DIR" => "") do
+        withenv("DISTSSH_OUTPUT_DIR" => "") do
             got = DistSSHRun.resolve_distributed_output_dir!(
                 String["--output-dir", from_args],
                 default
@@ -55,12 +55,12 @@ using Test
         _with_tempdir() do tmp
             script_dir = joinpath(tmp, "app")
             mkpath(script_dir)
-            withenv("DISTRIBUTED_OUTPUT_DIR" => nothing) do
+            withenv("DISTSSH_OUTPUT_DIR" => nothing) do
                 got = DistSSHRun.resolve_drive_output_dir(script_dir)
                 @test got == DistSSHRun.kit_dir_beside_script(script_dir, :drive)
             end
             explicit = joinpath(tmp, "explicit-out")
-            withenv("DISTRIBUTED_OUTPUT_DIR" => explicit) do
+            withenv("DISTSSH_OUTPUT_DIR" => explicit) do
                 got = DistSSHRun.resolve_drive_output_dir(script_dir)
                 @test got == DistSSHRun.canonical_local_path(explicit)
             end
@@ -72,7 +72,7 @@ using Test
             script_dir = joinpath(tmp, "app")
             mkpath(script_dir)
             withenv(
-                "DISTRIBUTED_OUTPUT_DIR" => nothing,
+                "DISTSSH_OUTPUT_DIR" => nothing,
                 DistSSHRun.DISTSSH_RUN_DIR_ENV => nothing
             ) do
                 @test DistSSHRun.resolve_drive_log_dir(nothing, script_dir) ==
@@ -81,7 +81,7 @@ using Test
             run_dir = joinpath(tmp, "run")
             mkpath(run_dir)
             withenv(
-                "DISTRIBUTED_OUTPUT_DIR" => joinpath(tmp, "env-out"),
+                "DISTSSH_OUTPUT_DIR" => joinpath(tmp, "env-out"),
                 DistSSHRun.DISTSSH_RUN_DIR_ENV => run_dir
             ) do
                 @test DistSSHRun.resolve_drive_log_dir(nothing, script_dir) ==
@@ -89,7 +89,7 @@ using Test
             end
             env_dir = joinpath(tmp, "env-out")
             withenv(
-                "DISTRIBUTED_OUTPUT_DIR" => env_dir,
+                "DISTSSH_OUTPUT_DIR" => env_dir,
                 DistSSHRun.DISTSSH_RUN_DIR_ENV => nothing
             ) do
                 @test DistSSHRun.resolve_drive_log_dir(nothing, script_dir) == env_dir

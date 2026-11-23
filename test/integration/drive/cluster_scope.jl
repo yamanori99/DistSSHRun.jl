@@ -21,26 +21,26 @@ end
             session = DistSSHSession(;
                 project = proj, head_workers = 1, remote = remote,
             )
-            prev = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+            prev = get(ENV, "DISTSSH_REMOTE_PROJECT_ROOT", nothing)
             after = nothing
             try
-                ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = keep
+                ENV["DISTSSH_REMOTE_PROJECT_ROOT"] = keep
                 redirect_stdout(devnull) do
                     cluster(session) do c
                         @test length(c.workers) == 1
-                        seen = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", "")
+                        seen = get(ENV, "DISTSSH_REMOTE_PROJECT_ROOT", "")
                         @test seen == DistSSHRun.remote_env_project_root(remote)
                         @test DistSSHRun.remote_deploy_root(proj) == remote
                         return :scoped
                     end
                 end
-                after = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+                after = get(ENV, "DISTSSH_REMOTE_PROJECT_ROOT", nothing)
                 @test after == keep
             finally
                 if prev === nothing
-                    delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+                    delete!(ENV, "DISTSSH_REMOTE_PROJECT_ROOT")
                 else
-                    ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = prev
+                    ENV["DISTSSH_REMOTE_PROJECT_ROOT"] = prev
                 end
             end
         end

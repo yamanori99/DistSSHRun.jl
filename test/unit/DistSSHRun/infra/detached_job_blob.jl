@@ -133,8 +133,8 @@ end
         run_dir = joinpath(d, "run")
         path = withenv(
             "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1",
-            "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "9",
-            "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "2",
+            "DISTSSH_HEARTBEAT_DEADLINE_SEC" => "9",
+            "DISTSSH_HEARTBEAT_INTERVAL_SEC" => "2",
             "DISTSSH_TOPOLOGY" => "master_worker",
         ) do
             fields = DistSSHRun.detached_job_blob_fields_from_env()
@@ -163,7 +163,7 @@ end
         end
         withenv(
             "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1",
-            "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "5",
+            "DISTSSH_HEARTBEAT_DEADLINE_SEC" => "5",
         ) do
             parsed = DistSSHRun.parse_drive_args(String["-y", "--job-blob", path])
             pol = DistSSHRun.resolve_drive_heartbeat_policy(

@@ -941,7 +941,7 @@ end
                 Dict(
                     "DISTSSH_QUIET" => "0",
                     "DISTSSH_YES" => "1",
-                    "DISTRIBUTED_INIT_DELAY_SEC" => "0"
+                    "DISTSSH_INIT_DELAY_SEC" => "0.01"
                 )
             )
             delete!(tty_extra, "DISTSSH_PROGRESS")
@@ -976,7 +976,7 @@ end
                     unset DISTSSH_QUIET
                     unset DISTSSH_PROGRESS
                     unset DISTSSH_VERBOSE
-                    unset DISTSSH_CLI_SUBCOMMAND_DONE
+                    unset DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE
                     unset DIST_SSH_KIT_CLI_INCLUDE
                     export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
                     unset JULIA_PROJECT
@@ -1373,10 +1373,10 @@ end
             _e2e_announce("in-process drive! is reentrant (no worker leak)")
             withenv(_e2e_base_env()...) do
                 for call in 1:2
-                    # `pipeline!` above leaves `DISTRIBUTED_OUTPUT_DIR` on the
+                    # `pipeline!` above leaves `DISTSSH_OUTPUT_DIR` on the
                     # project `output/`, which now has files. This call does
                     # not pass `output_dir`.
-                    delete!(ENV, "DISTRIBUTED_OUTPUT_DIR")
+                    delete!(ENV, "DISTSSH_OUTPUT_DIR")
                     out = mktemp() do out_path, out_io
                         res = redirect_stdout(out_io) do
                             drive!(
@@ -1427,9 +1427,9 @@ end
             hb_env = merge(
                 _e2e_base_env(), Dict(
                     "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1",
-                    "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "1",
-                    "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "5",
-                    "DISTRIBUTED_INIT_DELAY_SEC" => "0"
+                    "DISTSSH_HEARTBEAT_INTERVAL_SEC" => "1",
+                    "DISTSSH_HEARTBEAT_DEADLINE_SEC" => "5",
+                    "DISTSSH_INIT_DELAY_SEC" => "0.01"
                 )
             )
             detached = withenv(hb_env...) do
@@ -1493,7 +1493,7 @@ end
             gone, leftover, _ = _e2e_wait_worker_reap(host, pids)
             reap_elapsed = time() - kill_t0
             hb_log = _e2e_hb_log_text(log_dir)
-            hb_deadline = parse(Float64, get(hb_env, "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC", "5"))
+            hb_deadline = parse(Float64, get(hb_env, "DISTSSH_HEARTBEAT_DEADLINE_SEC", "5"))
             no_hb_exit75 = !occursin(_E2E_HB_EXIT75_NEEDLE, hb_log)
             fast_reap = reap_elapsed < hb_deadline
             _assert_ssh_e2e_api_ok(

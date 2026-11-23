@@ -71,8 +71,8 @@ end
                 env = merge(
                     _fake_setup_remote_env(state_dir),
                     Dict(
-                        "DISTRIBUTED_PROJECT_ROOT" => proj,
-                        "DISTRIBUTED_REMOTE_PROJECT_ROOT" => remote,
+                        "DISTSSH_PROJECT_ROOT" => proj,
+                        "DISTSSH_REMOTE_PROJECT_ROOT" => remote,
                         "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
                         # Absolute fake remotes are not a real git tree; selection
                         # still requires a Project.toml probe. Force the git path.
@@ -242,7 +242,9 @@ end
             write(script, "true\n")
             out = joinpath(proj, "out")
             mkpath(out)
-            withenv("DISTRIBUTED_OUTPUT_DIR" => out) do
+            withenv(
+                "DISTSSH_OUTPUT_DIR" => out,
+            ) do
                 ok, hrs = DistSSHRun.collect_drive_results!(
                     ["host1"], dirname(script), ".drive_sentinel_x", false, proj, proj
                 )
@@ -260,7 +262,9 @@ end
             logp = joinpath(state_dir, "ssh.log")
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
-            withenv("DISTSSH_TEST_SSH_LOG" => logp) do
+            withenv(
+                "DISTSSH_TEST_SSH_LOG" => logp,
+            ) do
                 name = DistSSHRun.place_drive_sentinels!(["host1"], dirname(script), true, proj)
                 @test name == ""
             end
@@ -282,7 +286,9 @@ end
             out = joinpath(proj, "out")
             mkpath(out)
             mkpath(joinpath(state_dir, "shared", "tree"))
-            withenv("DISTRIBUTED_OUTPUT_DIR" => out) do
+            withenv(
+                "DISTSSH_OUTPUT_DIR" => out,
+            ) do
                 base = DistSSHRun.place_drive_sentinels!(
                     ["host1", "host2"], dirname(script), false, proj
                 )
@@ -334,7 +340,9 @@ end
             end
             @test refused_parent
             @test occursin("Error:", out_parent)
-            withenv("DISTRIBUTED_COLLECT_DIRS" => ".") do
+            withenv(
+                "DISTSSH_COLLECT_DIRS" => ".",
+            ) do
                 roots = DistSSHRun.distributed_collect_root_dirs(proj, proj)
                 @test length(roots) == 1
                 @test rstrip(roots[1], '/') ==
@@ -347,7 +355,7 @@ end
             write(script, "true\n")
             withenv(
                 "DISTSSH_TEST_SSH_LOG" => logp,
-                "DISTRIBUTED_COLLECT_DIRS" => "."
+                "DISTSSH_COLLECT_DIRS" => "."
             ) do
                 captured, name = _capture_stdio() do _, _
                     DistSSHRun.place_drive_sentinels!(

@@ -1,9 +1,8 @@
 # pipeline! — sync → drive → collect.
 
 function _reject_obsolete_pipeline_size_env(env::ProcessEnv)
-    for name in ("GB_PER_WORKER", "DISTSSH_SIZE_PROBE")
-        raw = strip(get(env, name, ""))
-        isempty(raw) && continue
+    for name in ("GB_PER_WORKER", string("DISTSSH_", "SIZE_PROBE"), "DISTSSH_INTERNAL_SIZE_PROBE")
+        haskey(env, name) || continue
         throw(
             ArgumentError(
                 "$name is no longer used by pipeline!; pass explicit parent:N / NAME:N",
@@ -35,8 +34,8 @@ Build [`PipelineConfig`](@ref) from environment variables.
 |----------|------|
 | `DISTSSH_HOSTS` | Comma-separated placement tokens (`N*host`, …) |
 | `DISTSSH_HOSTS_FILE` | Hosts file when the CLI does not set a host list (same precedence as CLI) |
-| `DISTRIBUTED_REMOTE_PROJECT_ROOT` | Remote repo root |
-| `DISTRIBUTED_PROJECT_ROOT` | Local project root |
+| `DISTSSH_REMOTE_PROJECT_ROOT` | Remote repo root |
+| `DISTSSH_PROJECT_ROOT` | Local project root |
 | `DRIVER` | Driver script path |
 | `JULIA_DISTRIBUTED_EXE` | Remote Julia path (same as CLI `--julia`; `auto` / unset → detect) |
 | `DISTSSH_YES` / `DISTSSH_QUIET` / `DISTSSH_PROGRESS` / `DISTSSH_VERBOSE` | Same as CLI `-y` / `-q` / `--progress` / `--verbose` |
@@ -47,8 +46,8 @@ function pipeline_config_from_env(;
     )::PipelineConfig
     _reject_obsolete_pipeline_size_env(env)
     driver_path = _pipeline_config_driver_path(driver, env)
-    remote_raw = strip(get(env, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
-    project_root = strip(get(env, "DISTRIBUTED_PROJECT_ROOT", ""))
+    remote_raw = strip(get(env, "DISTSSH_REMOTE_PROJECT_ROOT", ""))
+    project_root = strip(get(env, "DISTSSH_PROJECT_ROOT", ""))
     cli = default_kit_cli_session(env)
     cli.hint_surface = :api
     env_v = _env_verbosity(env)
@@ -108,7 +107,7 @@ function pipeline_collect_root(config::PipelineConfig)::String
     if config.output_dir !== nothing
         return canonical_local_path(something(config.output_dir))
     end
-    env = strip(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
+    env = strip(get(ENV, "DISTSSH_OUTPUT_DIR", ""))
     if !isempty(env)
         return canonical_local_path(env)
     end
@@ -209,9 +208,9 @@ function _pipeline_run!(config::PipelineConfig, session::DistSSHSession, driver:
     end
 
     do_collect = resolve_pipeline_collect(config, session)
-    prev_skip = get(ENV, "DISTRIBUTED_SKIP_COLLECT", nothing)
+    prev_skip = get(ENV, "DISTSSH_SKIP_COLLECT", nothing)
     if do_collect
-        ENV["DISTRIBUTED_SKIP_COLLECT"] = "1"
+        ENV["DISTSSH_SKIP_COLLECT"] = "1"
     end
     drive_result = try
         drive!(
@@ -232,9 +231,9 @@ function _pipeline_run!(config::PipelineConfig, session::DistSSHSession, driver:
     finally
         if do_collect
             if prev_skip === nothing
-                delete!(ENV, "DISTRIBUTED_SKIP_COLLECT")
+                delete!(ENV, "DISTSSH_SKIP_COLLECT")
             else
-                ENV["DISTRIBUTED_SKIP_COLLECT"] = prev_skip
+                ENV["DISTSSH_SKIP_COLLECT"] = prev_skip
             end
         end
     end

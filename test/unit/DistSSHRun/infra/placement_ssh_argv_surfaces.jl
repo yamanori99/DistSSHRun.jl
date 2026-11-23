@@ -12,7 +12,7 @@ function _placement_ssh_p_flag(host::AbstractString)::Vector{String}
 end
 
 withenv(
-    "DISTRIBUTED_SSH_OPTS" => nothing,
+    "DISTSSH_SSH_OPTS" => nothing,
     "DISTSSH_TEST" => nothing,
     "DISTSSH_TEST_SSH" => nothing,
 ) do
@@ -22,7 +22,9 @@ withenv(
             plain = "alice@lab"
             @test _placement_ssh_p_flag(with_port) == ["-p", "2222"]
             @test isempty(_placement_ssh_p_flag(plain))
-            withenv("DISTRIBUTED_SSH_OPTS" => "-p 9999 -o Port=8888") do
+            withenv(
+                "DISTSSH_SSH_OPTS" => "-p 9999 -o Port=8888",
+            ) do
                 @test _placement_ssh_p_flag(with_port) == ["-p", "2222"]
                 env_plain = _placement_ssh_p_flag(plain)
                 @test env_plain == ["-p", "9999"]
@@ -55,7 +57,9 @@ withenv(
                 phase = DistSSHRun._ssh_phase_cmd(host, "true")
                 @test "-p" in phase.exec
                 @test !("-p" in DistSSHRun._ssh_phase_cmd("alice@lab", "true").exec)
-                withenv("DISTRIBUTED_SSH_OPTS" => "-p 2200") do
+                withenv(
+                    "DISTSSH_SSH_OPTS" => "-p 2200",
+                ) do
                     dup = DistSSHRun._ssh_phase_cmd(host, "true")
                     @test count(==("-p"), dup.exec) == 1
                     @test "2222" in dup.exec

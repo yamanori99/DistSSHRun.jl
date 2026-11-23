@@ -269,7 +269,7 @@ end
 function _demo_install_args(
         args::Vector{String},
     )::@NamedTuple{dest::String, force::Bool, family::String}
-    dest = canonical_local_path(get(ENV, "DISTRIBUTED_PROJECT_ROOT", pwd()))
+    dest = canonical_local_path(get(ENV, "DISTSSH_PROJECT_ROOT", pwd()))
     force = false
     families = String[]
     c = CliCursor(args)

@@ -6,13 +6,13 @@ function init_output_dir!(args)
     if length(args) >= 2 && args[1] == "--out"
         dest = args[2]
     end
-    ENV["DISTRIBUTED_OUTPUT_DIR"] = dest
+    ENV["DISTSSH_OUTPUT_DIR"] = dest
     mkpath(dest)
     return nothing
 end
 
 function main()
-    out = ENV["DISTRIBUTED_OUTPUT_DIR"]
+    out = ENV["DISTSSH_OUTPUT_DIR"]
     write(joinpath(out, "hook.txt"), "ok\n")
     println("DISTSSH_INIT_OUTPUT_OK ", out)
     return nothing

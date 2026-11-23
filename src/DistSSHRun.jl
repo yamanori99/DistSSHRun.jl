@@ -156,7 +156,7 @@ using .DistSSHBase: CliCursor, HostFacts, HostResult, OUTPUT_WIDTH, PARENT_HOST_
     _path_is_under, _path_under_resolved, _print_colored, _remote_julia_path_sh,
     _remote_shell_path_word, _remote_shell_status, _remote_shell_status_parts,
     _rethrow_missing_host_tool, _scp_cmd, _ssh_cmd, _ssh_exe,
-    _ssh_host_connection_args, _test_double_julia_argv, _test_doubles_on, _throw_if_nonposix_shell,
+    _ssh_host_connection_args, _test_doubles_on, _throw_if_nonposix_shell,
     _truncate_ssh_message,
     cli_at_end, cli_consume!, cli_current, cli_entry, cli_heading, cli_m, cli_m_project,
     cli_match, cli_take_value!, clone_url_from_local_origin, collect_host_facts, detect_julia_path,
@@ -187,6 +187,7 @@ include("DistSSHRun/messages/errors.jl")
 include("DistSSHRun/messages/placement.jl")
 include("DistSSHRun/options/process_env.jl")
 include("DistSSHRun/options/table.jl")
+include("DistSSHRun/options/env_table.jl")
 include("DistSSHRun/options/config.jl")
 include("DistSSHRun/options/cli_consume.jl")
 include("DistSSHRun/options/job_options.jl")
@@ -301,9 +302,9 @@ function _kit_cli_run_entry(script_base::String)::Cint
 end
 
 function _append_script_arg_prelude!(args::Vector{String})
-    raw = get(ENV, "DISTSSH_SCRIPT_ARG_PRELUDE", "")
+    raw = get(ENV, "DISTSSH_INTERNAL_SCRIPT_ARG_PRELUDE", "")
     isempty(raw) && return
-    delete!(ENV, "DISTSSH_SCRIPT_ARG_PRELUDE")
+    delete!(ENV, "DISTSSH_INTERNAL_SCRIPT_ARG_PRELUDE")
     for line in split(raw, '\n')
         s = strip(String(line))
         !isempty(s) && push!(args, s)
@@ -318,12 +319,12 @@ function _merge_script_arg_prelude(rest::Vector{String})::Vector{String}
 end
 
 function _mark_kit_cli_subcommand_done!()
-    return ENV["DISTSSH_CLI_SUBCOMMAND_DONE"] = "1"
+    return ENV["DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE"] = "1"
 end
 
 function _consume_kit_cli_subcommand_done!()::Bool
-    if get(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE", "") == "1"
-        delete!(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
+    if get(ENV, "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE", "") == "1"
+        delete!(ENV, "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE")
         return true
     end
     return false
@@ -331,9 +332,9 @@ end
 
 """Run a kit CLI script under `src/cli/` (`drive.jl`, `setup.jl`, …) with `ARGS` set."""
 function _run_kit_cli_script(script_name::AbstractString, args::Vector{String})::Cint
-    prev_proj = get(ENV, "DISTRIBUTED_PROJECT_ROOT", nothing)
-    prev_done = get(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE", nothing)
-    prev_proj === nothing && (ENV["DISTRIBUTED_PROJECT_ROOT"] = pwd())
+    prev_proj = get(ENV, "DISTSSH_PROJECT_ROOT", nothing)
+    prev_done = get(ENV, "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE", nothing)
+    prev_proj === nothing && (ENV["DISTSSH_PROJECT_ROOT"] = pwd())
     # `args` may alias `ARGS` (the app launcher can pass `ARGS` directly).
     args_snapshot = collect(String, args)
     orig_args = copy(ARGS)
@@ -364,9 +365,9 @@ function _run_kit_cli_script(script_name::AbstractString, args::Vector{String}):
         empty!(ARGS)
         append!(ARGS, orig_args)
         if prev_proj === nothing
-            delete!(ENV, "DISTRIBUTED_PROJECT_ROOT")
+            delete!(ENV, "DISTSSH_PROJECT_ROOT")
         else
-            ENV["DISTRIBUTED_PROJECT_ROOT"] = prev_proj
+            ENV["DISTSSH_PROJECT_ROOT"] = prev_proj
         end
         if prev_include === nothing
             delete!(ENV, "DIST_SSH_KIT_CLI_INCLUDE")
@@ -374,9 +375,9 @@ function _run_kit_cli_script(script_name::AbstractString, args::Vector{String}):
             ENV["DIST_SSH_KIT_CLI_INCLUDE"] = prev_include
         end
         if prev_done === nothing
-            delete!(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
+            delete!(ENV, "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE")
         else
-            ENV["DISTSSH_CLI_SUBCOMMAND_DONE"] = prev_done
+            ENV["DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE"] = prev_done
         end
     end
 end
@@ -532,7 +533,7 @@ function _main(args::Vector{String})::Cint
         # A second `main` in this process must run. The handshake flag is
         # single-shot: consume clears it, and this deletes it again on every
         # return, including throw and drive interrupt.
-        delete!(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
+        delete!(ENV, "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE")
     end
 end
 

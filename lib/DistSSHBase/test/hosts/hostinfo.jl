@@ -11,7 +11,7 @@ using Test
     @test localf.kernel_release !== nothing
     parsed = DistSSHBase._hostinfo_parse_probe(
         """
-        DISTSSH_HOSTINFO
+        DISTSSH_INTERNAL_HOSTINFO
         mem=17179869184
         ncpu=4
         os=Linux
@@ -38,7 +38,7 @@ using Test
     @test DistSSHBase._hostinfo_parse_ncpu("0") === nothing
 
     # Positional shift: missing RAM leaves CPU then OS. Must not treat ncpu as RAM.
-    shifted = DistSSHBase._hostinfo_parse_probe("DISTSSH_HOSTINFO\n4\nLinux\n")
+    shifted = DistSSHBase._hostinfo_parse_probe("DISTSSH_INTERNAL_HOSTINFO\n4\nLinux\n")
     @test shifted !== nothing
     if shifted !== nothing
         @test shifted.total_memory_bytes === nothing
@@ -51,7 +51,7 @@ using Test
         @test shifted.cpu_model === nothing
     end
     empty_mem = DistSSHBase._hostinfo_parse_probe(
-        "DISTSSH_HOSTINFO\nmem=\nncpu=4\nos=Linux\nkernel=1\narch=x86_64\n",
+        "DISTSSH_INTERNAL_HOSTINFO\nmem=\nncpu=4\nos=Linux\nkernel=1\narch=x86_64\n",
     )
     @test empty_mem !== nothing
     if empty_mem !== nothing
@@ -61,7 +61,7 @@ using Test
         @test empty_mem.arch == "x86_64"
     end
     empty_cpu = DistSSHBase._hostinfo_parse_probe(
-        "DISTSSH_HOSTINFO\nmem=8589934592\nncpu=\nos=Darwin\narch=arm64\nos_version=27.2\nos_pretty=macOS\n",
+        "DISTSSH_INTERNAL_HOSTINFO\nmem=8589934592\nncpu=\nos=Darwin\narch=arm64\nos_version=27.2\nos_pretty=macOS\n",
     )
     @test empty_cpu !== nothing
     if empty_cpu !== nothing
@@ -73,7 +73,7 @@ using Test
         @test empty_cpu.arch == "arm64"
     end
     empty_os = DistSSHBase._hostinfo_parse_probe(
-        "DISTSSH_HOSTINFO\nmem=8589934592\nncpu=2\nos=\narch=x86_64\n",
+        "DISTSSH_INTERNAL_HOSTINFO\nmem=8589934592\nncpu=2\nos=\narch=x86_64\n",
     )
     @test empty_os !== nothing
     if empty_os !== nothing
@@ -84,7 +84,7 @@ using Test
     # Partial labels must not shift later keys.
     partial = DistSSHBase._hostinfo_parse_probe(
         """
-        DISTSSH_HOSTINFO
+        DISTSSH_INTERNAL_HOSTINFO
         mem=8589934592
         ncpu=2
         os=Linux

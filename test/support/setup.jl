@@ -24,7 +24,7 @@ if !isdefined(@__MODULE__, :_run_kit_setup)
             cmd = _kit_cli_cmd(vcat([String(command)], args); julia = julia, project = kit_root)
             base = Dict{String, String}(
                 "DISTSSH_YES" => "1",
-                "DISTRIBUTED_PROJECT_ROOT" => proj
+                "DISTSSH_PROJECT_ROOT" => proj
             )
             env = _child_julia_env(merge(base, extra_env))
             return setenv(cmd, env), owned ? proj : nothing
@@ -223,7 +223,7 @@ if !isdefined(@__MODULE__, :_run_kit_setup)
             )
             base = Dict{String, String}(
                 "DISTSSH_YES" => "1",
-                "DISTRIBUTED_PROJECT_ROOT" => proj
+                "DISTSSH_PROJECT_ROOT" => proj
             )
             env = _child_julia_env(merge(base, extra_env))
             return _run_subprocess(setenv(cmd, env))
@@ -251,7 +251,7 @@ if !isdefined(@__MODULE__, :_run_kit_setup)
             cmd = _kit_cli_cmd(vcat(["hostinfo"], hostinfo_args); julia = julia, project = kit_root)
             base = Dict{String, String}(
                 "DISTSSH_YES" => "1",
-                "DISTRIBUTED_PROJECT_ROOT" => proj
+                "DISTSSH_PROJECT_ROOT" => proj
             )
             env = _child_julia_env(merge(base, extra_env))
             return _run_subprocess(setenv(cmd, env))

@@ -404,9 +404,14 @@ function parse_drive_args(args::Vector{String}; env::ProcessEnv = snapshot_proce
         lw = cli_session.head_workers::Int
         head_workers = _drive_set_head_workers!(head_workers, lw, "--head-workers")
     else
-        env_lw = tryparse(Int, strip(get(env, "DISTSSH_HEAD_WORKERS", "")))
-        env_lw !== nothing &&
-            (head_workers = _drive_set_head_workers!(head_workers, env_lw, "DISTSSH_HEAD_WORKERS"))
+        if haskey(env, "DISTSSH_HEAD_WORKERS")
+            env_lw = DistSSHBase.parse_env_int(
+                "DISTSSH_HEAD_WORKERS",
+                String(get(env, "DISTSSH_HEAD_WORKERS", ""));
+                minimum = 0,
+            )
+            head_workers = _drive_set_head_workers!(head_workers, env_lw, "DISTSSH_HEAD_WORKERS")
+        end
     end
 
     if script_path !== nothing
@@ -487,7 +492,7 @@ function show_drive_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  --deploy-root PATH  remote deployment root (location, not snapshot id).",
-        "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
+        "                      Omit for DISTSSH_REMOTE_PROJECT_ROOT, else the",
         "                      ~/Parent/RepoName layout from the local env_dir.",
         "  --ship-id ID       use ships/<ID>/src under the deploy root",
         "                      (after setup ship-tree + setup instantiate)",
@@ -515,8 +520,8 @@ function show_drive_usage(; io::IO = stdout)
         io,
         "  After main(): files newer than this run's sentinel.",
         "  Default root: --output-dir, else {script}/.distssh/drive/<stem>_<UTC>/.",
-        "  Extra trees: DISTRIBUTED_COLLECT_DIRS=dir[:dir...] (relative to the project, or absolute).",
-        "  Example: ENV[\"DISTRIBUTED_COLLECT_DIRS\"] = \"data/sims\" in the driver.",
+        "  Extra trees: DISTSSH_COLLECT_DIRS=dir[:dir...] (relative to the project, or absolute).",
+        "  Example: ENV[\"DISTSSH_COLLECT_DIRS\"] = \"data/sims\" in the driver.",
         "  A second drive --ship-id that does not rewrite files: (nothing to collect).",
         "  Later: --collect-missing / --collect-overwrite ROOT HOST... (fails on skipped hosts unless --best-effort)",
         "  Pass --ship-id ID so collect maps onto that ship, not a newer one.",
@@ -524,7 +529,7 @@ function show_drive_usage(; io::IO = stdout)
         "  Pull-back uses Tar. Remote mtimes and file modes are not kept.",
         "  Modes are 0644, or 0755 if executable. Remote Julia is --julia or auto-detect.",
         "  Escaping symlinks are refused.",
-        "  Skip auto-collect: DISTRIBUTED_SKIP_COLLECT=1",
+        "  Skip auto-collect: DISTSSH_SKIP_COLLECT=1",
     )
     print_help_blank(io)
     print_help_section("Environment"; io = io)
@@ -538,8 +543,8 @@ function show_drive_usage(; io::IO = stdout)
         "  $(DRIVE_UNSAFE_MASTER_SILENCE_EXIT_ENV_HELP)",
         "  $(DRIVE_HEARTBEAT_DEADLINE_ENV_HELP)",
         "  $(DRIVE_HEARTBEAT_INTERVAL_ENV_HELP)",
-        "  DISTRIBUTED_SKIP_COLLECT=1 skip post-run collect",
-        "  DISTRIBUTED_COLLECT_DIRS extra collect trees (colon-separated)",
+        "  DISTSSH_SKIP_COLLECT=1 skip post-run collect",
+        "  DISTSSH_COLLECT_DIRS extra collect trees (colon-separated)",
         "  SSH workers get JULIA_PROJECT / JULIA_LOAD_PATH / JULIA_NUM_THREADS,",
         "  optional BLAS/OMP thread vars, and DISTSSH_JOB_SEED / WORKER_RANK /",
         "  WORKER_SEED / JOB_ID when set. Other controller ENV is not forwarded.",

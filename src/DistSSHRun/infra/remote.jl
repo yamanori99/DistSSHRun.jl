@@ -188,7 +188,8 @@ end
 
 # One SSH command on many hosts. `kill -INT` and tagged `pkill` share this.
 # OpenSSH keeps the first value of each option, so these budgets win over
-# `ssh_opts`, including a replacement `DISTRIBUTED_SSH_OPTS`.
+# `ssh_opts`, including a replacement `DISTSSH_SSH_OPTS`.
+# A permit channel bounds `@async` work the same way as `map_host_jobs`.
 const _SSH_PHASE_CONCURRENCY = 8
 
 mutable struct _CmdRun
@@ -204,11 +205,12 @@ struct _SSHHostResult
     errkind::Symbol
 end
 
-"""`ssh` argv for one short remote command, or the `DISTSSH_TEST_SSH` double."""
+"""`ssh` argv for one short remote command, or an injected test double."""
 function _ssh_phase_cmd(host::AbstractString, remote::AbstractString)::Cmd
-    custom = _test_doubles_on() ? strip(get(ENV, "DISTSSH_TEST_SSH", "")) : ""
-    if !isempty(custom)
-        return Cmd(vcat(_test_double_julia_argv(custom), [String(host), String(remote)]))
+    t = DistSSHBase._injected_ssh[]
+    if t !== nothing
+        cmd = t.remote_cmd(String(host), String(remote); forward_stdin = false)
+        cmd !== nothing && return cmd
     end
     h = String(host)
     _, port = DistSSHBase.parse_ssh_endpoint(h)
@@ -233,6 +235,30 @@ function _kill_cmd_runs!(runs::AbstractVector{_CmdRun})
     return nothing
 end
 
+"""Run `f(i)` for each index, at most `ntasks` `@async` tasks at once."""
+function _foreach_bounded(f, indices::AbstractVector{Int}, ntasks::Integer)
+    n = length(indices)
+    n == 0 && return nothing
+    jobs = max(1, min(Int(ntasks), n))
+    permits = Channel{Nothing}(jobs)
+    for _ in 1:jobs
+        put!(permits, nothing)
+    end
+    @sync for k in 1:n
+        let i = indices[k]
+            @async begin
+                take!(permits)
+                try
+                    f(i)
+                finally
+                    put!(permits, nothing)
+                end
+            end
+        end
+    end
+    return nothing
+end
+
 """
 Run `cmds` with at most `ntasks` in flight. After `seconds`, SIGKILL every
 local process this started, including ones that were still queued, and wait
@@ -247,8 +273,6 @@ function _run_cmds_bounded!(
     runs = [_CmdRun() for _ in 1:n]
     n == 0 && return runs
     stop = Ref(false)
-    # `Base.Semaphore` waits on `Threads.Condition`. An `@async` task on this
-    # thread does not take that permit. A channel of permits does.
     permits = Channel{Nothing}(max(1, Int(ntasks)))
     for _ in 1:max(1, Int(ntasks))
         put!(permits, nothing)
@@ -646,7 +670,7 @@ function _collect_root_overlap_message(
     isempty(proj) && (proj = "/")
     (dest == proj || startswith(proj, dest * "/")) || return nothing
     return "collect root $dest is the project root or an ancestor of it ($proj). " *
-        "That would overwrite source files. Point DISTRIBUTED_COLLECT_DIRS, DISTRIBUTED_OUTPUT_DIR, or collect! at a result directory inside the project."
+        "That would overwrite source files. Point DISTSSH_COLLECT_DIRS, DISTSSH_OUTPUT_DIR, or collect! at a result directory inside the project."
 end
 
 """Print the collect-root error and return whether collection must stop."""
@@ -759,22 +783,22 @@ end
 """
 Local absolute directories used for per-run sentinel placement and post-run rsync from SSH workers.
 
-If `ENV["DISTRIBUTED_COLLECT_DIRS"]` is non-empty: colon-separated list (same convention as POSIX `PATH`).
+If `ENV["DISTSSH_COLLECT_DIRS"]` is non-empty: colon-separated list (same convention as POSIX `PATH`).
 Each token is `canonical_local_path(token)` when absolute, otherwise `canonical_local_path(joinpath(project_root, token))`.
 Empty tokens are skipped; duplicates removed (first occurrence order preserved).
 
 If unset or blank after trimming: a single root from [`resolve_drive_output_dir`](@ref)
-(`DISTRIBUTED_OUTPUT_DIR`, else the resolved `.distssh` / legacy drive root beside `{script_dir}` kind root).
+(`DISTSSH_OUTPUT_DIR`, else the resolved `.distssh` / legacy drive root beside `{script_dir}` kind root).
 
-Scripts should set `DISTRIBUTED_COLLECT_DIRS` to every tree that may receive new files on workers during the run
-(e.g. sweep output plus figures). Logs may stay under `DISTRIBUTED_OUTPUT_DIR` only; omit that path here if logs
+Scripts should set `DISTSSH_COLLECT_DIRS` to every tree that may receive new files on workers during the run
+(e.g. sweep output plus figures). Logs may stay under `DISTSSH_OUTPUT_DIR` only; omit that path here if logs
 should not be rsync'd.
 """
 function distributed_collect_root_dirs(
         script_dir::AbstractString,
         project_root::AbstractString,
     )::Vector{String}
-    spec = String(strip(get(ENV, "DISTRIBUTED_COLLECT_DIRS", "")))
+    spec = String(strip(get(ENV, "DISTSSH_COLLECT_DIRS", "")))
     repo = canonical_local_path(project_root)
     if !isempty(spec)
         out = String[]

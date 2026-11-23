@@ -135,7 +135,7 @@ using Test
             )
             env = something(rooted.env, String[])
             @test any(e -> startswith(e, "JULIA_LOAD_PATH="), env)
-            @test "DISTRIBUTED_PROJECT_ROOT=/jobs/app" in env
+            @test "DISTSSH_PROJECT_ROOT=/jobs/app" in env
             ap = Base.active_project()
             if ap !== nothing
                 @test "--project=$(dirname(String(ap)))" in rooted.exec
@@ -368,7 +368,7 @@ using Test
         @test occursin("--ship-id", txt)
         @test occursin("ships/<ID>/src", txt)
         @test occursin("post-run-new", txt) || occursin("sentinel", txt)
-        @test occursin("DISTRIBUTED_COLLECT_DIRS", txt)
+        @test occursin("DISTSSH_COLLECT_DIRS", txt)
         @test occursin("Pull-back uses Tar", txt)
         @test occursin("off by default", lowercase(txt))
         @test occursin("head-workers", txt)
@@ -384,7 +384,7 @@ using Test
         @test occursin("--best-effort", txt)
         @test !occursin("required after `setup --rsync`", txt)
         @test occursin("--deploy-root", txt)
-        @test occursin("Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT", txt)
+        @test occursin("Omit for DISTSSH_REMOTE_PROJECT_ROOT", txt)
     end
 
     @testset "deploy-root" begin

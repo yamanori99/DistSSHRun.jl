@@ -26,8 +26,8 @@ using Test
                 cmd,
                 _child_julia_env(
                     Dict(
-                        "DISTRIBUTED_INIT_DELAY_SEC" => "0",
-                        "DISTRIBUTED_PROJECT_ROOT" => proj
+                        "DISTSSH_INIT_DELAY_SEC" => "0",
+                        "DISTSSH_PROJECT_ROOT" => proj
                     )
                 )
             ),

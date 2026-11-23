@@ -31,7 +31,7 @@ function place_drive_sentinels!(
     sentinel_name = ".drive_sentinel_$(getpid())_$(Dates.format(now(), "yyyymmddTHHMMSS"))"
     repo_ra = canonical_local_path(project_root)
     collect_roots_sentinel = distributed_collect_root_dirs(script_dir, repo_ra)
-    # The driver script may set `DISTRIBUTED_COLLECT_DIRS` after drive starts
+    # The driver script may set `DISTSSH_COLLECT_DIRS` after drive starts
     # and before sentinels. Refuse here, before any remote mkdir.
     for local_rd in collect_roots_sentinel
         _early_local = DistSSHRun.canonical_local_path(local_rd)

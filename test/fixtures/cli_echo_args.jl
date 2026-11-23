@@ -15,6 +15,6 @@ let path = get(ENV, "_DISTSSH_TEST_ARGS_FILE", "")
     end
     proj_file = get(ENV, "_DISTSSH_TEST_PROJ_FILE", "")
     if !isempty(proj_file)
-        write(proj_file, get(ENV, "DISTRIBUTED_PROJECT_ROOT", ""))
+        write(proj_file, get(ENV, "DISTSSH_PROJECT_ROOT", ""))
     end
 end

@@ -3,6 +3,6 @@ using Distributed
 
 function main()
     all(!=(1), pmap(_ -> myid(), workers())) || error("expected SSH workers")
-    touch(joinpath(ENV["DISTRIBUTED_OUTPUT_DIR"], "bind_ok.txt"))
+    touch(joinpath(ENV["DISTSSH_OUTPUT_DIR"], "bind_ok.txt"))
     return nothing
 end

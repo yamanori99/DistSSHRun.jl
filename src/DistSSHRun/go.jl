@@ -582,7 +582,7 @@ function _go_run_local_slot!(
     )
     env_pairs = worker_env_pairs(
         project;
-        extra = ["DISTRIBUTED_OUTPUT_DIR" => String(slot_dir)],
+        extra = ["DISTSSH_OUTPUT_DIR" => String(slot_dir)],
         rank = take_worker_rank(),
     )
     notice = launch_override_notice(PARENT_HOST_NAME, launch_override_names(ENV))
@@ -666,12 +666,12 @@ function _go_remote_slot_shell_inner(
     loader_q = _remote_shell_path_word(joinpath(slot_rel, DistSSHBase.LOCAL_STATE_DIR, _GO_SLOT_LOADER_NAME))
     hs_q = _remote_shell_path_word(joinpath(slot_rel, DistSSHBase.LOCAL_STATE_DIR, _GO_HANDSHAKE_LOADER_NAME))
     # Quoted heredoc: the slot has no DistSSHRun, so the snapshot source travels in the command.
-    write_loader = "cat > $loader_q << 'DISTSSH_PROVENANCE_SLOT'\n$(_GO_SLOT_LOADER_SRC)\nDISTSSH_PROVENANCE_SLOT\n"
-    write_hs = "cat > $hs_q << 'DISTSSH_GO_HS'\n$(_GO_HANDSHAKE_LOADER_SRC)\nDISTSSH_GO_HS\n"
+    write_loader = "cat > $loader_q << 'DISTSSH_INTERNAL_PROVENANCE_SLOT'\n$(_GO_SLOT_LOADER_SRC)\nDISTSSH_INTERNAL_PROVENANCE_SLOT\n"
+    write_hs = "cat > $hs_q << 'DISTSSH_INTERNAL_GO_HS'\n$(_GO_HANDSHAKE_LOADER_SRC)\nDISTSSH_INTERNAL_GO_HS\n"
     prov_load = " -L $loader_q -L $hs_q"
     return string(
         "cd $rr && mkdir -p $slot_q && mkdir -p $kit_q && ",
-        "export DISTRIBUTED_OUTPUT_DIR=$slot_q && ",
+        "export DISTSSH_OUTPUT_DIR=$slot_q && ",
         seed_export,
         job_export,
         job_mark,
@@ -966,7 +966,7 @@ go!("job.jl", "parent:2"; args=["8"])
 go!("job.jl", "1*user@h1", "1*user@h2"; remote="/path/to/project")
 ```
 
-Each slot gets `DISTRIBUTED_OUTPUT_DIR` pointing at
+Each slot gets `DISTSSH_OUTPUT_DIR` pointing at
 `{script}/.distssh/go/<stem>_<UTC>/<slot>/`.
 Override the batch root with `output_dir` (CLI: `--output-dir`). For backward
 compatibility `collect_spec::AbstractString` also sets the batch root, but passing
@@ -1280,55 +1280,74 @@ function _go_run!(
 
             n_slots > 0 && _kit_progress_mark!("run")
             slot_run_ok = fill(false, n_slots)
-            @sync for (i, slot) in enumerate(slots)
-                @async begin
-                    kit_progress_item!(slot.label; status = :running)
-                    err = nothing
-                    outcome = try
-                        _go_exec_slot!(
-                            slot,
-                            proj,
-                            script_path,
-                            args,
-                            batch_dir,
-                            run_rr;
-                            quiet = quiet,
-                            julia = julia,
-                        )
-                    catch e
-                        err = e
-                        (
-                            run = DriveResult(false, 1),
-                            collect = nothing,
-                            collect_fail = false,
-                        )
-                    end
-                    slot_run_ok[i] = outcome.run.ok
-                    lock(_GO_IO_LOCK) do
-                        last_run[] = outcome.run
-                        if !outcome.run.ok && first_fail_run[] === nothing
-                            first_fail_run[] = outcome.run
-                        end
-                        if err !== nothing
-                            any_run_fail[] = true
-                            kit_progress_item!(slot.label; status = :fail)
-                            _progress_release_line!()
-                            write(stderr, "  ")
-                            print_err("✗ $(slot.label): $(sprint(showerror, err))"; io = stderr)
-                            println(stderr)
-                        elseif !outcome.run.ok
-                            any_run_fail[] = true
-                            kit_progress_item!(slot.label; status = :fail)
-                            _progress_release_line!()
-                            write(stderr, "  ")
-                            print_err(
-                                "✗ $(slot.label) (exit $(outcome.run.exit_code))$(_go_trace_suffix(outcome.run.output_dir))";
-                                io = stderr,
-                            )
-                            println(stderr)
-                        else
-                            kit_progress_item!(slot.label; status = :ok)
-                            ok(slot.label)
+            # `DISTSSH_JOBS` caps child SSH only. Parent slots stay concurrent.
+            ssh_jobs = kit_host_jobs()
+            ssh_permits = Channel{Nothing}(ssh_jobs)
+            for _ in 1:ssh_jobs
+                put!(ssh_permits, nothing)
+            end
+            @sync for i in 1:n_slots
+                let i = i
+                    @async begin
+                        slot = slots[i]
+                        child = slot.kind === :child
+                        child && take!(ssh_permits)
+                        try
+                            kit_progress_item!(slot.label; status = :running)
+                            outcome, err = try
+                                (
+                                    _go_exec_slot!(
+                                        slot,
+                                        proj,
+                                        script_path,
+                                        args,
+                                        batch_dir,
+                                        run_rr;
+                                        quiet = quiet,
+                                        julia = julia,
+                                    ),
+                                    nothing,
+                                )
+                            catch e
+                                (
+                                    (
+                                        run = DriveResult(false, 1),
+                                        collect = nothing,
+                                        collect_fail = false,
+                                    ),
+                                    e,
+                                )
+                            end
+                            slot_run_ok[i] = outcome.run.ok
+                            lock(_GO_IO_LOCK) do
+                                last_run[] = outcome.run
+                                if !outcome.run.ok && first_fail_run[] === nothing
+                                    first_fail_run[] = outcome.run
+                                end
+                                if err !== nothing
+                                    any_run_fail[] = true
+                                    kit_progress_item!(slot.label; status = :fail)
+                                    _progress_release_line!()
+                                    write(stderr, "  ")
+                                    print_err("✗ $(slot.label): $(sprint(showerror, err))"; io = stderr)
+                                    println(stderr)
+                                elseif !outcome.run.ok
+                                    any_run_fail[] = true
+                                    kit_progress_item!(slot.label; status = :fail)
+                                    _progress_release_line!()
+                                    write(stderr, "  ")
+                                    print_err(
+                                        "✗ $(slot.label) (exit $(outcome.run.exit_code))$(_go_trace_suffix(outcome.run.output_dir))";
+                                        io = stderr,
+                                    )
+                                    println(stderr)
+                                else
+                                    kit_progress_item!(slot.label; status = :ok)
+                                    ok(slot.label)
+                                end
+                            end
+                        finally
+                            child && put!(ssh_permits, nothing)
                         end
                     end
                 end
@@ -1337,39 +1356,41 @@ function _go_run!(
             n_slots > 0 && _kit_progress_mark!("collect")
             slot_collect_ok = fill(false, n_slots)
             if !skip_collect
-                @sync for (i, slot) in enumerate(slots)
-                    slot_run_ok[i] || continue
-                    slot.kind === :child || continue
-                    @async begin
-                        err = nothing
-                        outcome = try
+                collect_idx = Int[
+                    i for (i, slot) in enumerate(slots) if
+                        slot_run_ok[i] && slot.kind === :child
+                ]
+                _foreach_bounded(collect_idx, kit_host_jobs()) do i
+                    slot = slots[i]
+                    outcome, err = try
+                        (
                             _go_collect_slot!(
                                 slot, proj, batch_dir, run_rr; julia = julia,
-                            )
-                        catch e
-                            err = e
-                            (collect = CollectResult(false, 1), collect_fail = true)
+                            ),
+                            nothing,
+                        )
+                    catch e
+                        ((collect = CollectResult(false, 1), collect_fail = true), e)
+                    end
+                    lock(_GO_IO_LOCK) do
+                        if outcome.collect !== nothing
+                            last_collect[] = outcome.collect
                         end
-                        lock(_GO_IO_LOCK) do
-                            if outcome.collect !== nothing
-                                last_collect[] = outcome.collect
-                            end
-                            if err === nothing && outcome.collect !== nothing &&
-                                    outcome.collect.ok && !outcome.collect_fail
-                                slot_collect_ok[i] = true
-                            end
-                            if outcome.collect_fail || err !== nothing
-                                any_collect_fail[] = true
-                            end
-                            if err !== nothing
-                                _progress_release_line!()
-                                write(stderr, "  ")
-                                print_err(
-                                    "✗ $(slot.label): $(sprint(showerror, err))";
-                                    io = stderr,
-                                )
-                                println(stderr)
-                            end
+                        if err === nothing && outcome.collect !== nothing &&
+                                outcome.collect.ok && !outcome.collect_fail
+                            slot_collect_ok[i] = true
+                        end
+                        if outcome.collect_fail || err !== nothing
+                            any_collect_fail[] = true
+                        end
+                        if err !== nothing
+                            _progress_release_line!()
+                            write(stderr, "  ")
+                            print_err(
+                                "✗ $(slot.label): $(sprint(showerror, err))";
+                                io = stderr,
+                            )
+                            println(stderr)
                         end
                     end
                 end

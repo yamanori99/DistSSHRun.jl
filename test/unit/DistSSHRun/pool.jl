@@ -2,7 +2,7 @@ using Test
 
 @testset "pool" begin
     @testset "hostinfo probe parse" begin
-        p = DistSSHRun.DistSSHBase._hostinfo_parse_probe("DISTSSH_HOSTINFO\nmem=17179869184\nncpu=4\nos=Linux\n")
+        p = DistSSHRun.DistSSHBase._hostinfo_parse_probe("DISTSSH_INTERNAL_HOSTINFO\nmem=17179869184\nncpu=4\nos=Linux\n")
         @test p !== nothing
         if p !== nothing
             @test p.ncpu == 4
@@ -39,8 +39,8 @@ using Test
             env = merge(
                 _fake_setup_remote_env(state_dir),
                 Dict(
-                    "DISTRIBUTED_PROJECT_ROOT" => proj,
-                    "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/fake/remote/PoolHost",
+                    "DISTSSH_PROJECT_ROOT" => proj,
+                    "DISTSSH_REMOTE_PROJECT_ROOT" => "/fake/remote/PoolHost",
                     "DISTSSH_TEST_POOL_MEM" => "8589934592",
                     "DISTSSH_TEST_POOL_NCPU" => "8"
                 )

@@ -40,7 +40,8 @@ end
 
 """Local juliaup candidates (same layout as remotes; expands `\$HOME`)."""
 function local_juliaup_candidates()::Vector{String}
-    test = _test_doubles_on() ? strip(get(ENV, "DISTSSH_TEST_LOCAL_JULIAUP", "")) : ""
+    t = _injected_ssh[]
+    test = t === nothing || !_test_doubles_on() ? "" : String(something(t.local_juliaup(), ""))
     isempty(test) || return String[test]
     home = joinpath(homedir(), ".juliaup", "bin", "juliaup")
     if Sys.isapple()

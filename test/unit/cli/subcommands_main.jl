@@ -5,7 +5,7 @@ using Test
         mktemp() do out_path, out_io
             mktemp() do err_path, err_io
                 code = withenv(
-                    "DISTSSH_CLI_SUBCOMMAND_DONE" => "",
+                    "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE" => "",
                     "DISTSSH_YES" => nothing
                 ) do
                     redirect_stdin(devnull) do
@@ -126,7 +126,7 @@ using Test
                 write(joinpath(proj_a, "Project.toml"), "name = \"SwitchOne\"\n")
                 write(joinpath(proj_b, "Project.toml"), "name = \"SwitchTwo\"\n")
 
-                withenv("DISTRIBUTED_PROJECT_ROOT" => nothing) do
+                withenv("DISTSSH_PROJECT_ROOT" => nothing) do
                     let (code_a, out_a, err_a) = cd(proj_a) do
                             _cli_capture(
                                 () -> DistSSHRun.run_hostinfo(String[])

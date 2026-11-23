@@ -34,8 +34,8 @@ if !isdefined(@__MODULE__, :_ssh_e2e_enabled)
         base = Dict{String, String}(
             "DISTSSH_YES" => "1",
             "DISTSSH_QUIET" => get(ENV, "DISTSSH_QUIET", "1"),
-            "DISTRIBUTED_SSH_OPTS" => "-F $(g.ssh_config) -o RequestTTY=no",
-            "DISTRIBUTED_REMOTE_PROJECT_ROOT" => String(remote_project),
+            "DISTSSH_SSH_OPTS" => "-F $(g.ssh_config) -o RequestTTY=no",
+            "DISTSSH_REMOTE_PROJECT_ROOT" => String(remote_project),
             # setup git-sync / git push use this; DistSSHRun's git_push_project! has no -F flag.
             "GIT_SSH_COMMAND" => "ssh -F $(g.ssh_config) -o RequestTTY=no"
         )
@@ -60,7 +60,7 @@ if !isdefined(@__MODULE__, :_ssh_e2e_enabled)
 
     # Capture stdout of remote Julia via kit `ssh_opts` + `run_on_host` inner sh.
     #
-    # Call under `withenv` that sets `DISTRIBUTED_SSH_OPTS` (E2E `_ssh_e2e_env`).
+    # Call under `withenv` that sets `DISTSSH_SSH_OPTS` (E2E `_ssh_e2e_env`).
     function _e2e_run_on_host(host::AbstractString, argv::AbstractVector{<:AbstractString})
         inner = DistSSHRun.DistSSHBase._run_on_host_remote_sh(String[String(a) for a in argv])
         return _run_subprocess(Cmd(vcat(["ssh"], DistSSHRun.ssh_opts(), [String(host), inner])))

@@ -90,14 +90,14 @@ function main()
         exit(0)
     end
 
-    if occursin("DISTSSH_REMOTE_HOME", script)
+    if occursin("DISTSSH_INTERNAL_REMOTE_HOME", script)
         println(get(ENV, "DISTSSH_TEST_REMOTE_HOME", "/home/distsshkit"))
         exit(0)
     end
 
     # Before `uname -s`: the hostinfo probe also contains that substring.
-    if occursin("DISTSSH_HOSTINFO", script) || occursin("DISTSSH_POOL", script)
-        println("DISTSSH_HOSTINFO")
+    if occursin("DISTSSH_INTERNAL_HOSTINFO", script) || occursin("DISTSSH_INTERNAL_POOL", script)
+        println("DISTSSH_INTERNAL_HOSTINFO")
         omit_mem = get(ENV, "DISTSSH_TEST_HOSTINFO_OMIT_MEM", "") == "1"
         omit_ncpu = get(ENV, "DISTSSH_TEST_HOSTINFO_OMIT_NCPU", "") == "1"
         omit_os = get(ENV, "DISTSSH_TEST_HOSTINFO_OMIT_OS", "") == "1"
@@ -208,8 +208,8 @@ function main()
         exit(0)
     end
 
-    if occursin("DISTSSH_DEST_STATUS", script)
-        println("DISTSSH_DEST_STATUS")
+    if occursin("DISTSSH_INTERNAL_DEST_STATUS", script)
+        println("DISTSSH_INTERNAL_DEST_STATUS")
         println(_dest_status(tree))
         exit(0)
     end
@@ -354,10 +354,10 @@ function main()
     end
 
     # Ownership scans remove a tempfile with `rm -f`. That is not the remote op.
-    # Delete (`rm -rf`) and prune (`DISTSSH_PRUNE_LEAVES`) fall through.
+    # Delete (`rm -rf`) and prune (`DISTSSH_INTERNAL_PRUNE_LEAVES`) fall through.
     if occursin("rm -f ", script) &&
             !occursin("rm -rf", script) &&
-            !occursin("DISTSSH_PRUNE_LEAVES", script)
+            !occursin("DISTSSH_INTERNAL_PRUNE_LEAVES", script)
         m = match(r"rm -f\s+(\S+)", script)
         if m !== nothing
             cap = m.captures[1]
@@ -427,7 +427,7 @@ function main()
         exit(0)
     end
 
-    if occursin("DISTSSH_PRUNE_LEAVES", script)
+    if occursin("DISTSSH_INTERNAL_PRUNE_LEAVES", script)
         older = nothing
         m_old = match(r"older=([^\n]+)", script)
         if m_old !== nothing

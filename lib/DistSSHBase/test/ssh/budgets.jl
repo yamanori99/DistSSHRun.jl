@@ -34,10 +34,10 @@ using Test
         end
 
         withenv("DISTSSH_WAIT_SCALE" => "0") do
-            @test DistSSHBase.wait_seconds(:child_reply, 300) == 300.0
+            @test_throws ArgumentError DistSSHBase.wait_seconds(:child_reply, 300)
         end
         withenv("DISTSSH_WAIT_SCALE" => "nope") do
-            @test DistSSHBase.wait_seconds(:drive_job, 360) == 360.0
+            @test_throws ArgumentError DistSSHBase.wait_seconds(:drive_job, 360)
         end
 
         withenv("DISTSSH_WAIT_SCALE" => "2", "DISTSSH_WAIT_CHILD_REPLY" => "9") do
@@ -45,7 +45,7 @@ using Test
             @test DistSSHBase.wait_seconds(:go_job, 120) == 240.0
         end
         withenv("DISTSSH_WAIT_CHILD_REPLY" => "soon") do
-            @test DistSSHBase.wait_seconds(:child_reply, 300) == 300.0
+            @test_throws ArgumentError DistSSHBase.wait_seconds(:child_reply, 300)
         end
         withenv("DISTSSH_WAIT_STOP_GRACE" => "1.5") do
             @test DistSSHBase.wait_seconds(:stop_grace, 5) == 1.5

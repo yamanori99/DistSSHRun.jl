@@ -12,11 +12,15 @@ using Test
     @test DistSSHBase.default_remote_project_path("/Users/z/GitHub/MyApp.jl") ==
         joinpath("~", "GitHub", "MyApp.jl")
 
-    withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => nothing) do
+    withenv(
+        "DISTSSH_REMOTE_PROJECT_ROOT" => nothing,
+    ) do
         @test DistSSHBase.resolve_remote_project_root("/Users/z/GitHub/MyApp.jl") ==
             joinpath("~", "GitHub", "MyApp.jl")
     end
-    withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/Volumes/shared/MyApp.jl") do
+    withenv(
+        "DISTSSH_REMOTE_PROJECT_ROOT" => "/Volumes/shared/MyApp.jl",
+    ) do
         @test DistSSHBase.resolve_remote_project_root("/Users/z/GitHub/MyApp.jl") ==
             "/Volumes/shared/MyApp.jl"
     end
@@ -29,7 +33,9 @@ using Test
         "~/.distsshkitqueue/jobs/x"
     @test DistSSHBase.remote_env_project_root("/remote/App.jl") ==
         DistSSHBase.canonical_local_path("/remote/App.jl")
-    withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/Volumes/shared/MyApp.jl") do
+    withenv(
+        "DISTSSH_REMOTE_PROJECT_ROOT" => "/Volumes/shared/MyApp.jl",
+    ) do
         @test DistSSHBase.resolve_remote_project_root(
             "/Users/z/GitHub/MyApp.jl";
             cli_override = "~/work/MyApp.jl",
@@ -86,13 +92,17 @@ using Test
         "/Users/z/MyRepo/data/out",
         "/Users/z/MyRepo",
     ) == joinpath("~", "z", "MyRepo", "data", "out")
-    withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/Volumes/z/clone/MyRepo") do
+    withenv(
+        "DISTSSH_REMOTE_PROJECT_ROOT" => "/Volumes/z/clone/MyRepo",
+    ) do
         @test DistSSHBase.remote_layout_path(
             "/Users/z/MyRepo/data/sweep/x/ts",
             "/Users/z/MyRepo",
         ) == joinpath("/Volumes/z/clone/MyRepo", "data", "sweep", "x", "ts") |> abspath
     end
-    withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => "~/work/MyRepo") do
+    withenv(
+        "DISTSSH_REMOTE_PROJECT_ROOT" => "~/work/MyRepo",
+    ) do
         @test DistSSHBase.remote_layout_path(
             "/Users/z/MyRepo/demos/with_kit",
             "/Users/z/MyRepo",
@@ -113,14 +123,16 @@ using Test
         _with_tempdir() do tmp
             p = DistSSHBase.canonical_local_path(tmp)
             @test DistSSHBase.resolve_host_project_abs("parent", p) == p
-            withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/Volumes/z/clone/MyRepo") do
+            withenv(
+                "DISTSSH_REMOTE_PROJECT_ROOT" => "/Volumes/z/clone/MyRepo",
+            ) do
                 @test DistSSHBase.resolve_host_project_abs("host", p) == "/Volumes/z/clone/MyRepo"
             end
         end
     end
 
     withenv(
-        "DISTRIBUTED_SSH_OPTS" => nothing,
+        "DISTSSH_SSH_OPTS" => nothing,
         "DISTSSH_WAIT_SSH_CONNECT" => nothing,
         "DISTSSH_WAIT_PEER_SILENT" => nothing,
     ) do
@@ -140,7 +152,7 @@ using Test
         @test DistSSHBase.ssh_opts(; request_tty = false) == DistSSHBase.ssh_opts()
     end
     withenv(
-        "DISTRIBUTED_SSH_OPTS" => nothing,
+        "DISTSSH_SSH_OPTS" => nothing,
         "DISTSSH_WAIT_SSH_CONNECT" => "0.4",
         "DISTSSH_WAIT_PEER_SILENT" => "0",
     ) do
@@ -149,25 +161,33 @@ using Test
         @test "ServerAliveInterval=60" in opts
         @test "ServerAliveCountMax=10" in opts
     end
-    withenv("DISTRIBUTED_SSH_OPTS" => "-o Foo=bar -o Baz=qux") do
+    withenv(
+        "DISTSSH_SSH_OPTS" => "-o Foo=bar -o Baz=qux",
+    ) do
         opts = DistSSHBase.build_ssh_opts()
         @test "BatchMode=yes" in opts
         @test "Foo=bar" in opts
         @test "Baz=qux" in opts
     end
-    withenv("DISTRIBUTED_SSH_OPTS" => "-F /tmp/ssh_config") do
+    withenv(
+        "DISTSSH_SSH_OPTS" => "-F /tmp/ssh_config",
+    ) do
         opts = DistSSHBase.ssh_opts()
         @test opts[1:2] == ["-F", "/tmp/ssh_config"]
         @test "BatchMode=yes" in opts
     end
-    withenv("DISTRIBUTED_SSH_OPTS" => "-o ConnectTimeout=99") do
+    withenv(
+        "DISTSSH_SSH_OPTS" => "-o ConnectTimeout=99",
+    ) do
         opts = DistSSHBase.build_ssh_opts()
         @test first(opts) == "-o"
         @test opts[2] == "ConnectTimeout=99"
         @test count(kv -> kv == "ConnectTimeout=10", opts) == 0
         @test "BatchMode=yes" in opts
     end
-    withenv("DISTRIBUTED_SSH_OPTS" => "-o BatchMode=no") do
+    withenv(
+        "DISTSSH_SSH_OPTS" => "-o BatchMode=no",
+    ) do
         @test_throws ArgumentError DistSSHBase.build_ssh_opts()
     end
 

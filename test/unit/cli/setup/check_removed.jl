@@ -4,7 +4,7 @@ using Test
     function _setup_capture(args)
         mktemp() do out_path, out_io
             mktemp() do err_path, err_io
-                code = withenv("DISTSSH_CLI_SUBCOMMAND_DONE" => "") do
+                code = withenv("DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE" => "") do
                     redirect_stdin(devnull) do
                         redirect_stdout(out_io) do
                             redirect_stderr(err_io) do

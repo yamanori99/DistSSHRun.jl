@@ -800,7 +800,7 @@ end
                         cli_override = remote, ship_id = _SNAP_ID_OLD
                     )
                     @test wr1 == work
-                    withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => wr1) do
+                    withenv("DISTSSH_REMOTE_PROJECT_ROOT" => wr1) do
                         wr2 = DistSSHRun._project_work_root(
                             ["child-1"], proj;
                             cli_override = nothing, ship_id = _SNAP_ID_OLD
@@ -941,7 +941,7 @@ end
                 Dict(
                     "DISTSSH_TEST_SSH_LOGICAL_ROOT" => "/__dsr_logical__",
                     "DISTSSH_TEST_SSH_HOST_ROOTS" => roots,
-                    "DISTSSH_CLI_SUBCOMMAND_DONE" => "",
+                    "DISTSSH_INTERNAL_CLI_SUBCOMMAND_DONE" => "",
                     "DISTSSH_YES" => nothing
                 )
             )

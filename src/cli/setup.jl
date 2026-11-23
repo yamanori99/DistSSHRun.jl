@@ -296,10 +296,10 @@ if !isdefined(@__MODULE__, :setup_main)
                     if !result.cancelled && result.failed == 0 &&
                             (
                             opts.deploy_root !== nothing ||
-                                !isempty(strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", "")))
+                                !isempty(strip(get(ENV, "DISTSSH_REMOTE_PROJECT_ROOT", "")))
                         )
                         kit_println(
-                            "  Tip: export DISTRIBUTED_REMOTE_PROJECT_ROOT=$(DistSSHRun.posix_quote(deploy_path))",
+                            "  Tip: export DISTSSH_REMOTE_PROJECT_ROOT=$(DistSSHRun.posix_quote(deploy_path))",
                         )
                         kit_println("       so drive.jl uses the same remote root for workers / collect.")
                         kit_println()

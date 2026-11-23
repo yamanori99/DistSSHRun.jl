@@ -152,7 +152,7 @@ end
 function _collect_dirs_from_env(;
         project_root::Union{Nothing, AbstractString} = nothing,
     )::Vector{String}
-    spec = String(strip(get(ENV, "DISTRIBUTED_COLLECT_DIRS", "")))
+    spec = String(strip(get(ENV, "DISTSSH_COLLECT_DIRS", "")))
     isempty(spec) && return String[]
     repo = project_root isa AbstractString ? canonical_local_path(project_root) : nothing
     out = String[]
@@ -213,20 +213,20 @@ function _recorded_env_names()::Vector{String}
     return names
 end
 
-"""`[launch]` when this process is a detached child (`DISTSSH_LAUNCH_THREADS`).
+"""`[launch]` when this process is a detached child (`DISTSSH_INTERNAL_LAUNCH_THREADS`).
 
 `dir` is recorded with the same path rules as `output_dir`. `dropped` is
 the comma-separated name list. Schema stays 1. In-process runs leave the
 table out.
 """
 function _launch_table_from_env(project_root)::Union{Nothing, Dict{String, Any}}
-    threads = strip(get(ENV, "DISTSSH_LAUNCH_THREADS", ""))
+    threads = strip(get(ENV, "DISTSSH_INTERNAL_LAUNCH_THREADS", ""))
     isempty(threads) && return nothing
     table = Dict{String, Any}("threads" => threads)
-    dir = strip(get(ENV, "DISTSSH_LAUNCH_DIR", ""))
+    dir = strip(get(ENV, "DISTSSH_INTERNAL_LAUNCH_DIR", ""))
     isempty(dir) || (table["dir"] = _record_path(dir, project_root))
     dropped = String[]
-    for part in split(get(ENV, "DISTSSH_LAUNCH_DROPPED", ""), ',')
+    for part in split(get(ENV, "DISTSSH_INTERNAL_LAUNCH_DROPPED", ""), ',')
         name = strip(String(part))
         isempty(name) || push!(dropped, name)
     end

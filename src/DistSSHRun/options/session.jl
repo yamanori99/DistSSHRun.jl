@@ -26,7 +26,7 @@ on listed tokens (`1*user@host`). `drive` local workers use
 
 `session.hosts` keeps remote SSH names only (for sync / collect).
 `session.tokens` keeps the original tokens (including `parent:N`).
-`remote` is the remote project path (`DISTRIBUTED_REMOTE_PROJECT_ROOT`).
+`remote` is the remote project path (`DISTSSH_REMOTE_PROJECT_ROOT`).
 A value that starts with `~` stays a remote-shell layout (not `expanduser`
 on the kit parent).
 
@@ -101,8 +101,8 @@ end
 
 """Apply session fields to `ENV` and kit CLI session flags.
 
-Sets `DISTRIBUTED_PROJECT_ROOT` from `session.project`. Does **not** write
-`DISTRIBUTED_REMOTE_PROJECT_ROOT`: `session.remote` is passed as
+Sets `DISTSSH_PROJECT_ROOT` from `session.project`. Does **not** write
+`DISTSSH_REMOTE_PROJECT_ROOT`: `session.remote` is passed as
 `cli_override` into location helpers. Callers that must expose a remote
 layout to `remote_layout_path` / workers (drive) set that ENV only
 inside a frame that restores the caller's value. Overlapping in-process kit
@@ -110,7 +110,7 @@ runs are refused (`_acquire_kit_inproc_run!`); nested same-task runs share
 one owner task.
 """
 function apply_session_env!(session::DistSSHSession)
-    ENV["DISTRIBUTED_PROJECT_ROOT"] = session.project
+    ENV["DISTSSH_PROJECT_ROOT"] = session.project
     session.cli_session.quiet = session.quiet
     # Non-explicit sessions auto-resolve to `:verbose` when stdout is a pipe
     # (Pkg.test). Do not wipe an ambient `:progress` / `:quiet` pin — that
@@ -128,43 +128,43 @@ function apply_session_env!(session::DistSSHSession)
     return session
 end
 
-"""Run `f` after [`apply_session_env!`](@ref), then restore `DISTRIBUTED_PROJECT_ROOT`.
+"""Run `f` after [`apply_session_env!`](@ref), then restore `DISTSSH_PROJECT_ROOT`.
 
 Deletes the key when it was absent before the call. Runs the restore from
 `finally`, including when `f` throws.
 """
 function _with_session_env!(f, session::DistSSHSession)
-    prev_root = get(ENV, "DISTRIBUTED_PROJECT_ROOT", nothing)
+    prev_root = get(ENV, "DISTSSH_PROJECT_ROOT", nothing)
     try
         apply_session_env!(session)
         return f()
     finally
         if prev_root === nothing
-            delete!(ENV, "DISTRIBUTED_PROJECT_ROOT")
+            delete!(ENV, "DISTSSH_PROJECT_ROOT")
         else
-            ENV["DISTRIBUTED_PROJECT_ROOT"] = prev_root
+            ENV["DISTSSH_PROJECT_ROOT"] = prev_root
         end
     end
 end
 
-"""Run `f` with `session.remote` in `DISTRIBUTED_REMOTE_PROJECT_ROOT`, then restore.
+"""Run `f` with `session.remote` in `DISTSSH_REMOTE_PROJECT_ROOT`, then restore.
 
 Needed for `remote_layout_path` / collect mapping when `apply_session_env!`
 does not persist the remote. `session.remote === nothing` leaves the ENV alone.
 """
 function _with_session_remote_env!(f, session::DistSSHSession)
-    prev = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+    prev = get(ENV, "DISTSSH_REMOTE_PROJECT_ROOT", nothing)
     try
         rr = session.remote
         if rr isa AbstractString
-            ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote_env_project_root(rr)
+            ENV["DISTSSH_REMOTE_PROJECT_ROOT"] = remote_env_project_root(rr)
         end
         return f()
     finally
         if prev === nothing
-            delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            delete!(ENV, "DISTSSH_REMOTE_PROJECT_ROOT")
         else
-            ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = prev
+            ENV["DISTSSH_REMOTE_PROJECT_ROOT"] = prev
         end
     end
 end

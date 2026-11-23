@@ -118,7 +118,7 @@ using Test
     let fixture = _fixture("cli_echo_args.jl")
         mktemp() do args_file, _
             withenv(
-                "DISTRIBUTED_PROJECT_ROOT" => "/override",
+                "DISTSSH_PROJECT_ROOT" => "/override",
                 "_DISTSSH_TEST_ARGS_FILE" => args_file
             ) do
                 empty!(ARGS)
@@ -132,7 +132,7 @@ using Test
             mktemp() do args_file, _
                 mktemp() do proj_file, _
                     withenv(
-                        "DISTRIBUTED_PROJECT_ROOT" => nothing,
+                        "DISTSSH_PROJECT_ROOT" => nothing,
                         "_DISTSSH_TEST_ARGS_FILE" => args_file,
                         "_DISTSSH_TEST_PROJ_FILE" => proj_file
                     ) do
@@ -140,7 +140,7 @@ using Test
                             empty!(ARGS)
                             @test DistSSHRun._run_kit_cli_script(fixture, ["probe"]) == 0
                             @test realpath(read(proj_file, String)) == realpath(tmp)
-                            @test !haskey(ENV, "DISTRIBUTED_PROJECT_ROOT")
+                            @test !haskey(ENV, "DISTSSH_PROJECT_ROOT")
                             @test readlines(args_file) == ["probe"]
                         end
                     end
@@ -150,9 +150,11 @@ using Test
     end
 
     @testset "script arg prelude" begin
-        withenv("DISTSSH_SCRIPT_ARG_PRELUDE" => "alpha\n\nbeta") do
+        withenv(
+            "DISTSSH_INTERNAL_SCRIPT_ARG_PRELUDE" => "alpha\n\nbeta",
+        ) do
             @test DistSSHRun._merge_script_arg_prelude(["job.jl"]) == ["job.jl", "alpha", "beta"]
         end
-        @test get(ENV, "DISTSSH_SCRIPT_ARG_PRELUDE", nothing) === nothing
+        @test get(ENV, "DISTSSH_INTERNAL_SCRIPT_ARG_PRELUDE", nothing) === nothing
     end
 end

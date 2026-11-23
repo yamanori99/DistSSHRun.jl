@@ -12,10 +12,10 @@ function main()
             open(path, "w") do io
                 println(io, "active=", repr(Base.ACTIVE_PROJECT[]))
                 for key in (
-                        "DISTRIBUTED_PROJECT_ROOT",
-                        "DISTRIBUTED_REMOTE_PROJECT_ROOT",
-                        "DISTRIBUTED_OUTPUT_DIR",
-                        "DISTRIBUTED_RUNNER",
+                        "DISTSSH_PROJECT_ROOT",
+                        "DISTSSH_REMOTE_PROJECT_ROOT",
+                        "DISTSSH_OUTPUT_DIR",
+                        "DISTSSH_INTERNAL_RUNNER",
                     )
                     present = haskey(ENV, key)
                     println(io, key, "=", present ? repr(ENV[key]) : "absent")

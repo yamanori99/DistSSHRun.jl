@@ -53,9 +53,9 @@ const DRIVE_UNSAFE_MASTER_SILENCE_EXIT_FLAG_HELP =
 const DRIVE_UNSAFE_MASTER_SILENCE_EXIT_ENV_HELP =
     "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT  Same as --unsafe-master-silence-exit"
 const DRIVE_HEARTBEAT_DEADLINE_ENV_HELP =
-    "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC  required positive seconds when self-exit is on"
+    "DISTSSH_HEARTBEAT_DEADLINE_SEC  required positive seconds when self-exit is on"
 const DRIVE_HEARTBEAT_INTERVAL_ENV_HELP =
-    "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC  heartbeat ping interval (default 30)"
+    "DISTSSH_HEARTBEAT_INTERVAL_SEC  heartbeat ping interval (default 30)"
 
 """CLI default when no verbosity flag/env is set: live bar on a TTY, else verbose."""
 kit_cli_auto_verbosity(; live::Union{Nothing, Bool} = nothing)::Symbol =
@@ -174,16 +174,20 @@ function CliSharedFlags(;
 end
 
 function _env_flag(name::AbstractString, env::ProcessEnv)::Bool
-    v = strip(get(env, String(name), ""))
-    return v in ("1", "true", "yes", "on")
+    haskey(env, String(name)) || return false
+    raw = strip(get(env, String(name), ""))
+    isempty(raw) && return false
+    return DistSSHBase.parse_env_bool(name, raw)
 end
 
 """Max concurrent SSH host jobs (`DISTSSH_JOBS`, default 1) from `env`."""
 function kit_host_jobs(env::ProcessEnv = invocation_process_env())::Int
-    raw = strip(get(env, "DISTSSH_JOBS", "1"))
-    n = tryparse(Int, raw)
-    (n === nothing || n < 1) && return 1
-    return n
+    haskey(env, "DISTSSH_JOBS") || return 1
+    return DistSSHBase.parse_env_int(
+        "DISTSSH_JOBS",
+        String(get(env, "DISTSSH_JOBS", ""));
+        minimum = 1,
+    )
 end
 
 """Call `f(i, host)` for each host, at most `kit_host_jobs(env)` at once (1 → sequential)."""
@@ -292,7 +296,7 @@ function _unknown_cli_option_message(command::AbstractString, arg::AbstractStrin
     )
 end
 
-"""CLI location override. Not `DISTRIBUTED_REMOTE_PROJECT_ROOT` and not `session.remote`."""
+"""CLI location override. Not `DISTSSH_REMOTE_PROJECT_ROOT` and not `session.remote`."""
 const DEPLOY_ROOT_FLAG = "--deploy-root"
 
 function _legacy_remote_path_arg(arg::AbstractString)::Bool

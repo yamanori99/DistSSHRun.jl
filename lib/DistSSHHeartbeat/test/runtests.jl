@@ -35,18 +35,33 @@ end
     @testset "heartbeat env parsing" begin
         @test DistSSHHeartbeat._heartbeat_interval(Dict{String, String}()) == 30.0
         @test DistSSHHeartbeat._heartbeat_interval(
-            Dict("DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "2"),
+            Dict("DISTSSH_HEARTBEAT_INTERVAL_SEC" => "2"),
         ) == 2.0
-        @test DistSSHHeartbeat._heartbeat_interval(
-            Dict("DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "nope"),
-        ) == 30.0
+        @test_throws ArgumentError DistSSHHeartbeat._heartbeat_interval(
+            Dict("DISTSSH_HEARTBEAT_INTERVAL_SEC" => ""),
+        )
+        @test_throws ArgumentError DistSSHHeartbeat._heartbeat_interval(
+            Dict("DISTSSH_HEARTBEAT_INTERVAL_SEC" => "nope"),
+        )
+        @test_throws ArgumentError DistSSHHeartbeat._heartbeat_interval(
+            Dict("DISTSSH_HEARTBEAT_INTERVAL_SEC" => "0"),
+        )
+        @test_throws ArgumentError DistSSHHeartbeat._heartbeat_interval(
+            Dict("DISTSSH_HEARTBEAT_INTERVAL_SEC" => "-1"),
+        )
         @test DistSSHHeartbeat._heartbeat_deadline_explicit(Dict{String, String}()) === nothing
         @test DistSSHHeartbeat._heartbeat_deadline_explicit(
-            Dict("DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "9"),
+            Dict("DISTSSH_HEARTBEAT_DEADLINE_SEC" => "9"),
         ) == 9.0
-        @test DistSSHHeartbeat._heartbeat_deadline_explicit(
-            Dict("DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "-1"),
-        ) === nothing
+        @test_throws ArgumentError DistSSHHeartbeat._heartbeat_deadline_explicit(
+            Dict("DISTSSH_HEARTBEAT_DEADLINE_SEC" => "-1"),
+        )
+        @test_throws ArgumentError DistSSHHeartbeat._heartbeat_deadline_explicit(
+            Dict("DISTSSH_HEARTBEAT_DEADLINE_SEC" => "nope"),
+        )
+        @test_throws ArgumentError DistSSHHeartbeat._heartbeat_deadline_explicit(
+            Dict("DISTSSH_HEARTBEAT_DEADLINE_SEC" => ""),
+        )
         cfg = DistSSHHeartbeat._heartbeat_config(Dict{String, String}(); deadline = 12.0)
         @test cfg.interval == 30.0
         @test cfg.deadline == 12.0

@@ -179,7 +179,7 @@ that lookup finds no file. `env_dir` is the directory of `manifest`, or
 
 Queue: `default_queue_env` (no dedicated `~/.distsshqueue/env`) should return
 `env_dir`. `stage_job_tree!` should rsync `env_dir`, and set
-`DISTRIBUTED_PROJECT_ROOT` to the staged `project_dir` (relative to that
+`DISTSSH_PROJECT_ROOT` to the staged `project_dir` (relative to that
 tree). Serve `--queue-env` is `env_dir`. A job's `--project` stays
 `project_dir`, because `env_dir` as `--project` misses `[deps]` that exist
 only on the member.

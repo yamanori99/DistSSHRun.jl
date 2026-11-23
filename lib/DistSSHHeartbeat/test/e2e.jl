@@ -24,7 +24,7 @@ const _ssh_config = abspath(
 isfile(_ssh_config) ||
     error("docker-ssh not ready: missing $(_ssh_config). Run testenv/docker-ssh/scripts/up.sh")
 
-"""`DISTRIBUTED_SSH_OPTS` for this E2E; config path is shell-quoted for `Base.shell_split`."""
+"""`DISTSSH_SSH_OPTS` for this E2E; config path is shell-quoted for `Base.shell_split`."""
 function _distributed_ssh_opts(config_path::AbstractString = _ssh_config)::String
     cfg_q = DistSSHBase._remote_sh_quote(abspath(String(config_path)))
     return "-F $cfg_q -o RequestTTY=no"
@@ -176,7 +176,7 @@ function _master_script_contents(
     using DistSSHBase
     using DistSSHHeartbeat
 
-    ENV["DISTRIBUTED_SSH_OPTS"] = $opts
+    ENV["DISTSSH_SSH_OPTS"] = $opts
     const _ready = $ready
     const _probe_req = $probe_req
     const _probe_ok = $probe_ok
@@ -199,8 +199,8 @@ function _master_script_contents(
 
     withenv(
         "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1",
-        "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => string(_interval),
-        "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => string(_deadline),
+        "DISTSSH_HEARTBEAT_INTERVAL_SEC" => string(_interval),
+        "DISTSSH_HEARTBEAT_DEADLINE_SEC" => string(_deadline),
     ) do
         machine = string(DistSSHBase.ssh_addprocs_machine(_host), " 127.0.0.1")
         sshflags = Cmd(DistSSHBase.ssh_opts())
@@ -309,7 +309,7 @@ function _heartbeat_e2e_begin!(; label::AbstractString = "STOP")::_HeartbeatE2EC
         master_script,
         _master_script_contents(ready_path, probe_req_path, probe_ok_path, wrap_path, ssh_opts),
     )
-    master_proc = withenv("DISTRIBUTED_SSH_OPTS" => ssh_opts) do
+    master_proc = withenv("DISTSSH_SSH_OPTS" => ssh_opts) do
         return run(
             pipeline(
                 _julia_cmd_for_master(master_script);
@@ -540,14 +540,14 @@ end
         @test success(proc)
     end
 
-    @testset "DISTRIBUTED_SSH_OPTS shell_split" begin
+    @testset "DISTSSH_SSH_OPTS shell_split" begin
         spaced_cfg = joinpath(mktempdir(), "ssh config with spaces")
         opts = _distributed_ssh_opts(spaced_cfg)
         split = Base.shell_split(opts)
         fidx = findfirst(==("-F"), split)
         @test fidx !== nothing
         @test split[fidx + 1] == abspath(spaced_cfg)
-        withenv("DISTRIBUTED_SSH_OPTS" => opts) do
+        withenv("DISTSSH_SSH_OPTS" => opts) do
             vec = DistSSHBase.ssh_opts()
             @test vec[1:2] == ["-F", abspath(spaced_cfg)]
             @test count(==("RequestTTY=no"), vec) == 1
@@ -557,7 +557,7 @@ end
         end
     end
 
-    withenv("DISTRIBUTED_SSH_OPTS" => _distributed_ssh_opts()) do
+    withenv("DISTSSH_SSH_OPTS" => _distributed_ssh_opts()) do
         n = try
             max(1, parse(Int, strip(get(ENV, "DISTSSH_HEARTBEAT_E2E_N", "1"))))
         catch

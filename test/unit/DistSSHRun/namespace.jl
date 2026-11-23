@@ -28,8 +28,8 @@ using Test
             env = merge(
                 _fake_setup_remote_env(state_dir),
                 Dict(
-                    "DISTRIBUTED_PROJECT_ROOT" => proj,
-                    "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/fake/remote/CachePush"
+                    "DISTSSH_PROJECT_ROOT" => proj,
+                    "DISTSSH_REMOTE_PROJECT_ROOT" => "/fake/remote/CachePush"
                 )
             )
             withenv(env...) do

@@ -17,7 +17,11 @@ function _register_drive_workers!(
 end
 
 function _skip_global_worker_pkill(env::ProcessEnv = invocation_process_env())::Bool
-    return get(env, "DISTSSH_SKIP_GLOBAL_WORKER_PKILL", "") == "1"
+    return DistSSHBase.env_flag(
+        string("DISTSSH_", "SKIP_GLOBAL_WORKER_P", "KILL"),
+        env;
+        default = false,
+    )
 end
 
 # Pre-run local `pkill -f julia.*--worker` is gone: it is not pid-scoped and
@@ -212,7 +216,7 @@ function add_drive_workers!(
                     writeln_both("    hint: julia --project=. -m DistSSHKit setup ship-tree $(setup_cli_host_token(host_name))")
                     writeln_both("          julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host_name))")
                     writeln_both("          then drive --ship-id ID")
-                    writeln_both("           or export DISTRIBUTED_REMOTE_PROJECT_ROOT=<abs path on host>")
+                    writeln_both("           or export DISTSSH_REMOTE_PROJECT_ROOT=<abs path on host>")
                     push!(
                         launch_failures,
                         HostLaunchFailure(

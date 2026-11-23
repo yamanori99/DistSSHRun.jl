@@ -294,7 +294,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             @test DistSSHRun._INTERRUPT_SSH_PHASE_S ==
                 Float64(DistSSHRun.DistSSHBase._SSH_CONNECT_TIMEOUT_S)
             @test DistSSHRun._SSH_PHASE_CONCURRENCY == 8
-            withenv("DISTRIBUTED_SSH_OPTS" => nothing) do
+            withenv("DISTSSH_SSH_OPTS" => nothing) do
                 cmd = DistSSHRun._ssh_phase_cmd("child.example", "kill -INT 4242 || true")
                 argv = collect(cmd)
                 i5 = findfirst(==("ServerAliveInterval=5"), argv)
@@ -353,7 +353,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             @test DistSSHRun.DistSSHBase.placement_ssh_endpoint_from_worker_host(
                 "user@::1",
             ) === nothing
-            withenv("DISTRIBUTED_SSH_OPTS" => nothing) do
+            withenv("DISTSSH_SSH_OPTS" => nothing) do
                 cmd = DistSSHRun._ssh_phase_cmd("alice@lab:2222", "kill -INT 1 || true")
                 @test "-p" in cmd.exec
                 @test "2222" in cmd.exec
@@ -637,8 +637,8 @@ end
         cfg = DistSSHRun.resolve_drive_heartbeat_policy(
             env = DistSSHRun.ProcessEnv(
                 Dict(
-                    "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "2",
-                    "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "9"
+                    "DISTSSH_HEARTBEAT_INTERVAL_SEC" => "2",
+                    "DISTSSH_HEARTBEAT_DEADLINE_SEC" => "9"
                 )
             ),
             self_exit = true
@@ -657,7 +657,7 @@ end
             env = DistSSHRun.ProcessEnv(
                 Dict(
                     "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1",
-                    "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "7"
+                    "DISTSSH_HEARTBEAT_DEADLINE_SEC" => "7"
                 )
             )
         )

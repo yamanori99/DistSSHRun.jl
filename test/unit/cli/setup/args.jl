@@ -41,7 +41,7 @@ using Test
         @test occursin("push_cache! uses Tar and a remote Julia", text)
         @test occursin("control character", text)
         @test !occursin("fish is refused", text)
-        @test occursin("Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT", text)
+        @test occursin("Omit for DISTSSH_REMOTE_PROJECT_ROOT", text)
         @test !occursin("--remote-path PATH", text)
     end
 

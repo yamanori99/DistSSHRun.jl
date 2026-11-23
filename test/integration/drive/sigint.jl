@@ -21,8 +21,8 @@ function _sigint_child(proj::AbstractString; marker::AbstractString, restore::Ab
         extra_env = Dict(
             "DISTSSH_TEST_SIGINT_MARKER" => marker,
             "DISTSSH_TEST_RESTORE_FILE" => restore,
-            "DISTRIBUTED_OUTPUT_DIR" => joinpath(proj, "keep-output"),
-            "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "keep-remote"
+            "DISTSSH_OUTPUT_DIR" => joinpath(proj, "keep-output"),
+            "DISTSSH_REMOTE_PROJECT_ROOT" => "keep-remote"
         )
     )
 end
@@ -53,10 +53,10 @@ end
         @test !occursin("TaskFailedException", combined)
         lines = _sigint_restore_lines(restore)
         @test lines["active"] == repr(Base.active_project())
-        @test lines["DISTRIBUTED_PROJECT_ROOT"] == repr(abspath(proj))
-        @test lines["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == repr("keep-remote")
-        @test lines["DISTRIBUTED_OUTPUT_DIR"] == repr(joinpath(proj, "keep-output"))
-        @test lines["DISTRIBUTED_RUNNER"] == "absent"
+        @test lines["DISTSSH_PROJECT_ROOT"] == repr(abspath(proj))
+        @test lines["DISTSSH_REMOTE_PROJECT_ROOT"] == repr("keep-remote")
+        @test lines["DISTSSH_OUTPUT_DIR"] == repr(joinpath(proj, "keep-output"))
+        @test lines["DISTSSH_INTERNAL_RUNNER"] == "absent"
     end
 end
 

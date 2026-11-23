@@ -40,12 +40,12 @@ end
 end
 
 @testset "ssh_phase_argv" begin
-    withenv("DISTRIBUTED_SSH_OPTS" => nothing) do
+    withenv("DISTSSH_SSH_OPTS" => nothing) do
         vec = DistSSHBase.ssh_phase_argv()
         @test "BatchMode=yes" in vec
         @test occursin("ConnectTimeout=", join(vec, " "))
     end
-    withenv("DISTRIBUTED_SSH_OPTS" => "-p 2200 -o Port=8888") do
+    withenv("DISTSSH_SSH_OPTS" => "-p 2200 -o Port=8888") do
         vec = DistSSHBase.ssh_phase_argv(; explicit_port = 2222)
         @test !("-p" in vec)
         @test !("2200" in vec)

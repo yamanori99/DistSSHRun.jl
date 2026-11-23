@@ -256,7 +256,9 @@ let _BASE = DistSSHBase
 
                 _BASE._remote_posix_shell_remember!("opts-host.test")
                 @test _BASE._remote_posix_shell_cached("opts-host.test")
-                withenv("DISTRIBUTED_SSH_OPTS" => "-o Foo=cache-bust") do
+                withenv(
+                    "DISTSSH_SSH_OPTS" => "-o Foo=cache-bust",
+                ) do
                     @test !_BASE._remote_posix_shell_cached("opts-host.test")
                 end
                 @test _BASE._remote_posix_shell_cached("opts-host.test")
@@ -304,7 +306,9 @@ let _BASE = DistSSHBase
         port_args, spec = _BASE._scp_remote_file_spec("alice@h:2222", "/tmp/x")
         @test port_args == ["-P", "2222"]
         @test spec == "alice@h:/tmp/x"
-        withenv("DISTRIBUTED_SSH_OPTS" => "-o Port=2200 -p 2200") do
+        withenv(
+            "DISTSSH_SSH_OPTS" => "-o Port=2200 -p 2200",
+        ) do
             argv = _BASE._ssh_remote_session_argv("alice@h:2222", "true")
             pidx = findfirst(==("-p"), argv)
             @test pidx !== nothing
@@ -315,7 +319,9 @@ let _BASE = DistSSHBase
             @test opts[(end - 1):end] == ["-p", "2222"]
             @test count(==("-p"), opts) == 1
         end
-        withenv("DISTRIBUTED_SSH_OPTS" => "-P tag -p -p2201 -oPort=2202 -o Port 2203") do
+        withenv(
+            "DISTSSH_SSH_OPTS" => "-P tag -p -p2201 -oPort=2202 -o Port 2203",
+        ) do
             ssh_opts = _BASE.ssh_forwarded_opts(explicit_port = 2222)
             @test "-P" in ssh_opts
             @test "tag" in ssh_opts
@@ -324,14 +330,18 @@ let _BASE = DistSSHBase
             @test "-p" in scp_opts
             @test count(==("-P"), scp_opts) == 0
         end
-        withenv("DISTRIBUTED_SSH_OPTS" => "-o  Port=2200 -p 2200") do
+        withenv(
+            "DISTSSH_SSH_OPTS" => "-o  Port=2200 -p 2200",
+        ) do
             ssh_opts = _BASE.ssh_forwarded_opts(explicit_port = 2222)
             @test count(x -> occursin("Port=", String(x)), ssh_opts) == 0
             scp_opts = _BASE.scp_forwarded_opts(explicit_port = 2222)
             pidx = findfirst(==("-p"), scp_opts)
             @test pidx === nothing || scp_opts[pidx + 1] != "2200"
         end
-        withenv("DISTRIBUTED_SSH_OPTS" => "-p 2200") do
+        withenv(
+            "DISTSSH_SSH_OPTS" => "-p 2200",
+        ) do
             scp_opts = _BASE.scp_forwarded_opts(explicit_port = 2222)
             @test !("-p" in scp_opts)
             @test !any(x -> x == "2200", scp_opts)
@@ -352,7 +362,7 @@ let _BASE = DistSSHBase
             @test_skip "ssh not in PATH"
         else
             withenv(
-                "DISTRIBUTED_SSH_OPTS" => nothing,
+                "DISTSSH_SSH_OPTS" => nothing,
                 "DISTSSH_TEST" => nothing,
                 "DISTSSH_TEST_SSH" => nothing,
             ) do
@@ -385,7 +395,9 @@ let _BASE = DistSSHBase
         if Sys.which("ssh") === nothing
             @test_skip "ssh not in PATH"
         else
-            withenv("DISTSSH_TEST" => nothing, "DISTSSH_TEST_SSH" => nothing) do
+            withenv(
+                "DISTSSH_TEST" => nothing, "DISTSSH_TEST_SSH" => nothing,
+            ) do
                 cmd = _BASE._host_sync_remote_shell_cmd("host.test", "true")
                 @test "-n" in cmd.exec
                 fed = _BASE._host_sync_remote_shell_cmd(
