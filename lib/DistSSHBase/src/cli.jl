@@ -1,13 +1,13 @@
 """Console and progress names Queue prints with. Help and exits stay in `messages/`."""
 module CLI
 
-mutable struct KitProgressItem
+mutable struct ProgressItem
     label::String
     status::Symbol
     tick::Int
 end
 
-mutable struct KitProgressState
+mutable struct ProgressState
     title::String
     steps::Int
     done::Int
@@ -18,14 +18,14 @@ mutable struct KitProgressState
     tick::Int
     spinning::Bool
     spinner_task::Union{Task, Nothing}
-    items::Vector{KitProgressItem}
+    items::Vector{ProgressItem}
     drawn::Int
     cursor_hidden::Bool
     job_id::Union{Nothing, String}
     released::Bool
 end
 
-function KitProgressState(
+function ProgressState(
         title::AbstractString,
         steps::Int,
         done::Int,
@@ -33,7 +33,7 @@ function KitProgressState(
         kind::Symbol = :unknown,
         job_id::Union{Nothing, AbstractString} = nothing,
     )
-    return KitProgressState(
+    return ProgressState(
         String(title),
         steps,
         done,
@@ -44,7 +44,7 @@ function KitProgressState(
         0,
         false,
         nothing,
-        KitProgressItem[],
+        ProgressItem[],
         0,
         false,
         job_id === nothing ? nothing : String(job_id),
@@ -52,26 +52,26 @@ function KitProgressState(
     )
 end
 
-const KIT_PROGRESS = Ref{Union{Nothing, KitProgressState}}(nothing)
-const KIT_PROGRESS_SUSPEND = Ref(0)
+const CURRENT_PROGRESS = Ref{Union{Nothing, ProgressState}}(nothing)
+const PROGRESS_SUSPEND = Ref(0)
 
 function print_warn end
-function kit_println end
+function cli_println end
 function print_header end
 function writeln_field end
-function kit_confirm end
-function kit_progress_done! end
-function kit_progress_latest end
+function cli_confirm end
+function progress_done! end
+function progress_latest end
 
-public KitProgressState
-public KIT_PROGRESS
-public KIT_PROGRESS_SUSPEND
+public ProgressState
+public CURRENT_PROGRESS
+public PROGRESS_SUSPEND
 public print_warn
-public kit_println
+public cli_println
 public print_header
 public writeln_field
-public kit_confirm
-public kit_progress_done!
-public kit_progress_latest
+public cli_confirm
+public progress_done!
+public progress_latest
 
 end

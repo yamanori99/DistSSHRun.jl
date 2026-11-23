@@ -141,14 +141,14 @@ include("DistSSHRun/up_module.jl")
 using .DistSSHBase
 import .DistSSHBase: process_start_key
 import .DistSSHBase.CLI:
-    KIT_PROGRESS,
-    KIT_PROGRESS_SUSPEND,
-    KitProgressItem,
-    KitProgressState,
-    kit_confirm,
-    kit_println,
-    kit_progress_done!,
-    kit_progress_latest,
+    CURRENT_PROGRESS,
+    PROGRESS_SUSPEND,
+    ProgressItem,
+    ProgressState,
+    cli_confirm,
+    cli_println,
+    progress_done!,
+    progress_latest,
     print_header,
     print_warn,
     writeln_field

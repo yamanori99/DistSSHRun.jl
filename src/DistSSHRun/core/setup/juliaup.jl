@@ -131,7 +131,7 @@ function juliaup_align_remotes(
             println_fatal("  (/opt/homebrew/bin/juliaup or /usr/local/bin/juliaup).")
             println_fatal("  The running kit process keeps its current Julia until restart.")
             println_fatal()
-            kit_confirm("Type 'juliaup' to confirm: "; keyword = "juliaup") || begin
+            cli_confirm("Type 'juliaup' to confirm: "; keyword = "juliaup") || begin
                 println_fatal("Cancelled.")
                 return true
             end
@@ -199,7 +199,7 @@ function juliaup_update_remotes(
             println_fatal("  (/opt/homebrew/bin/juliaup or /usr/local/bin/juliaup).")
             println_fatal("  The running kit process keeps its current Julia until restart.")
             println_fatal()
-            kit_confirm("Type 'update' to confirm: "; keyword = "update") || begin
+            cli_confirm("Type 'update' to confirm: "; keyword = "update") || begin
                 println_fatal("Cancelled.")
                 return true
             end
@@ -347,7 +347,7 @@ function juliaup_verb_remotes(
             println_fatal("  Targets: $(join(hosts, ", "))")
             println_fatal("  The running kit process keeps its current Julia until restart.")
             println_fatal()
-            kit_confirm("Type 'default' to confirm: "; keyword = "default") || begin
+            cli_confirm("Type 'default' to confirm: "; keyword = "default") || begin
                 println_fatal("Cancelled.")
                 return true
             end

@@ -110,7 +110,7 @@ if !isdefined(@__MODULE__, :_run_kit_setup)
     # Use only when asserting on printed messages. For return-value checks, prefer
     # `_apply_quiet_setup_session!` / `report=false` instead of discarding stdout.
     #
-    # `probe_suspend=true` feeds stdin through a pipe after `KIT_PROGRESS_SUSPEND`
+    # `probe_suspend=true` feeds stdin through a pipe after `PROGRESS_SUSPEND`
     # is already up (confirm `readline` is pending) and returns that count as a
     # third value (#374).
     function _capture_stdio(f::Function; probe_suspend::Bool = false)
@@ -125,11 +125,11 @@ if !isdefined(@__MODULE__, :_run_kit_setup)
                             feeder = @async begin
                                 try
                                     t0 = time()
-                                    while DistSSHRun.KIT_PROGRESS_SUSPEND[] == 0
+                                    while DistSSHRun.PROGRESS_SUSPEND[] == 0
                                         (time() - t0) > 5 && error("timeout waiting for progress suspend")
                                         yield()
                                     end
-                                    seen[] = DistSSHRun.KIT_PROGRESS_SUSPEND[]
+                                    seen[] = DistSSHRun.PROGRESS_SUSPEND[]
                                     write(pin.in, read(stdin_io))
                                 finally
                                     close(pin.in)
@@ -177,27 +177,27 @@ if !isdefined(@__MODULE__, :_run_kit_setup)
             return f()
         finally
             DistSSHRun.close_log_file()
-            DistSSHRun.kit_progress_done!()
+            DistSSHRun.progress_done!()
             DistSSHRun._set_kit_progress_sidecar!(nothing)
             DistSSHRun.set_kit_verbosity!(prev)
         end
     end
 
-    # Seed `KIT_PROGRESS[]` so confirm paths enter `with_kit_progress_suspended`
+    # Seed `CURRENT_PROGRESS[]` so confirm paths enter `with_kit_progress_suspended`
     # with a live bar, restoring the previous progress state afterwards.
     #
-    # Assert `KIT_PROGRESS_SUSPEND[] > 0` *during* stdin read (`probe_suspend`
+    # Assert `PROGRESS_SUSPEND[] > 0` *during* stdin read (`probe_suspend`
     # on `_capture_stdio`), then `== 0` after the op returns (#374).
     # Post-return `drawn` / `cursor_hidden` are reset by cleanup even without
     # a live `KIT_PROGRESS_IO`, so they do not prove the prompt hid the bar.
     function _with_active_kit_progress(f::Function)
-        prev = DistSSHRun.KIT_PROGRESS[]
-        st = DistSSHRun.KitProgressState("op", 1, 0, "op")
-        DistSSHRun.KIT_PROGRESS[] = st
+        prev = DistSSHRun.CURRENT_PROGRESS[]
+        st = DistSSHRun.ProgressState("op", 1, 0, "op")
+        DistSSHRun.CURRENT_PROGRESS[] = st
         try
             return f(st)
         finally
-            DistSSHRun.KIT_PROGRESS[] = prev
+            DistSSHRun.CURRENT_PROGRESS[] = prev
         end
     end
 

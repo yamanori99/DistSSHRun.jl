@@ -6,7 +6,7 @@ function _confirm_stdio(answer; keyword = nothing)
         write(stdin_io, answer)
         flush(stdin_io)
         seekstart(stdin_io)
-        DistSSHRun.kit_confirm("really wipe?"; keyword = keyword)
+        DistSSHRun.cli_confirm("really wipe?"; keyword = keyword)
     end
 end
 
@@ -94,7 +94,7 @@ end
             prev_ni = DistSSHRun.kit_noninteractive()
             try
                 DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(yes = true))
-                @test DistSSHRun.kit_confirm("ignored")
+                @test DistSSHRun.cli_confirm("ignored")
 
                 DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(verbosity = :progress))
                 @test DistSSHRun.kit_verbosity() === :progress
@@ -136,7 +136,7 @@ end
         end
     end
 
-    @testset "kit_confirm stdin" begin
+    @testset "cli_confirm stdin" begin
         withenv("DISTSSH_YES" => nothing) do
             prev_ni = DistSSHRun.kit_noninteractive()
             DistSSHRun.set_kit_noninteractive!(false)

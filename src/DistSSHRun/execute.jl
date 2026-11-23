@@ -469,7 +469,7 @@ not apply to the subprocess. Detached `:drive` omits `--output-dir` unless
 `job_id`, if given, is passed to the child as `DISTSSH_JOB_ID`, which
 adds `job=<id>` to every `progress:` log line. `DISTSSH_PROGRESS=1` is
 `--progress` verbosity, not a watcher; read lines with
-`DistSSHRun.parse_progress_line` / `DistSSHRun.kit_progress_latest`.
+`DistSSHRun.parse_progress_line` / `DistSSHRun.progress_latest`.
 Omitted entirely when unset.
 
 The detached child starts in `dir` (default: the `project` directory) and

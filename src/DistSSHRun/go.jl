@@ -921,7 +921,7 @@ function _go_complete!(
         tokens::Vector{String},
     )::GoResult
     footer = progress_ok ? display_path(batch_dir, anchor) : nothing
-    kit_progress_done!(; ok = progress_ok, footer = footer)
+    progress_done!(; ok = progress_ok, footer = footer)
     _print_go_slot_stdout_after_progress!(batch_dir)
     _maybe_print_kit_progress_phases(batch_dir)
     close_log_file()
@@ -934,7 +934,7 @@ function _go_complete!(
             try
                 note_controller_shipped_tree_drift!(proj)
             catch err
-                kit_println(
+                cli_println(
                     "shipped-tree drift check skipped: $(sprint(showerror, err; context = 0))",
                 )
             end
@@ -1471,7 +1471,7 @@ function _go_run!(
             finally
                 if !completed
                     footer = progress_ok ? display_path(batch_dir, anchor) : nothing
-                    kit_progress_done!(; ok = progress_ok, footer = footer)
+                    progress_done!(; ok = progress_ok, footer = footer)
                     _print_go_slot_stdout_after_progress!(batch_dir)
                     _maybe_print_kit_progress_phases(batch_dir)
                     close_log_file()

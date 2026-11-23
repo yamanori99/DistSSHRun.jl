@@ -744,7 +744,7 @@ function merge_go_hosts_file_worker_tokens!(
 end
 
 """`println` with the same terminal gate as `writeln_both` (setup / size)."""
-function kit_println(args...; io::IO = stdout)
+function cli_println(args...; io::IO = stdout)
     if kit_output_detail()
         println(io, args...)
     end
@@ -778,7 +778,7 @@ With `--yes` / `DISTSSH_YES`, always returns `true` without prompting.
 `keyword=nothing` → accept `y` / `yes` (case-insensitive).
 Otherwise the answer must match `keyword` exactly.
 """
-function kit_confirm(prompt::AbstractString; keyword::Union{Nothing, String} = nothing)::Bool
+function cli_confirm(prompt::AbstractString; keyword::Union{Nothing, String} = nothing)::Bool
     kit_noninteractive() && return true
     return with_kit_progress_suspended() do
         print(stdout, prompt)
@@ -795,7 +795,7 @@ function kit_confirm(prompt::AbstractString; keyword::Union{Nothing, String} = n
     end
 end
 
-function kit_confirm!(prompt::AbstractString; keyword::Union{Nothing, String} = nothing)::Bool
-    kit_confirm(prompt; keyword = keyword) || return false
+function cli_confirm!(prompt::AbstractString; keyword::Union{Nothing, String} = nothing)::Bool
+    cli_confirm(prompt; keyword = keyword) || return false
     return true
 end

@@ -133,10 +133,10 @@ function setup_cli_via_bang!(
         return Cint(1)
     end
     print_header("$(DistSSHRun.cli_heading("setup")) · $mode_name")
-    kit_println()
+    cli_println()
     remote_for_session = opts.deploy_root !== nothing ? deploy_path : remote_path
     writeln_field("Remote path", remote_for_session)
-    kit_println()
+    cli_println()
     session = setup_session_from_cli(opts, project, remote_for_session)
     if mode === :remote_root && opts.deploy_root isa AbstractString
         prev = session
@@ -201,22 +201,22 @@ function setup_cli_via_bang!(
             path_flag = _cli_deploy_root_flag(opts.deploy_root)
             rid = sel.ship_id
             if rid isa AbstractString && !isempty(rid)
-                kit_println(
+                cli_println(
                     "  Next: $(cli_m()) setup instantiate --ship-id $rid$path_flag",
                 )
-                kit_println(
+                cli_println(
                     "        $(cli_m()) doctor --deploy --ship-id $rid$path_flag",
                 )
             elseif sel.work_root isa AbstractString
                 flag = _cli_deploy_root_flag(sel.work_root)
-                kit_println(
+                cli_println(
                     "  Next: $(cli_m()) setup instantiate$flag",
                 )
-                kit_println(
+                cli_println(
                     "        $(cli_m()) doctor --deploy$flag",
                 )
             end
-            kit_println()
+            cli_println()
         end
     end
     return Cint(ok ? 0 : 1)

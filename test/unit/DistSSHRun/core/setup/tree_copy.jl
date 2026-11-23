@@ -274,7 +274,7 @@ using Test
                             @test occursin("Type 'ship-tree'", out)
                             # #374: bar is suspended while stdin is read, then released.
                             @test nsus >= 1
-                            @test DistSSHRun.KIT_PROGRESS_SUSPEND[] == 0
+                            @test DistSSHRun.PROGRESS_SUSPEND[] == 0
                         end
                     end
                 end

@@ -704,7 +704,7 @@ function _show_input_progress!(name::AbstractString, line::AbstractString, t0::F
     elapsed = time() - t0
     rate = elapsed > 0 ? done / elapsed : 0.0
     eta = rate > 0 ? (total - done) / rate : 0.0
-    kit_println(
+    cli_println(
         "hashed $name: $(_format_bytes(done)) / $(_format_bytes(total)), $(_format_seconds(eta)) left",
     )
     return nothing
@@ -791,7 +791,7 @@ function _record_remote_inputs!(
             input.name, input.path, host, input.hash, out, run_dir,
         )
         push!(rows, row)
-        kit_println(_input_summary_line(input.name, Int(row["bytes"]), elapsed, !input.hash))
+        cli_println(_input_summary_line(input.name, Int(row["bytes"]), elapsed, !input.hash))
     end
     _commit_declared_input_rows!(run_dir, rows)
     return nothing
@@ -1577,7 +1577,7 @@ function create_remote_roots!(
     if confirm && !kit_noninteractive()
         cancelled = with_kit_progress_suspended() do
             writeln_both("remote-root $(path) on $(length(host_list)) host(s)")
-            if !kit_confirm("Type 'remote-root' to confirm: "; keyword = "remote-root")
+            if !cli_confirm("Type 'remote-root' to confirm: "; keyword = "remote-root")
                 println_fatal("Cancelled.")
                 return true
             end
@@ -1949,7 +1949,7 @@ function _ship_tree_to_hosts!(
             writeln_both(
                 "  files=$(pack.files) bytes=$(pack.bytes) hash=$(pack.content_tree_hash)",
             )
-            if !kit_confirm("Type 'ship-tree' to confirm: "; keyword = "ship-tree")
+            if !cli_confirm("Type 'ship-tree' to confirm: "; keyword = "ship-tree")
                 println_fatal("Cancelled.")
                 return true
             end
@@ -1974,7 +1974,7 @@ function _ship_tree_to_hosts!(
                     await_inputs = await_inputs,
                 )
                 if report
-                    kit_println(
+                    cli_println(
                         "  $host: remote_root $(abs_root) (" *
                             (created ? "created" : "existed") * ")",
                     )
@@ -1982,7 +1982,7 @@ function _ship_tree_to_hosts!(
                 if report
                     kit_print("  $host: ")
                     print_ok("✓")
-                    kit_println()
+                    cli_println()
                 end
                 msg = created ? "ship-tree ok (created remote_root)" :
                     "ship-tree ok"
@@ -1991,7 +1991,7 @@ function _ship_tree_to_hosts!(
                 if report
                     kit_print("  $host: ")
                     print_err("✗")
-                    kit_println()
+                    cli_println()
                 end
                 return HostResult(host, false, sprint(showerror, e))
             end

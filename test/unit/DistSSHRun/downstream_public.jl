@@ -13,17 +13,17 @@ include(joinpath(@__DIR__, "..", "..", "..", ".github", "downstream_public.jl"))
     @test !isdefined(DistSSHRun, :kit_process_start_key)
     @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :print_header)
     @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :print_warn)
-    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :kit_println)
+    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :cli_println)
     @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :writeln_field)
-    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :kit_confirm)
-    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :kit_progress_done!)
-    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :kit_progress_latest)
-    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :KIT_PROGRESS)
-    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :KIT_PROGRESS_SUSPEND)
-    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :KitProgressState)
+    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :cli_confirm)
+    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :progress_done!)
+    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :progress_latest)
+    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :CURRENT_PROGRESS)
+    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :PROGRESS_SUSPEND)
+    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :ProgressState)
     @test !Base.ispublic(DistSSHRun, :_main)
     @test !Base.ispublic(DistSSHRun.DistSSHBase, :_scp_cmd)
-    @test !Base.ispublic(DistSSHRun, :kit_confirm!)
+    @test !Base.ispublic(DistSSHRun, :cli_confirm!)
 
     mktempdir() do tmp
         src = joinpath(tmp, "src")
@@ -72,7 +72,7 @@ include(joinpath(@__DIR__, "..", "..", "..", ".github", "downstream_public.jl"))
             joinpath(src, "bound.jl"),
             """
             const _QUALIFIED = (
-                :kit_confirm!)
+                :cli_confirm!)
             for _n in _QUALIFIED
                 _bind!(DistSSHRun, _n; export_name = false)
             end
@@ -81,7 +81,7 @@ include(joinpath(@__DIR__, "..", "..", "..", ".github", "downstream_public.jl"))
         fails = downstream_public_failures(src)
         @test length(fails) == 1
         @test startswith(fails[1], "bound.jl:")
-        @test occursin("DistSSHRun.kit_confirm! is not public", fails[1])
+        @test occursin("DistSSHRun.cli_confirm! is not public", fails[1])
         rm(joinpath(src, "bound.jl"))
 
         testdir = joinpath(tmp, "test")

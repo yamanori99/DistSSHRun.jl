@@ -4,7 +4,7 @@ using .DistSSHRun:
     doctor!,
     doctor_deploy_check,
     init_log_file,
-    kit_println,
+    cli_println,
     parse_doctor_args,
     print_err,
     print_header,

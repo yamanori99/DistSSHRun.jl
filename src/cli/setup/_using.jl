@@ -9,7 +9,7 @@ using .DistSSHRun:
     git_sync_project_to_hosts!,
     init_log_file,
     instantiate_remotes,
-    kit_println,
+    cli_println,
     parse_setup_args,
     preflight_setup_ssh,
     print_err,

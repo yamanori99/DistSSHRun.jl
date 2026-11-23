@@ -138,7 +138,7 @@ Probe SSH to each host via the setup SSH transport.
 Returns `true` when every host answers. Prints a short summary per failure.
 """
 function preflight_setup_ssh(hosts::Vector{String})::Bool
-    kit_println("SSH preflight:")
+    cli_println("SSH preflight:")
     all_ok = true
     for host in hosts
         if kit_output_detail()
@@ -148,12 +148,12 @@ function preflight_setup_ssh(hosts::Vector{String})::Bool
             err = probe_setup_ssh(host)
             if err === nothing
                 print_ok("✓")
-                kit_println()
+                cli_println()
             else
                 all_ok = false
                 print_progress_err("✗")
-                kit_println()
-                kit_println("    $err")
+                cli_println()
+                cli_println("    $err")
             end
         else
             # `:progress` / `:quiet`: one complete kit-log line (no advance prefix).
@@ -172,7 +172,7 @@ function preflight_setup_ssh(hosts::Vector{String})::Bool
             end
         end
     end
-    kit_println()
+    cli_println()
     return all_ok
 end
 

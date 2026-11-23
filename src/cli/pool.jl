@@ -40,7 +40,7 @@ function pool_main()::Cint
         end
         print_header(DistSSHRun.cli_heading("pool"))
         DistSSHRun.writeln_field("Project", cli_project_disp(project_root, path_anchor))
-        DistSSHRun.kit_println()
+        DistSSHRun.cli_println()
 
         session = DistSSHRun.DistSSHSession(
             project = project_root,
