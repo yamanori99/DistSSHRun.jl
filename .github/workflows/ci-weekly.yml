@@ -23,6 +23,8 @@ concurrency:
 permissions:
   contents: read
 
+cache-mode: read
+
 jobs:
   test:
     name: DistSSHRun (1.13, ubuntu-latest, x64)
@@ -35,7 +37,7 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
           delete-old-caches: false
@@ -52,7 +54,7 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
           delete-old-caches: false
@@ -132,7 +134,7 @@ jobs:
         if: ${{ !matrix.slot.wsl }}
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         if: ${{ !matrix.slot.wsl }}
         with:
           cache-scratchspaces: false
@@ -184,7 +186,7 @@ jobs:
         if: ${{ !matrix.slot.wsl }}
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         if: ${{ !matrix.slot.wsl }}
         with:
           cache-scratchspaces: false
@@ -232,7 +234,7 @@ jobs:
         if: ${{ !matrix.slot.wsl }}
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         if: ${{ !matrix.slot.wsl }}
         with:
           cache-scratchspaces: false
@@ -285,7 +287,7 @@ jobs:
         if: ${{ !matrix.slot.wsl }}
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         if: ${{ !matrix.slot.wsl }}
         with:
           cache-scratchspaces: false
@@ -307,7 +309,7 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "~1.14.0-0"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
           delete-old-caches: false
@@ -326,7 +328,7 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "nightly"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
           delete-old-caches: false
@@ -344,7 +346,7 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "~1.14.0-0"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
           delete-old-caches: false
@@ -362,7 +364,7 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "nightly"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
           delete-old-caches: false
@@ -441,7 +443,7 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
           delete-old-caches: false
@@ -460,7 +462,7 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
           delete-old-caches: false
@@ -479,7 +481,7 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "~1.14.0-0"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
           delete-old-caches: false
@@ -498,7 +500,7 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "nightly"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
           delete-old-caches: false
@@ -517,7 +519,7 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "~1.14.0-0"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
           delete-old-caches: false
@@ -536,7 +538,7 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "nightly"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
           delete-old-caches: false

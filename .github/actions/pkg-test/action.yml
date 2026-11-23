@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-action.json
 name: pkg-test
-description: Pkg.test after the caller has run setup-julia and julia-actions/cache
+description: Pkg.test after the caller has run setup-julia and julia-depot-cache
 
 inputs:
   coverage:

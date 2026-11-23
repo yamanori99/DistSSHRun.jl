@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+name: julia-depot-cache
+description: >-
+  julia-actions/cache wrapper. Restore on every event; save only when the
+  workflow or job sets cache-mode write (push to main in CI). Caller must not
+  nest this action inside another composite (julia-actions/cache#236).
+
+inputs:
+  cache-name:
+    description: Cache key prefix (forwarded; empty uses julia-actions/cache default).
+    required: false
+    default: ""
+  include-matrix:
+    description: Include matrix values in the cache key.
+    required: false
+    default: "true"
+  cache-scratchspaces:
+    description: Cache scratchspaces.
+    required: false
+    default: "true"
+  delete-old-caches:
+    description: Delete old caches for the restore key.
+    required: false
+    default: "true"
+  save-always:
+    description: Save cache when the job fails.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      with:
+        cache-name: ${{ inputs.cache-name != '' && inputs.cache-name || format('julia-cache;workflow={0};job={1}', github.workflow, github.job) }}
+        include-matrix: ${{ inputs.include-matrix }}
+        cache-scratchspaces: ${{ inputs.cache-scratchspaces }}
+        delete-old-caches: ${{ inputs.delete-old-caches }}
+        save-always: ${{ inputs.save-always }}

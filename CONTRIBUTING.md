@@ -78,7 +78,7 @@ VS Code: recommend
 ]
 ```
 
-JETLS CI uses [`.github/actions/jetls-check`](.github/actions/jetls-check/action.yml) (installs `JETLS.jl` `@release` after `julia-actions/cache`). After a bump, re-read [cli-check](https://aviatesk.github.io/JETLS.jl/dev/cli-check/) and keep failing on hint+.
+JETLS CI uses [`.github/actions/jetls-check`](.github/actions/jetls-check/action.yml) with a dedicated JETLS depot cache (restore on all events; save on `main` push only). Other Julia jobs use [`.github/actions/julia-depot-cache`](.github/actions/julia-depot-cache/action.yml) under the same `cache-mode` policy so pull requests do not fill the Actions cache quota. After a JETLS bump, re-read [cli-check](https://aviatesk.github.io/JETLS.jl/dev/cli-check/) and keep failing on hint+.
 
 JETLS is the type gate. Do not commit `.vscode/settings.json` to silence the Language Server.
 
