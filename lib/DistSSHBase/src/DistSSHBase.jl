@@ -49,7 +49,9 @@ include("hosts/hostinfo.jl")
 include("hosts/host_result.jl")
 include("ssh/julia_where.jl")
 include("procs/list.jl")
+include("procs/start_key.jl")
 include("procs/reap.jl")
+include("cli.jl")
 include("namespace.jl")
 include("component_src.jl")
 include("component_id.jl")
@@ -78,6 +80,8 @@ public ssh_connection_ssh_opts
 public join_explained_message, machine_ssh_label, throw_legacy_machine_token
 public parse_placement_token, posix_quote, remote_env_project_root, resolve_remote_julia
 public resolve_remote_project_root, shell_status, shield_sigint, with_cli_entry, without_cancel
+public process_start_key
+public CLI
 public CLI_EXIT_USAGE, CliForegroundInterrupt, CliUsageError, cli_help_stdout, cli_parse, cli_required_else_help, with_cli_exit
 public wait_seconds
 public tool_require

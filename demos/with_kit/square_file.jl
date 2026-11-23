@@ -34,9 +34,9 @@ function init_output_dir!(_)
     pkg = getfield(Main, _DEMO_PACKAGE)
     env = strip(get(ENV, "DISTSSH_OUTPUT_DIR", ""))
     if !isempty(env) || any(==("--output-dir"), ARGS)
-        return pkg.resolve_distributed_output_dir!(ARGS, env)
+        return pkg.resolve_output_dir!(ARGS, env)
     end
-    return pkg.resolve_distributed_output_dir!(ARGS, _demo_default_output())
+    return pkg.resolve_output_dir!(ARGS, _demo_default_output())
 end
 
 function main()

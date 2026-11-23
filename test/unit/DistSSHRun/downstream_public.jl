@@ -5,7 +5,22 @@ include(joinpath(@__DIR__, "..", "..", "..", ".github", "downstream_public.jl"))
 @testset "downstream public names" begin
     @test Base.ispublic(DistSSHRun, :main)
     @test !Base.isexported(DistSSHRun, :main)
-    @test length(DOWNSTREAM_PUBLIC_ALLOW) == 28
+    @test length(DOWNSTREAM_PUBLIC_ALLOW) == 0
+    @test Base.ispublic(DistSSHRun, :dist_ssh_kit_version)
+    @test Base.ispublic(DistSSHRun, :parse_pool_args)
+    @test Base.ispublic(DistSSHRun, :show_pool_usage)
+    @test Base.ispublic(DistSSHRun.DistSSHBase, :process_start_key)
+    @test !isdefined(DistSSHRun, :kit_process_start_key)
+    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :print_header)
+    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :print_warn)
+    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :kit_println)
+    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :writeln_field)
+    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :kit_confirm)
+    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :kit_progress_done!)
+    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :kit_progress_latest)
+    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :KIT_PROGRESS)
+    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :KIT_PROGRESS_SUSPEND)
+    @test Base.ispublic(DistSSHRun.DistSSHBase.CLI, :KitProgressState)
     @test !Base.ispublic(DistSSHRun, :_main)
     @test !Base.ispublic(DistSSHRun.DistSSHBase, :_scp_cmd)
     @test !Base.ispublic(DistSSHRun, :kit_confirm!)
@@ -28,10 +43,19 @@ include(joinpath(@__DIR__, "..", "..", "..", ".github", "downstream_public.jl"))
             """
         )
         write(joinpath(src, "field.jl"), "DistSSHRun.DetachedProcess.run_dir\n")
-        write(joinpath(src, "allow.jl"), "DistSSHRun.print_header(\"t\")\n")
-        write(joinpath(src, "imp.jl"), "using DistSSHRun.DistSSHBase: _ssh_host_args\n")
         write(joinpath(src, "pkg.jl"), "import DistSSHRun\n")
+        write(joinpath(src, "cli.jl"), "DistSSHRun.DistSSHBase.CLI.print_header(\"t\")\n")
         @test isempty(downstream_public_failures(src))
+
+        write(joinpath(src, "allow.jl"), "DistSSHRun.print_header(\"t\")\n")
+        fails = downstream_public_failures(src)
+        @test fails == ["allow.jl:1: DistSSHRun.print_header is not public"]
+        rm(joinpath(src, "allow.jl"))
+
+        write(joinpath(src, "imp.jl"), "using DistSSHRun.DistSSHBase: _ssh_host_args\n")
+        fails = downstream_public_failures(src)
+        @test fails == ["imp.jl:1: DistSSHRun.DistSSHBase._ssh_host_args is not public"]
+        rm(joinpath(src, "imp.jl"))
 
         write(joinpath(src, "bad.jl"), "DistSSHRun._main(String[])\n")
         fails = downstream_public_failures(src)

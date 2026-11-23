@@ -139,6 +139,19 @@ end
 include(joinpath(@__DIR__, "..", "lib", "DistSSHBase", "src", "DistSSHBase.jl"))
 include("DistSSHRun/up_module.jl")
 using .DistSSHBase
+import .DistSSHBase: process_start_key
+import .DistSSHBase.CLI:
+    KIT_PROGRESS,
+    KIT_PROGRESS_SUSPEND,
+    KitProgressItem,
+    KitProgressState,
+    kit_confirm,
+    kit_println,
+    kit_progress_done!,
+    kit_progress_latest,
+    print_header,
+    print_warn,
+    writeln_field
 import .DistSSHBase: cancel!, join_explained_message, manifest_path
 public join_explained_message, manifest_path
 import .DistSSHBase:
@@ -276,6 +289,9 @@ const DIST_SSH_KIT_VERSION = something(
 )
 
 dist_ssh_kit_version()::VersionNumber = DIST_SSH_KIT_VERSION
+public dist_ssh_kit_version
+public parse_pool_args
+public show_pool_usage
 
 # CLI: load `src/cli/*.jl` into Main and run `*_main`.
 #   julia --project=. -m DistSSHKit drive parent:2 script.jl

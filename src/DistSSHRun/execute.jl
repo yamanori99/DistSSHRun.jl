@@ -1064,7 +1064,7 @@ function _write_kit_pid_file(
             path = joinpath(d, "kit.pid")
             body = sprint() do io
                 println(io, Int(pid))
-                st = kit_process_start_key(Int(pid))
+                st = process_start_key(Int(pid))
                 if st !== nothing
                     println(io, st)
                 end
@@ -1470,7 +1470,7 @@ end
 
 Whether `kit.pid` names a still-running child of this run. Requires
 `DistSSHRun.kit_pid_alive` and, when a start key is in the file, a match with
-`kit_process_start_key`. A leftover after SIGKILL whose pid was reused
+`process_start_key`. A leftover after SIGKILL whose pid was reused
 is false. One-line (pid-only) files keep the old probe. Missing file is false.
 """
 function kit_pid_file_running(output_dir::AbstractString)::Bool
@@ -1478,7 +1478,7 @@ function kit_pid_file_running(output_dir::AbstractString)::Bool
     rec === nothing && return false
     kit_pid_alive(rec.pid) || return false
     rec.start === nothing && return true
-    cur = kit_process_start_key(rec.pid)
+    cur = process_start_key(rec.pid)
     cur === nothing && return false
     return cur == rec.start
 end

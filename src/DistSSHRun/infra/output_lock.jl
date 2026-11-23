@@ -13,7 +13,7 @@ end
 
 """Hex start key for `pid`, or `nothing` when the key cannot be read."""
 function _output_lock_start_hex(pid::Integer)::Union{Nothing, String}
-    key = kit_process_start_key(pid)
+    key = process_start_key(pid)
     key === nothing && return nothing
     isempty(key) && return nothing
     return bytes2hex(codeunits(String(key)))

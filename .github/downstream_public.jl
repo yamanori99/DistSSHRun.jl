@@ -15,43 +15,16 @@ using DistSSHRun
 # #57 exported `parse_ride_args`. #509 removes ride; followers drop src refs (#509).
 # Remaining entries wait for #201.
 # #201 is the public-surface freeze. `main` is public, so it is not listed.
-const DOWNSTREAM_PUBLIC_ALLOW_MAX = 28
-const DOWNSTREAM_PUBLIC_ALLOW = Dict{Tuple{Symbol, Symbol}, Int}(
-    (:DistSSHBase, :_ssh_host_args) => 201,
-    (:DistSSHBase, :_test_doubles_on) => 201,
-    (:DistSSHRun, :KIT_PROGRESS) => 201,
-    (:DistSSHRun, :KIT_PROGRESS_SUSPEND) => 201,
-    (:DistSSHRun, :CliSharedFlags) => 201,
-    (:DistSSHRun, :KitProgressState) => 201,
-    (:DistSSHRun, :apply_shared_cli_flags!) => 201,
-    (:DistSSHRun, :close_log_file) => 201,
-    (:DistSSHRun, :dist_ssh_kit_version) => 201,
-    (:DistSSHRun, :get_local_git_hash) => 201,
-    (:DistSSHRun, :kit_confirm) => 201,
-    (:DistSSHRun, :kit_job_mark_comment) => 201,
-    (:DistSSHRun, :kit_job_pkill_pattern) => 201,
-    (:DistSSHRun, :kit_println) => 201,
-    (:DistSSHRun, :kit_process_start_key) => 201,
-    (:DistSSHRun, :kit_progress_done!) => 201,
-    (:DistSSHRun, :kit_progress_latest) => 201,
-    (:DistSSHRun, :kit_verbosity) => 201,
-    (:DistSSHRun, :parse_pool_args) => 201,
-    (:DistSSHRun, :parse_ride_args) => 509,
-    (:DistSSHRun, :print_header) => 201,
-    (:DistSSHRun, :print_warn) => 201,
-    (:DistSSHRun, :resolve_distributed_output_dir!) => 201,
-    (:DistSSHRun, :set_kit_verbosity!) => 201,
-    (:DistSSHRun, :setup_cli_host_token) => 201,
-    (:DistSSHRun, :show_pool_usage) => 201,
-    (:DistSSHRun, :show_ride_usage) => 201,
-    (:DistSSHRun, :writeln_field) => 201,
-)
+const DOWNSTREAM_PUBLIC_ALLOW_MAX = 0
+const DOWNSTREAM_PUBLIC_ALLOW = Dict{Tuple{Symbol, Symbol}, Int}()
 
 function _owner_module(owner::Symbol)::Module
     if owner === :DistSSHRun
         return DistSSHRun
     elseif owner === :DistSSHBase
         return DistSSHRun.DistSSHBase
+    elseif owner === :DistSSHBaseCLI
+        return DistSSHRun.DistSSHBase.CLI
     elseif owner === :DistSSHUp
         return DistSSHRun.DistSSHUp
     elseif owner === :DistSSHShip
@@ -69,6 +42,8 @@ end
 function _binding_label(owner::Symbol, name::Symbol)::String
     if owner === :DistSSHBase
         return "DistSSHRun.DistSSHBase.$(name)"
+    elseif owner === :DistSSHBaseCLI
+        return "DistSSHRun.DistSSHBase.CLI.$(name)"
     elseif owner === :DistSSHUp
         return "DistSSHRun.DistSSHUp.$(name)"
     elseif owner === :DistSSHShip
@@ -109,6 +84,10 @@ function _owner_and_name(chain::Vector{Symbol})::Union{Nothing, Tuple{Symbol, Sy
         return nothing
     elseif chain[2] === :DistSSHBase
         length(chain) < 3 && return nothing
+        if chain[3] === :CLI
+            length(chain) < 4 && return nothing
+            return (:DistSSHBaseCLI, chain[4])
+        end
         return (:DistSSHBase, chain[3])
     elseif chain[2] === :DistSSHUp
         length(chain) < 3 && return nothing
@@ -200,6 +179,8 @@ function _walk_import(arg, file::String, line::Int, hits::Vector{Tuple{String, I
     # `using DistSSHRun.DistSSHBase: name` has no name after the submodule.
     owner = if picked !== nothing
         picked[1]
+    elseif length(chain) == 3 && chain[1] === :DistSSHRun && chain[2] === :DistSSHBase && chain[3] === :CLI
+        :DistSSHBaseCLI
     elseif length(chain) == 2 && chain[1] === :DistSSHRun && chain[2] === :DistSSHBase
         :DistSSHBase
     elseif length(chain) == 2 && chain[1] === :DistSSHRun && chain[2] === :DistSSHUp

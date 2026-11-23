@@ -32,18 +32,18 @@ using Test
     _with_tempdir() do tmp
         default = joinpath(tmp, "output")
         withenv("DISTSSH_OUTPUT_DIR" => nothing) do
-            @test DistSSHRun.resolve_distributed_output_dir!(String[], default) == abspath(default)
+            @test DistSSHRun.resolve_output_dir!(String[], default) == abspath(default)
             @test ENV["DISTSSH_OUTPUT_DIR"] == abspath(default)
         end
 
         custom = joinpath(tmp, "custom")
         withenv("DISTSSH_OUTPUT_DIR" => custom) do
-            @test DistSSHRun.resolve_distributed_output_dir!(String[], default) == abspath(custom)
+            @test DistSSHRun.resolve_output_dir!(String[], default) == abspath(custom)
         end
 
         from_args = joinpath(tmp, "from_args")
         withenv("DISTSSH_OUTPUT_DIR" => "") do
-            got = DistSSHRun.resolve_distributed_output_dir!(
+            got = DistSSHRun.resolve_output_dir!(
                 String["--output-dir", from_args],
                 default
             )

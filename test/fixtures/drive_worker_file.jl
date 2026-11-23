@@ -5,7 +5,7 @@ using Distributed
 using DistSSHRun
 
 function init_output_dir!(_)
-    return DistSSHRun.resolve_distributed_output_dir!(ARGS, joinpath(@__DIR__, "output"))
+    return DistSSHRun.resolve_output_dir!(ARGS, joinpath(@__DIR__, "output"))
 end
 
 function write_worker_file()

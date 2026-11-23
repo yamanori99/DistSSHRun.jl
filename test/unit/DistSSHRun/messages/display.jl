@@ -35,7 +35,7 @@ using Test
         @test DistSSHRun.kit_pid_alive(-1) === false
         if Sys.isunix()
             @test DistSSHRun.kit_pid_alive(getpid()) === true
-            @test DistSSHRun.kit_process_start_key(getpid()) isa String
+            @test DistSSHRun.process_start_key(getpid()) isa String
         end
     end
 
