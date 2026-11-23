@@ -40,11 +40,8 @@ end
         kill(proc, Base.SIGINT)
         stopped = timedwait(() -> !process_running(proc), 60.0; pollint = 0.5)
         if stopped !== :ok && process_running(proc)
-            try
-                kill(proc, Base.SIGUSR1)
-                timedwait(() -> !process_running(proc), 2.0; pollint = 0.05)
-            catch
-            end
+            kill(proc, Base.SIGUSR1)
+            timedwait(() -> !process_running(proc), 2.0; pollint = 0.05)
             process_running(proc) && kill(proc, Base.SIGKILL)
         end
         wait(proc)
@@ -101,11 +98,8 @@ end
         if stopped !== :ok && process_running(proc)
             # Linux Julia dumps every thread on SIGUSR1. Capture that before
             # SIGKILL so a hung first SIGINT leaves a backtrace in the log.
-            try
-                kill(proc, Base.SIGUSR1)
-                timedwait(() -> !process_running(proc), 2.0; pollint = 0.05)
-            catch
-            end
+            kill(proc, Base.SIGUSR1)
+            timedwait(() -> !process_running(proc), 2.0; pollint = 0.05)
             process_running(proc) && kill(proc, Base.SIGKILL)
         end
         wait(proc)
