@@ -3184,16 +3184,16 @@ function check_swallowed_ceiling(measured::Int, constant::Int)
 end
 
 const BANNED_NEW = ("best-effort", "until", "lockstep", "pending", "known failure", "pre-existing")
-const CEILING_ID_MATCH = 4
+const CEILING_ID_MATCH = 0
 const CEILING_PROCESS_PATTERN = 37
-const CEILING_LOCK_CREATE = 2
-const CEILING_ENV_DEFAULT = 5
-const CEILING_ENV_DEFAULT_TEST = 12
+const CEILING_LOCK_CREATE = 0
+const CEILING_ENV_DEFAULT = 0
+const CEILING_ENV_DEFAULT_TEST = 0
 const CEILING_SWALLOWED_CATCH_RULE_REV = 2
 const CEILING_SWALLOWED_CATCH = 146
 const CEILING_LOOP_SKIP = 0
-const CEILING_PR_REFS = 2
-const CEILING_EXCUSE_PHRASES = 24
+const CEILING_PR_REFS = 0
+const CEILING_EXCUSE_PHRASES = 6
 const CEILING_INVOKELATEST = 14
 const CEILING_ENV_WRITE = 38
 const CEILING_KWARGS_SPLAT = 22

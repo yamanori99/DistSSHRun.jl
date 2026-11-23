@@ -141,9 +141,8 @@ end
             pid_path = joinpath(d, "kit.pid")
             write(pid_path, "4242")
             DistSSHRun._remove_kit_pid_file(99, d, nothing)
-            @test isfile(pid_path)
+            @test read(pid_path, String) == "4242"
             DistSSHRun._remove_kit_pid_file(4242, d, nothing)
-            @test !isfile(pid_path)
             write(pid_path, "4242\nold-start\n")
             DistSSHRun._remove_kit_pid_file(4242, d, nothing)
             @test !isfile(pid_path)

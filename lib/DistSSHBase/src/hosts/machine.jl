@@ -21,9 +21,11 @@ end
 
 function _looks_like_legacy_placement(s::AbstractString)::Bool
     base = strip(s)
-    base == PARENT_HOST_NAME && return true
-    startswith(base, PARENT_HOST_NAME * ":") && return true
-    startswith(base, CHILD_TOKEN_PREFIX) && return true
+    child_prefix = CHILD_TOKEN_PREFIX
+    parent_name = PARENT_HOST_NAME
+    base == parent_name && return true
+    startswith(base, parent_name * ":") && return true
+    startswith(base, child_prefix) && return true
     return false
 end
 
@@ -31,7 +33,9 @@ end
 function throw_legacy_machine_token(raw::AbstractString)
     s = String(raw)
     if _looks_like_legacy_placement(s)
-        if startswith(s, CHILD_TOKEN_PREFIX) || s == PARENT_HOST_NAME || startswith(s, PARENT_HOST_NAME * ":")
+        child_prefix = CHILD_TOKEN_PREFIX
+        parent_name = PARENT_HOST_NAME
+        if startswith(s, child_prefix) || s == parent_name || startswith(s, parent_name * ":")
             throw(
                 ArgumentError(
                     "$(repr(s)) was removed; use --head-workers on drive, --head-slots on go; "

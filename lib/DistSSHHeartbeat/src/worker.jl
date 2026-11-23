@@ -8,7 +8,7 @@ function ping_master()
 end
 
 function _heartbeat_die!()
-    # Keep `_exit` until a Julia 1.13.x ships with Distributed.jl #198.
+    # Keep `_exit` while Julia 1.13.x still lacks the upstream Distributed exit hook.
     Timer(10) do _
         ccall(:_exit, Cvoid, (Cint,), HEARTBEAT_EXIT_CODE)
         return

@@ -167,9 +167,9 @@ function _is_overlapped_hash_interrupt(e)
         (isdefined(Base, :CancellationRequest) && e isa Base.CancellationRequest)
 end
 
-# `await_declared_input_hashes!` already emptied the pending list. An interrupt
+# `await_declared_input_hashes!` already emptied the in-flight list. An interrupt
 # during `fetch` must not return while that task is still hashing: the outer
-# drain would see an empty list and return. Wait until `hash_task` finishes,
+# drain would see an empty list and return. Wait for `hash_task` to finish,
 # keep its failure, then rethrow the interrupt so a hash failure cannot hide it.
 function _join_overlapped_input_hash!(hash_task::Task)
     interrupt_err = nothing

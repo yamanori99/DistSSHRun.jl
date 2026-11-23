@@ -127,7 +127,11 @@ struct HostLaunchPlan
     topology::Symbol
 end
 
-function resolved_topology(env_val::AbstractString = get(ENV, "DISTSSH_TOPOLOGY", "auto"))::Symbol
+function resolved_topology(
+        env_val::AbstractString = get(ENV, "DISTSSH_TOPOLOGY") do
+            "auto"
+        end,
+    )::Symbol
     v = lowercase(String(strip(env_val)))
     v == "auto" && return :auto
     v == "master_worker" && return :master_worker

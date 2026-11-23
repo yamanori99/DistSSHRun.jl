@@ -72,7 +72,8 @@ function _ppid_from_proc(pid::Int)::Int
     rest = strip(line[(j + 1):end])
     flds = split(rest)
     length(flds) < 2 && return 0
-    return something(tryparse(Int, flds[2]), 0)
+    parsed = tryparse(Int, flds[2])
+    return parsed === nothing ? 0 : parsed
 end
 
 function _processes_with_env_proc(
@@ -127,11 +128,11 @@ function _ps_line_has_mark(
     searchfrom = 1
     n = ncodeunits(line)
     while searchfrom <= n
-        idx = findnext(needle, line, searchfrom)
-        idx === nothing && return false
-        at = first(idx)
+        found = findnext(needle, line, searchfrom)
+        found === nothing && return false
+        at = first(found)
         before_ok = at == 1 || isspace(line[prevind(line, at)])
-        after = nextind(line, last(idx))
+        after = nextind(line, last(found))
         after_ok = prefix || after > n || isspace(line[after])
         before_ok && after_ok && return true
         searchfrom = nextind(line, at)

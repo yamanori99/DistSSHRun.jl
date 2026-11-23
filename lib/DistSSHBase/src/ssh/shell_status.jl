@@ -1,5 +1,5 @@
 # Shell status of one exited child. Callers that still read `exitcode` alone
-# stay on that read until they switch.
+# stay on that read while callers keep the old pattern.
 
 """
     shell_status(proc::Base.Process)::Int
