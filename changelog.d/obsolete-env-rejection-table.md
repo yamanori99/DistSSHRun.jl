@@ -1,6 +1,6 @@
 category: changed
 
-Registry of env vars rejected at runtime (see `obsolete_env.jl`). Changelog fragments:
+- Runtime env rejection list is centralized in `obsolete_env.jl` and kept in sync with changelog `Removed:` lines. Behavior unchanged.
 
 Removed: `GB_PER_WORKER`
 Removed: `DISTSSH_SIZE_PROBE`
