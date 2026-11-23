@@ -120,10 +120,14 @@ else
   if [[ "${DISTSSH_BUILD_CACHE:-}" == "gha" ]]; then
     # CI: reuse layers across runs. The release ARGs are the cache key for the
     # juliaup layer, so a hit skips julialang-s3 entirely.
+    # PR and other events read the cache only; main pushes refresh it.
+    _gha_cache_args=(--cache-from "type=gha,scope=distsshrun-ssh-worker")
+    if [[ "${GITHUB_ACTIONS:-}" == "true" && "${GITHUB_EVENT_NAME:-}" == "push" && "${GITHUB_REF:-}" == "refs/heads/main" ]]; then
+      _gha_cache_args+=(--cache-to "type=gha,scope=distsshrun-ssh-worker,mode=max")
+    fi
     _distsshkit_retry "worker image build" docker buildx build --load \
       -t "${LOCAL_IMAGE}" \
-      --cache-from "type=gha,scope=distsshrun-ssh-worker" \
-      --cache-to "type=gha,scope=distsshrun-ssh-worker,mode=max" \
+      "${_gha_cache_args[@]}" \
       --build-arg JULIA_DEFAULT_CHANNEL \
       --build-arg JULIA_ALT_CHANNEL \
       --build-arg JULIA_DEFAULT_RELEASE \

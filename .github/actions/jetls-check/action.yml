@@ -1,48 +1,23 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-action.json
 name: jetls-check
-description: Install JETLS app and run jetls check (caller must setup-julia + julia-actions/cache)
+description: Install JETLS app and run jetls check (caller must setup-julia + JETLS depot cache restore)
 
 inputs:
   files:
     description: Space-separated Julia files for jetls check
     required: true
+  depot-cache-exact:
+    description: True when the workflow JETLS depot restore had an exact cache hit
+    required: false
+    default: "false"
 
 runs:
   using: composite
   steps:
-    # Do not call julia-actions/cache here (julia-actions/cache#236).
-    # That action restores packages/ and compiled/, not environments/apps or bin/.
-    # actions/cache below is only the app env and the jetls shim.
-    # Official aviatesk/JETLS.jl check@release nests cache with no opt-out.
-    - name: JETLS app cache key
-      id: jetls-key
-      shell: bash
-      run: |
-        set -euo pipefail
-        ver="$(julia --startup-file=no -e 'print(VERSION)')"
-        rev="$(grep -E -m 1 -o 'rev="[0-9]{4}-[0-9]{2}-[0-9]{2}"' "${GITHUB_ACTION_PATH}/action.yml" || true)"
-        rev="${rev#rev=\"}"
-        rev="${rev%\"}"
-        if [[ ! "${rev}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
-          echo "jetls-check: date pin missing in ${GITHUB_ACTION_PATH}/action.yml" >&2
-          exit 1
-        fi
-        echo "julia=${ver}" >> "${GITHUB_OUTPUT}"
-        echo "rev=${rev}" >> "${GITHUB_OUTPUT}"
-        echo "jetls-startup: cache key jetls-app-${RUNNER_OS}-${ver}-${rev}"
-    - name: Restore JETLS app
-      id: jetls-app
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: |
-          ~/.julia/environments/apps/JETLS
-          ~/.julia/environments/apps/AppManifest.toml
-          ~/.julia/bin/jetls
-        key: jetls-app-${{ runner.os }}-${{ steps.jetls-key.outputs.julia }}-${{ steps.jetls-key.outputs.rev }}
     - name: Install jetls
       shell: bash
       env:
-        JETLS_APP_CACHE: ${{ steps.jetls-app.outputs.cache-hit }}
+        JETLS_DEPOT_CACHE_EXACT: ${{ inputs.depot-cache-exact }}
       run: | # zizmor: ignore[github-env] constant "$HOME/.julia/bin", not attacker input
         set -euo pipefail
         mkdir -p "$HOME/.julia/bin"
@@ -56,14 +31,14 @@ runs:
         # Pkg.Apps.add deletes and rewrites the app env, and fetches the git
         # repo, even when the depot cache already has the packages. Skip that
         # when this rev and Julia are already restored.
-        if [[ "${JETLS_APP_CACHE}" == "true" && -x "${HOME}/.julia/bin/jetls" && -f "${HOME}/.julia/environments/apps/JETLS/Manifest.toml" ]]; then
+        if [[ "${JETLS_DEPOT_CACHE_EXACT}" == "true" && -x "${HOME}/.julia/bin/jetls" && -f "${HOME}/.julia/environments/apps/JETLS/Manifest.toml" ]]; then
           if jetls version; then
-            echo "jetls-startup: app cache hit; skip Pkg.Apps.add"
+            echo "jetls-startup: depot cache hit; skip Pkg.Apps.add"
             exit 0
           fi
-          echo "jetls-startup: app cache hit but jetls version failed; installing"
+          echo "jetls-startup: depot cache hit but jetls version failed; installing"
         else
-          echo "jetls-startup: app cache miss; Pkg.Apps.add"
+          echo "jetls-startup: depot cache miss; Pkg.Apps.add"
         fi
         julia --startup-file=no -e '
           using Pkg

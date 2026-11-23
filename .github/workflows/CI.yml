@@ -92,8 +92,8 @@ jobs:
   # `.github/workflows/runic.yml` keeps the monthly schedule.
   # Linux E2E (1.13 required, 1.14-pre continue-on-error): path filter on PR /
   # main push; always on a version
-  # increase and dispatch. JETLS uses `.github/actions/jetls-check` (no nested
-  # cache; julia-actions/cache#236). JETLS 2026-11-20 supports 1.12.2 through
+  # increase and dispatch. JETLS uses one depot cache (restore all events;
+  # save main only; julia-actions/cache#236). JETLS 2026-11-20 supports 1.12.2 through
   # 1.14. The required job is 1.13. The 1.14-pre job is continue-on-error
   # and is not a required check.
   detect:
@@ -1425,16 +1425,48 @@ jobs:
           echo "julia=${ver}" >> "$GITHUB_OUTPUT"
           echo "cputarget=${tag}" >> "$GITHUB_OUTPUT"
           echo "jetls-cache: julia=${ver} cputarget=${tag}"
-      # Default prefix omits the target and the resolved version, so the
-      # native 1.13 depot stays the newest restore. Old caches are left in place.
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - name: JETLS pin
+        id: jetls-rev
+        run: |
+          set -euo pipefail
+          rev="$(grep -E -m 1 -o 'rev="[0-9]{4}-[0-9]{2}-[0-9]{2}"' .github/actions/jetls-check/action.yml || true)"
+          rev="${rev#rev=\"}"
+          rev="${rev%\"}"
+          if [[ ! "${rev}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "jetls job: date pin missing in .github/actions/jetls-check/action.yml" >&2
+            exit 1
+          fi
+          echo "rev=${rev}" >> "${GITHUB_OUTPUT}"
+      - name: Restore JETLS depot cache
+        id: jetls-depot-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          cache-name: julia-cache;workflow=${{ github.workflow }};job=${{ github.job }};cputarget=${{ steps.runner.outputs.cputarget }};julia=${{ steps.runner.outputs.julia }}
-          cache-scratchspaces: false
-          delete-old-caches: false
+          path: |
+            ~/.julia/packages
+            ~/.julia/artifacts
+            ~/.julia/compiled
+            ~/.julia/registries
+            ~/.julia/environments/apps
+            ~/.julia/bin
+          key: jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-${{ hashFiles('Project.toml', 'test/Project.toml', 'lib/DistSSHBase/Project.toml', 'lib/DistSSHBase/test/Project.toml', 'lib/DistSSHUp/Project.toml', 'lib/DistSSHUp/test/Project.toml', 'lib/DistSSHShip/Project.toml', 'lib/DistSSHShip/test/Project.toml', 'lib/DistSSHHeartbeat/Project.toml', 'lib/DistSSHHeartbeat/test/Project.toml') }}
+          restore-keys: |
+            jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-
       - uses: ./.github/actions/jetls-check
         with:
           files: ${{ steps.files.outputs.list }}
+          depot-cache-exact: ${{ steps.jetls-depot-cache.outputs.cache-hit == 'true' }}
+      - name: Save JETLS depot cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.jetls-depot-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.julia/packages
+            ~/.julia/artifacts
+            ~/.julia/compiled
+            ~/.julia/registries
+            ~/.julia/environments/apps
+            ~/.julia/bin
+          key: ${{ steps.jetls-depot-cache.outputs.cache-primary-key }}
 
   # Same action and file list as the 1.13 job. continue-on-error, so a new
   # hint does not block merge. Not a ruleset check. The 1.13 name stays.
@@ -1470,15 +1502,48 @@ jobs:
           echo "julia=${ver}" >> "$GITHUB_OUTPUT"
           echo "cputarget=${tag}" >> "$GITHUB_OUTPUT"
           echo "jetls-cache: julia=${ver} cputarget=${tag}"
-      # Same prefix fields as the 1.13 job. An alpha bump changes julia=.
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+      - name: JETLS pin
+        id: jetls-rev
+        run: |
+          set -euo pipefail
+          rev="$(grep -E -m 1 -o 'rev="[0-9]{4}-[0-9]{2}-[0-9]{2}"' .github/actions/jetls-check/action.yml || true)"
+          rev="${rev#rev=\"}"
+          rev="${rev%\"}"
+          if [[ ! "${rev}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "jetls job: date pin missing in .github/actions/jetls-check/action.yml" >&2
+            exit 1
+          fi
+          echo "rev=${rev}" >> "${GITHUB_OUTPUT}"
+      - name: Restore JETLS depot cache
+        id: jetls-depot-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          cache-name: julia-cache;workflow=${{ github.workflow }};job=${{ github.job }};cputarget=${{ steps.runner.outputs.cputarget }};julia=${{ steps.runner.outputs.julia }}
-          cache-scratchspaces: false
-          delete-old-caches: false
+          path: |
+            ~/.julia/packages
+            ~/.julia/artifacts
+            ~/.julia/compiled
+            ~/.julia/registries
+            ~/.julia/environments/apps
+            ~/.julia/bin
+          key: jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-${{ hashFiles('Project.toml', 'test/Project.toml', 'lib/DistSSHBase/Project.toml', 'lib/DistSSHBase/test/Project.toml', 'lib/DistSSHUp/Project.toml', 'lib/DistSSHUp/test/Project.toml', 'lib/DistSSHShip/Project.toml', 'lib/DistSSHShip/test/Project.toml', 'lib/DistSSHHeartbeat/Project.toml', 'lib/DistSSHHeartbeat/test/Project.toml') }}
+          restore-keys: |
+            jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-
       - uses: ./.github/actions/jetls-check
         with:
           files: ${{ steps.files.outputs.list }}
+          depot-cache-exact: ${{ steps.jetls-depot-cache.outputs.cache-hit == 'true' }}
+      - name: Save JETLS depot cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.jetls-depot-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.julia/packages
+            ~/.julia/artifacts
+            ~/.julia/compiled
+            ~/.julia/registries
+            ~/.julia/environments/apps
+            ~/.julia/bin
+          key: ${{ steps.jetls-depot-cache.outputs.cache-primary-key }}
 
   ssh-e2e:
     name: DistSSHRun (1.13, ubuntu-latest → ubuntu-26.04)
