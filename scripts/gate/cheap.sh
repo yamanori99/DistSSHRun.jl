@@ -52,6 +52,9 @@ run_step "lint" env GATE_DIFF_BASE="${GATE_DIFF_BASE}" GATE_DIFF_HEAD="${GATE_DI
 run_step "shellcheck" "${ROOT}/scripts/gate/shellcheck.sh"
 
 run_step "removed names" "${ROOT}/scripts/lint/run.sh" removed-names
+run_step "workflow checkout" "${ROOT}/scripts/gate/workflow_checkout_verify.sh"
+run_step "workflow gate wiring" "${ROOT}/scripts/gate/workflow_gate_wiring_verify.sh"
+run_step "bash 3.2 compat" "${ROOT}/scripts/gate/bash32_compat_verify.sh"
 run_step "docs static" "${ROOT}/scripts/docs.sh" static
 
 if [[ -z "${GITHUB_ACTIONS:-}" ]] || [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then

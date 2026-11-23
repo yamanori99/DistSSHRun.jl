@@ -366,6 +366,9 @@ gate_capture "shellcheck" "${ROOT}/scripts/gate/shellcheck.sh"
 gate_capture "gitleaks" "${ROOT}/scripts/gate/gitleaks.sh"
 
 gate_capture "removed names" "${ROOT}/scripts/lint/run.sh" removed-names
+gate_capture "workflow checkout" "${ROOT}/scripts/gate/workflow_checkout_verify.sh"
+gate_capture "workflow gate wiring" "${ROOT}/scripts/gate/workflow_gate_wiring_verify.sh"
+gate_capture "bash 3.2 compat" "${ROOT}/scripts/gate/bash32_compat_verify.sh"
 
 INVARIANT_NAMES=()
 if ((${#INVARIANT_NAMES[@]} > 0)); then

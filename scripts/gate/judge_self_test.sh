@@ -34,6 +34,24 @@ chmod +x "${ROOT}/scripts/gate/workflow_cache_verify.sh"
 "${ROOT}/scripts/gate/workflow_cache_verify.sh" >/dev/null || fail_scenario "workflow_cache_verify"
 pass_scenario "workflow_cache_verify"
 
+chmod +x "${ROOT}/scripts/gate/workflow_checkout_verify.sh" \
+  "${ROOT}/scripts/gate/workflow_gate_wiring_verify.sh" \
+  "${ROOT}/scripts/gate/bash32_compat_verify.sh"
+"${ROOT}/scripts/gate/workflow_checkout_verify.sh" --self-test >/dev/null || fail_scenario "workflow_checkout_self_test"
+pass_scenario "workflow_checkout_self_test"
+"${ROOT}/scripts/gate/workflow_checkout_verify.sh" >/dev/null || fail_scenario "workflow_checkout_verify"
+pass_scenario "workflow_checkout_verify"
+
+"${ROOT}/scripts/gate/workflow_gate_wiring_verify.sh" --self-test >/dev/null || fail_scenario "workflow_gate_wiring_self_test"
+pass_scenario "workflow_gate_wiring_self_test"
+"${ROOT}/scripts/gate/workflow_gate_wiring_verify.sh" >/dev/null || fail_scenario "workflow_gate_wiring_verify"
+pass_scenario "workflow_gate_wiring_verify"
+
+"${ROOT}/scripts/gate/bash32_compat_verify.sh" --self-test >/dev/null || fail_scenario "bash32_compat_self_test"
+pass_scenario "bash32_compat_self_test"
+"${ROOT}/scripts/gate/bash32_compat_verify.sh" >/dev/null || fail_scenario "bash32_compat_verify"
+pass_scenario "bash32_compat_verify"
+
 SKIP_JOBS=(
   test-unit test-integration test-tty test-coverage test-macos-unit test-macos-integration test-macos-tty test-wsl
   test-1-14-pre-unit test-1-14-pre-integration test-1-14-pre-tty test-1-14-pre-macos-unit test-1-14-pre-macos-integration test-1-14-pre-macos-tty
