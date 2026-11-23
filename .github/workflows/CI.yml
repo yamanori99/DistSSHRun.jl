@@ -11,6 +11,7 @@ on:
       - reopened
       - ready_for_review
       - labeled
+      - unlabeled
   workflow_dispatch:
   # Daily 06:00 JST (21:00 UTC). Downstream report and macOS 1.14-pre Pkg.test;
   # detect sets heavy=false.
@@ -1404,7 +1405,6 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
-      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1413,6 +1413,7 @@ jobs:
       - name: Lint infra label
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
         run: ./scripts/gate/lint_change_guard.sh
 
   fix-tests-on-base:

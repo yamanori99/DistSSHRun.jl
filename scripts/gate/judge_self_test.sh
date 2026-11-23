@@ -52,6 +52,10 @@ pass_scenario "bash32_compat_self_test"
 "${ROOT}/scripts/gate/bash32_compat_verify.sh" >/dev/null || fail_scenario "bash32_compat_verify"
 pass_scenario "bash32_compat_verify"
 
+chmod +x "${ROOT}/scripts/gate/lint_change_guard.sh"
+"${ROOT}/scripts/gate/lint_change_guard.sh" --self-test >/dev/null || fail_scenario "lint_change_guard_self_test"
+pass_scenario "lint_change_guard_self_test"
+
 SKIP_JOBS=(
   test-unit test-integration test-tty test-coverage test-macos-unit test-macos-integration test-macos-tty test-wsl
   test-1-14-pre-unit test-1-14-pre-integration test-1-14-pre-tty test-1-14-pre-macos-unit test-1-14-pre-macos-integration test-1-14-pre-macos-tty
