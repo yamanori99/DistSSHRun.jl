@@ -1,0 +1,84 @@
+# Lean 4 formal model: independent of the Julia Test matrix.
+name: Formal
+
+on:
+  pull_request:
+    paths:
+      - "formal/**"
+      - "lib/DistSSHBase/**"
+      - ".github/workflows/formal.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "formal/**"
+      - "lib/DistSSHBase/**"
+      - ".github/workflows/formal.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: formal-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
+permissions:
+  contents: read
+
+env:
+  ELAN_NO_UPDATE_CHECK: "1"
+
+jobs:
+  lean:
+    name: Lean formal
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Lake key: formal-lake-<toolchain|manifest|lakefile>-<all .lean hashes>;
+      # restore-key prefix reuses .lake when only sources under formal/**/*.lean change.
+      - name: Cache Lake build (formal/.lake)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: formal/.lake
+          key: formal-lake-${{ hashFiles('formal/lean-toolchain', 'formal/lake-manifest.json', 'formal/lakefile.toml') }}-${{ hashFiles('formal/**/*.lean') }}
+          restore-keys: |
+            formal-lake-${{ hashFiles('formal/lean-toolchain', 'formal/lake-manifest.json', 'formal/lakefile.toml') }}-
+
+      - name: Install elan
+        run: |
+          bash formal/ci/install-elan.sh
+          echo "${HOME}/.elan/bin" >>"$GITHUB_PATH"
+
+      - name: Select Lean toolchain
+        working-directory: formal
+        run: |
+          elan toolchain install "$(cat lean-toolchain)"
+
+      - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
+        with:
+          version: "1.13"
+
+      - name: Install PyYAML for audit
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends python3-yaml
+
+      - name: Audit (build, escapes, registry, coverage, bugs)
+        run: bash formal/scripts/audit.sh
+
+      - name: Refutation reproducers
+        run: bash formal/scripts/run-repros.sh
+
+      - name: Differential test (shell_status)
+        run: julia --project=lib/DistSSHBase formal/diff/shell_status.jl
+
+      - name: Install zsh for posix_quote differential
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update -qq
+          sudo apt-get install -qq -y --no-install-recommends zsh
+
+      - name: Differential test (posix_quote)
+        run: julia --project=lib/DistSSHBase formal/scripts/differential_full.jl

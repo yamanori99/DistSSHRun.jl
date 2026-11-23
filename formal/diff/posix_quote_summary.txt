@@ -1,0 +1,7 @@
+corpus_target=2100 corpus_unique=1880 skipped_nul=0
+shell_mismatches=0 lean_mismatches=0
+bash_posix=1880
+dash=1880
+lean=1880
+zsh_emulate_sh=1880
+zsh_f=1880
