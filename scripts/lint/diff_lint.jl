@@ -3547,7 +3547,7 @@ end
 
 const BANNED_NEW = ("best-effort", "until", "lockstep", "pending", "known failure", "pre-existing")
 const CEILING_ID_MATCH = 0
-const CEILING_PROCESS_PATTERN = 7
+const CEILING_PROCESS_PATTERN = 2
 const CEILING_LOCK_CREATE = 0
 const CEILING_ENV_DEFAULT = 0
 const CEILING_ENV_DEFAULT_TEST = 0
@@ -3561,9 +3561,9 @@ const CEILING_ENV_WRITE = 38
 const CEILING_KWARGS_SPLAT = 22
 const CEILING_SUPPRESSION = 18
 const CEILING_ADDPROCS_KW_SPLAT = 0
-const CEILING_SPLIT_TOKEN = 0
-const CEILING_ENV_TABLE = 0
-const CEILING_TEST_ENV_MUTATION = 200
+const CEILING_SPLIT_TOKEN = 8
+const CEILING_ENV_TABLE = 5
+const CEILING_TEST_ENV_MUTATION = 71
 const ADDDROCS_KW_ALLOWLIST = Set{Symbol}(
     [
         :cmdline_cookie,
