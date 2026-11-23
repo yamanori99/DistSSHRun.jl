@@ -55,6 +55,10 @@ function prune_kit_leaf_dirs!(
     n = 0
     for p in victims
         isdir(p) || continue
+        if islink(p)
+            push!(refused, "refusing to prune symlink leaf $p")
+            continue
+        end
         reason = _output_lock_prune_block(p)
         if reason !== nothing
             push!(refused, reason)
@@ -202,7 +206,7 @@ function _prune_remote_shell(
     pq = _remote_shell_path_word(remote_path)
     # `$pq` is its own word, same as delete. Do not paste it into double quotes.
     older = older_days === nothing ? "" : string(Int(older_days))
-    idn = id === nothing ? "" : String(id)
+    idn = id === nothing ? "" : _parse_kit_job_id(String(id))
     idq = posix_quote(idn)
     older_q = posix_quote(older)
     return """
@@ -246,7 +250,7 @@ function _prune_remote_shell(
             return 0
             ;;
         esac
-        _job=\$(printf '%s\\n' "\$base" | sed -n 's/.*_[0-9]\\{8\\}T[0-9]\\{6\\}Z_//p')
+        _job=\$(printf '%s\\n' "\$base" | sed -n 's/.*_[0-9]\\{8\\}T[0-9]\\{6\\}Z\\(-[0-9][0-9]*\\)\\{0,1\\}_//p')
         [ -n "\$_job" ] || return 0
         [ "\$_job" = "\$id" ] || return 0
       fi
@@ -353,24 +357,30 @@ function _prune_remote_shell(
     fi
     _distssh_rm_fail=0
     while IFS= read -r _child; do
+      if [ -L "\$_child" ]; then
+        printf 'refusing to prune symlink leaf %s\\n' "\$_child" >&2
+        _distssh_rm_fail=1
+        continue
+      fi
       [ -d "\$_child" ] || continue
       if _distssh_tree_blocks "\$_child"; then
-        printf '%s\\n' "\$_child" >> "\$_distssh_refused"
+        printf '%s\\n' "\$_child" >> "\$_distssh_refused" || _distssh_record_fail
         continue
       fi
       if ! _distssh_hold_lock "\$_child" ""; then
-        printf '%s\\n' "\$_child" >> "\$_distssh_refused"
+        printf '%s\\n' "\$_child" >> "\$_distssh_refused" || _distssh_record_fail
         continue
       fi
       _self="\$_child/.distssh.lock"
       _mine=\$(cat "\$_self" 2>/dev/null) || _mine=
       if _distssh_tree_blocks "\$_child" "\$_self"; then
         [ -n "\$_mine" ] && _distssh_unlink_if_same "\$_self" "\$_mine"
-        printf '%s\\n' "\$_child" >> "\$_distssh_refused"
+        printf '%s\\n' "\$_child" >> "\$_distssh_refused" || _distssh_record_fail
         continue
       fi
       if ! rm -rf "\$_child"; then
         _distssh_rm_fail=1
+        [ -n "\$_mine" ] && _distssh_unlink_if_same "\$_self" "\$_mine"
       fi
     done < "\$_distssh_victims"
     rm -f "\$_distssh_victims"

@@ -787,7 +787,7 @@ using Test
             _with_tempdir() do tmp
                 root = pkgdir(DistSSHRun)
                 hold = joinpath(tmp, "hold")
-                script = "using DistSSHRun\ntry\n    DistSSHRun.output_dir_lock!(ARGS[1])\n    println(\"WIN\")\n    flush(stdout)\n    while !isfile(ARGS[2])\n        sleep(0.02)\n    end\ncatch\n    println(\"LOSE\")\n    flush(stdout)\nend\n"
+                script = "using DistSSHRun\ntry\n    DistSSHRun.output_dir_lock!(ARGS[1])\n    println(\"WIN\")\n    flush(stdout)\n    while !isfile(ARGS[2])\n        sleep(0.02)\n    end\ncatch e\n    if e isa ArgumentError && occursin(\"already holds\", e.msg)\n        println(\"LOSE\")\n        flush(stdout)\n    else\n        rethrow()\n    end\nend\n"
                 outs = [tempname() for _ in 1:4]
                 for out in outs
                     write(out, "")
@@ -820,6 +820,7 @@ using Test
                     write(hold, "1")
                     foreach(wait, procs)
                     @test !timed_out
+                    @test all(p -> p.exitcode == 0, procs)
                     @test count(==("WIN"), texts) == 1
                     @test count(==("LOSE"), texts) == 3
                 finally

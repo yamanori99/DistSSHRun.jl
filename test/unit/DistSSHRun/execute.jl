@@ -447,6 +447,11 @@ end
             @test again != taken
             @test isdir(again)
             @test startswith(basename(again), basename(taken))
+            tagged = DistSSHRun.allocate_run_dir(:go, "same.jl"; project, job_id = "exp1")
+            bumped = DistSSHRun._mkdir_unique!(tagged)
+            @test DistSSHRun._leaf_job_id(basename(tagged)) == "exp1"
+            @test DistSSHRun._leaf_job_id(basename(bumped)) == "exp1"
+            @test basename(bumped) != basename(tagged)
         end
     end
 

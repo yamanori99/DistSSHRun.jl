@@ -196,11 +196,12 @@ end
 
 """Job id after the last `_<YYYYMMDDTHHMMSSZ>_` in a leaf name, else `nothing`.
 
-A name that ends on that timestamp has no job id. An earlier timestamp in the
-stem is not an id.
+A uniqueness suffix `-<digits>` may sit between that stamp and the id. A name
+that ends on the stamp, or on the stamp plus that suffix, has no job id. An
+earlier timestamp in the stem is not an id.
 """
 function _leaf_job_id(name::AbstractString)::Union{Nothing, String}
-    m = match(r"^.*_[0-9]{8}T[0-9]{6}Z(?:_(.*))?$", String(name))
+    m = match(r"^.*_[0-9]{8}T[0-9]{6}Z(?:-[0-9]+)?(?:_(.*))?$", String(name))
     m === nothing && return nothing
     job = m.captures[1]
     job === nothing && return nothing

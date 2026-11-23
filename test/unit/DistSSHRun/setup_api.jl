@@ -244,6 +244,8 @@ using Test
             write(joinpath(untagged, "keep.txt"), "x")
             @test DistSSHRun._leaf_job_id(basename(untagged)) === nothing
             @test DistSSHRun._leaf_job_id(basename(tagged)) == "exp1"
+            @test DistSSHRun._leaf_job_id("job_20200101T000000Z-99_exp1") == "exp1"
+            @test DistSSHRun._leaf_job_id("job_20200101T000000Z-99") === nothing
             n_untagged = DistSSHRun.prune_kit_leaf_dirs!(proj; id = "report_20260803T134428Z")
             @test n_untagged == 0
             @test isdir(untagged)
@@ -252,6 +254,20 @@ using Test
             @test n_tagged == 1
             @test !isdir(tagged)
             @test isdir(untagged)
+            outside = joinpath(proj, "outside")
+            mkpath(outside)
+            linked = joinpath(proj, ".distssh", "go", "job_20200101T000000Z_link")
+            symlink(outside, linked)
+            err_link = try
+                DistSSHRun.prune_kit_leaf_dirs!(proj)
+                nothing
+            catch e
+                e
+            end
+            @test err_link isa ArgumentError
+            @test occursin("symlink leaf", err_link.msg)
+            @test islink(linked)
+            @test !isfile(joinpath(outside, ".distssh.lock"))
         end
 
         _with_fake_remotes() do state_dir

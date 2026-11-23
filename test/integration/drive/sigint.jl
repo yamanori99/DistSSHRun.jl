@@ -84,10 +84,12 @@ end
         @test started === :ok && isfile(marker)
         sleep(2)
         kill(proc, Base.SIGINT)
-        seen = timedwait(30.0; pollint = 0.05) do
-            occursin("Cleaning up workers", String(acc)) || !process_running(proc)
+        seen = timedwait(90.0; pollint = 0.05) do
+            occursin("Cleaning up workers", String(acc))
         end
-        process_running(proc) && kill(proc, Base.SIGINT)
+        if process_running(proc) && occursin("Cleaning up workers", String(acc))
+            kill(proc, Base.SIGINT)
+        end
         stopped = timedwait(() -> !process_running(proc), 30.0; pollint = 0.05)
         stopped === :ok || kill(proc, Base.SIGKILL)
         wait(proc)

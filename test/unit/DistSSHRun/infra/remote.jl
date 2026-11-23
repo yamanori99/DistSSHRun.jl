@@ -1058,6 +1058,40 @@ end
             @test !isdir(hit)
             @test isdir(miss)
             @test isdir(year)
+            spaced = joinpath(root, ".distssh", "go", "job_20200101T000000Z-99_exp1")
+            mkpath(spaced)
+            proc_sp = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root; id = " exp1 "))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc_sp.exitcode == 0
+            @test !isdir(spaced)
+            outside = joinpath(d, "outside-leaf")
+            mkpath(outside)
+            linked = joinpath(root, ".distssh", "go", "job_20200101T000000Z_link")
+            symlink(outside, linked)
+            err_l = IOBuffer()
+            proc_l = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root; id = "link"))`;
+                        stdout = devnull,
+                        stderr = err_l,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc_l.exitcode != 0
+            @test occursin("symlink leaf", String(take!(err_l)))
+            @test islink(linked)
+            @test isdir(outside)
+            @test !isfile(joinpath(outside, ".distssh.lock"))
             release = DistSSHRun.output_dir_lock!(miss)
             err = IOBuffer()
             proc2 = run(
