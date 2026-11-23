@@ -1410,7 +1410,7 @@ function self_test_body_main()
     for line in judge_lines
         startswith(line, "ok  ") || die("self-test: judge_self_test unexpected line $(line)")
     end
-    length(GATE_LINT_NAMES) == 28 || die("self-test: GATE_LINT_NAMES $(length(GATE_LINT_NAMES))")
+    length(GATE_LINT_NAMES) == 30 || die("self-test: GATE_LINT_NAMES $(length(GATE_LINT_NAMES))")
     "all" in GATE_LINT_NAMES && die("self-test: all is not a per-mode name")
     lint_sh = read(joinpath(@__DIR__, "..", "gate", "lint.sh"), String)
     occursin("run.sh\" all", lint_sh) || die("self-test: lint.sh must run all in one process")
@@ -1449,6 +1449,27 @@ function self_test_body_main()
     throw_src = "withenv(\"DISTSSH_JOBS\" => \"nope\") do\n    @test_throws ArgumentError kit_host_jobs()\nend\n"
     isempty(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> throw_src; whole = false)) ||
         die("self-test: env-default test throws")
+    ssh_src = "withenv(\"DISTSSH_SSH_OPTS\" => \"-o BatchMode=yes\") do\n    @test true\nend\n"
+    isempty(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> ssh_src; whole = false)) ||
+        die("self-test: env-default test ssh opts")
+    multi_src = "withenv(\n    \"DISTSSH_JOBS\" => \"nope\",\n) do\n    @test x == 1\nend\n"
+    length(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 5, String[])]), _ -> multi_src; whole = false)) >= 1 ||
+        die("self-test: env-default test multiline withenv")
+    concat_hit = "s = string(\"DISTSSH_\", \"FOO\")\n"
+    length(collect_literal_string_concat("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> concat_hit; whole = false)) >= 1 ||
+        die("self-test: literal-string-concat hit")
+    concat_star = "s = \"a\" * \"b\"\n"
+    length(collect_literal_string_concat("", Dict("test/t.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> concat_star; whole = false)) >= 1 ||
+        die("self-test: literal-string-concat star")
+    concat_ok = "s = string(\"x=\", 1)\n"
+    isempty(collect_literal_string_concat("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> concat_ok; whole = false)) ||
+        die("self-test: literal-string-concat interpolation")
+    concat_var = "a = \"x\"; s = string(a, \"y\")\n"
+    isempty(collect_literal_string_concat("", Dict("src/x.jl" => [Hunk(1, 0, 2, 1, String[])]), _ -> concat_var; whole = false)) ||
+        die("self-test: literal-string-concat variable")
+    proc_doc = "function f()\n\"\"\"\nUse pkill with care.\n\"\"\"\nend\n"
+    isempty(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 5, String[])]), _ -> proc_doc; whole = false)) ||
+        die("self-test: process-pattern docstring")
     catch_src = "try\n    f()\ncatch\nend\n"
     length(collect_swallowed_catch("", Dict("src/x.jl" => [Hunk(3, 0, 3, 2, String[])]), _ -> catch_src; whole = false)) >= 1 ||
         die("self-test: swallowed-catch hit")
@@ -2186,7 +2207,192 @@ function string_literal_value(node)
     kind(node) == K"string" || return nothing
     txt = sourcetext(node)
     startswith(txt, "\"") && endswith(txt, "\"") || return nothing
-    return txt[2:(end - 1)]
+    inner = txt[2:(end - 1)]
+    return occursin('\0', inner) ? nothing : inner
+end
+
+function string_literal_value_src(node, src::AbstractString)
+    kind(node) == K"string" || return nothing
+    ex = try
+        Meta.parse(sourcetext(node); lang = :julia)
+    catch
+        return nothing
+    end
+    ex isa String || return nothing
+    return ex
+end
+
+function product_jl_path(path::AbstractString)::Bool
+    p = replace(String(path), '\\' => '/')
+    startswith(p, "src/") && return true
+    startswith(p, "test/") && return true
+    return occursin(r"^lib/", p)
+end
+
+function env_table_src_path(path::AbstractString)::Bool
+    p = replace(String(path), '\\' => '/')
+    startswith(p, "src/") && return true
+    return occursin(r"^lib/[^/]+/src/", p)
+end
+
+function literal_string_concat_call(node)
+    kind(node) == K"call" || return false
+    kind(node[1]) == K"Identifier" && sourcetext(node[1]) == "string" || return false
+    numchildren(node) < 3 && return false
+    for i in 2:numchildren(node)
+        string_literal_value(node[i]) === nothing && return false
+    end
+    return true
+end
+
+function literal_string_concat_star(node)
+    kind(node) == K"call" || return false
+    numchildren(node) < 3 && return false
+    if sourcetext(node[1]) == "*"
+        lhs, rhs = node[2], node[3]
+    elseif numchildren(node) >= 3 && sourcetext(node[2]) == "*"
+        lhs, rhs = node[1], node[3]
+    else
+        return false
+    end
+    return string_literal_value(lhs) !== nothing && string_literal_value(rhs) !== nothing
+end
+
+function walk_literal_string_concat!(node, src, path, added, in_doc, rule, hits)
+    in_doc = in_doc || kind(node) == K"doc"
+    if !in_doc
+        if (literal_string_concat_call(node) || literal_string_concat_star(node)) &&
+                node_touches_added(src, node, added)
+            push!(
+                hits,
+                (path, line_of(src, Int(first(byte_range(node)))), rule),
+            )
+        end
+    end
+    for i in 1:numchildren(node)
+        walk_literal_string_concat!(node[i], src, path, added, in_doc, rule, hits)
+    end
+    return
+end
+
+function collect_literal_string_concat(root, files, src_for_path; whole::Bool)
+    hits = Tuple{String, Int, String}[]
+    paths = whole ? filter(product_jl_path, tracked_jl(root)) : collect(keys(files))
+    for path in paths
+        product_jl_path(path) || continue
+        skipped_path(path) && continue
+        endswith(path, ".jl") || continue
+        whole || (isempty(added_lines(get(files, path, Hunk[]))) && continue)
+        src = lint_file_src(root, path, src_for_path)
+        src === nothing && continue
+        added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
+        whole || (isempty(added) && continue)
+        walk_literal_string_concat!(
+            parse_tree(src),
+            src,
+            path,
+            added,
+            false,
+            "literal-string-concat",
+            hits,
+        )
+    end
+    return unique(hits)
+end
+
+const DISTSSH_ENV_NAME_RE = r"^DISTSSH_[A-Z0-9_]+$"
+
+function distssh_env_literal_name(node, src::AbstractString)
+    v = string_literal_value_src(node, src)
+    v === nothing && return nothing
+    occursin(DISTSSH_ENV_NAME_RE, v) || return nothing
+    return v
+end
+
+function parse_user_env_table_names(root::AbstractString)
+    path = joinpath(root, "src", "DistSSHRun", "options", "env_table.jl")
+    isfile(path) || return Set{String}()
+    names = Set{String}()
+    for m in eachmatch(r"EnvRow\(\"([^\"]+)\"", read(path, String))
+        push!(names, String(m.captures[1]))
+    end
+    return names
+end
+
+function parse_legacy_env_old_names(root::AbstractString)
+    path = joinpath(root, "lib", "DistSSHBase", "src", "env.jl")
+    isfile(path) || return Set{String}()
+    names = Set{String}()
+    for m in eachmatch(r"\"([A-Z0-9_]+)\"\s*=>", read(path, String))
+        push!(names, String(m.captures[1]))
+    end
+    return names
+end
+
+function parse_obsolete_env_reject_names(root::AbstractString)
+  names = Set{String}()
+    for rel in ("src/DistSSHRun/drive/pipeline.jl", "src/DistSSHRun/provenance.jl")
+        path = joinpath(root, rel)
+        isfile(path) || continue
+        for m in eachmatch(r"\"(DISTSSH_[A-Z0-9_]+)\"", read(path, String))
+            push!(names, String(m.captures[1]))
+        end
+    end
+    return names
+end
+
+function env_name_allowed(
+        name::AbstractString,
+        table::Set{String},
+        legacy::Set{String},
+        obsolete::Set{String},
+    )::Bool
+    name == "JULIA_DISTRIBUTED_EXE" && return true
+    startswith(name, "DISTSSH_INTERNAL_") && return true
+    startswith(name, "DISTSSH_TEST_") && return true
+    name in table && return true
+    name in legacy && return true
+    name in obsolete && return true
+    if endswith(name, "_ENV")
+        base = name[1:(end - 4)]
+        base in table && return true
+    end
+    return false
+end
+
+function walk_env_table_names!(node, src, path, added, table, legacy, obsolete, hits)
+    if kind(node) == K"string" || kind(node) == K"String"
+        name = distssh_env_literal_name(node, src)
+        if name !== nothing && node_touches_added(src, node, added) &&
+                !env_name_allowed(name, table, legacy, obsolete)
+            push!(hits, (path, line_of(src, Int(first(byte_range(node)))), "env-table"))
+        end
+    end
+    kind(node) == K"doc" && return
+    for i in 1:numchildren(node)
+        walk_env_table_names!(node[i], src, path, added, table, legacy, obsolete, hits)
+    end
+    return
+end
+
+function collect_env_table_names(root, files, src_for_path; whole::Bool)
+    hits = Tuple{String, Int, String}[]
+    table = parse_user_env_table_names(root)
+    legacy = parse_legacy_env_old_names(root)
+    obsolete = parse_obsolete_env_reject_names(root)
+    paths = whole ? filter(env_table_src_path, tracked_jl(root)) : collect(keys(files))
+    for path in paths
+        env_table_src_path(path) || continue
+        skipped_path(path) && continue
+        endswith(path, ".jl") || continue
+        whole || (isempty(added_lines(get(files, path, Hunk[]))) && continue)
+        src = lint_file_src(root, path, src_for_path)
+        src === nothing && continue
+        added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
+        whole || (isempty(added) && continue)
+        walk_env_table_names!(parse_tree(src), src, path, added, table, legacy, obsolete, hits)
+    end
+    return unique(hits)
 end
 
 function join_test_rel(prefix::AbstractString, suffix::AbstractString)
@@ -3185,10 +3391,10 @@ end
 
 const BANNED_NEW = ("best-effort", "until", "lockstep", "pending", "known failure", "pre-existing")
 const CEILING_ID_MATCH = 4
-const CEILING_PROCESS_PATTERN = 37
+const CEILING_PROCESS_PATTERN = 11
 const CEILING_LOCK_CREATE = 2
 const CEILING_ENV_DEFAULT = 5
-const CEILING_ENV_DEFAULT_TEST = 12
+const CEILING_ENV_DEFAULT_TEST = 9
 const CEILING_SWALLOWED_CATCH_RULE_REV = 2
 const CEILING_SWALLOWED_CATCH = 146
 const CEILING_LOOP_SKIP = 0
@@ -3330,27 +3536,37 @@ function process_builder_name(node)
     return n == "_pkill_pattern!"
 end
 
-function walk_process!(node, src, path, added, in_builder, hits)
+function string_is_function_docstring(node, parent)
+    kind(node) in (K"string", K"String") || return false
+    kind(parent) == K"block" || return false
+    numchildren(parent) < 1 && return false
+    parent[1] === node || return false
+    return true
+end
+
+function walk_process!(node, parent, src, path, added, in_builder, in_doc, hits)
+    in_doc = in_doc || kind(node) == K"doc" || string_is_function_docstring(node, parent)
     if process_builder_name(node)
         for i in 1:numchildren(node)
-            walk_process!(node[i], src, path, added, true, hits)
+            walk_process!(node[i], node, src, path, added, true, in_doc, hits)
         end
         return
     end
     st = sourcetext(node)
-    if !in_builder && kind(node) in (K"vect", K"ref", K"string", K"String")
+    skip = in_doc || string_is_function_docstring(node, parent)
+    if !in_builder && !skip && kind(node) in (K"vect", K"ref", K"string", K"String")
         if occursin(r"(?i)(?<![A-Za-z])(pkill|pgrep)(?![A-Za-z])", st) && node_touches_added(src, node, added)
             a = line_of(src, Int(first(byte_range(node))))
             push!(hits, (path, a, "process-pattern"))
         end
     end
-    if kind(node) in (K"string", K"String") && occursin(r"\[[a-zA-Z]\]", st) &&
+    if !skip && kind(node) in (K"string", K"String") && occursin(r"\[[a-zA-Z]\]", st) &&
             node_touches_added(src, node, added)
         a = line_of(src, Int(first(byte_range(node))))
         push!(hits, (path, a, "process-pattern"))
     end
     for i in 1:numchildren(node)
-        walk_process!(node[i], src, path, added, in_builder, hits)
+        walk_process!(node[i], node, src, path, added, in_builder, in_doc, hits)
     end
     return
 end
@@ -3368,7 +3584,7 @@ function collect_process_pattern(root, files, src_for_path; whole::Bool)
         src === nothing && continue
         added_set = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
         whole || (isempty(added_set) && continue)
-        walk_process!(parse_tree(src), src, path, added_set, false, hits)
+        walk_process!(parse_tree(src), parse_tree(src), src, path, added_set, false, false, hits)
     end
     return unique(hits)
 end
@@ -3443,16 +3659,92 @@ function collect_env_default(root, files, src_for_path; whole::Bool)
 end
 
 function invalid_env_literal(s::AbstractString)::Bool
-    s == "0" && return true
-    s == "-1" && return true
     isempty(s) && return false
-    return tryparse(Float64, s) === nothing
+    s in ("0", "-1", "nope", "maybe", "foo") && return true
+    all(isletter, s) || return false
+    lowercase(s) in ("true", "false", "yes", "no", "on", "off", "unset") && return false
+    return true
 end
 
 function test_path(path::AbstractString)::Bool
     p = replace(String(path), '\\' => '/')
     startswith(p, "test/") && return true
     return occursin(r"^lib/[^/]+/test/", p)
+end
+
+function env_pair_string_literals(node)
+    kind(node) == K"call" || return nothing
+    numchildren(node) < 3 && return nothing
+    (op_i, key_i, val_i) = if sourcetext(node[1]) in ("=>", ":(=>)")
+        (1, 2, 3)
+    elseif numchildren(node) >= 3 && sourcetext(node[2]) in ("=>", ":(=>)")
+        (2, 1, 3)
+    else
+        return nothing
+    end
+    op = sourcetext(node[op_i])
+    op in ("=>", ":(=>)") || return nothing
+    key = string_literal_value(node[key_i])
+    val = string_literal_value(node[val_i])
+    if key === nothing || val === nothing
+        key = string_literal_value_src(node[key_i], "")
+        val = string_literal_value_src(node[val_i], "")
+    end
+    (key === nothing || val === nothing) && return nothing
+    return (key, val)
+end
+
+function test_flags_in_subtree(node)
+    has_eq = Ref(false)
+    has_throws = Ref(false)
+    function walk(n)
+        if kind(n) == K"macrocall"
+            mh = macro_head_name(n)
+            if mh in ("test_throws", "@test_throws")
+                has_throws[] = true
+            elseif mh in ("test", "@test") && numchildren(n) >= 2
+                arg = n[2]
+                if kind(arg) == K"call" && numchildren(arg) >= 3
+                    op = sourcetext(arg[2])
+                    op in ("==", "===") && (has_eq[] = true)
+                end
+            end
+        end
+        for i in 1:numchildren(n)
+            walk(n[i])
+        end
+        return
+    end
+    walk(node)
+    return has_eq[], has_throws[]
+end
+
+function withenv_has_invalid_test_literal(node)
+    kind(node) == K"call" || return false
+    call_head_name(node) == "withenv" || return false
+    for i in 2:numchildren(node)
+        pair = env_pair_string_literals(node[i])
+        pair === nothing && continue
+        invalid_env_literal(pair[2]) && return true
+    end
+    return false
+end
+
+function walk_env_default_test!(node, src, path, added, hits)
+    if kind(node) == K"call" && call_head_name(node) == "withenv" &&
+            node_touches_added(src, node, added) && withenv_has_invalid_test_literal(node)
+        numchildren(node) >= 2 || return
+        body = node[numchildren(node)]
+        has_eq, has_throws = test_flags_in_subtree(body)
+        if has_eq && !has_throws
+            a = line_of(src, Int(first(byte_range(node))))
+            push!(hits, (path, a, "env-default"))
+        end
+    end
+    for i in 1:numchildren(node)
+        walk_env_default_test!(node[i], src, path, added, hits)
+    end
+    return
 end
 
 function collect_env_default_test(root, files, src_for_path; whole::Bool)
@@ -3466,28 +3758,7 @@ function collect_env_default_test(root, files, src_for_path; whole::Bool)
         src === nothing && continue
         added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
         whole || (isempty(added) && continue)
-        lines = split(src, '\n'; keepempty = true)
-        i = 1
-        while i <= length(lines)
-            line = lines[i]
-            m = match(r"withenv\([^)]*\"([^\"]+)\"\s*=>\s*\"([^\"]*)\"", line)
-            if m !== nothing && invalid_env_literal(m.captures[2]) && i in added
-                has_throws = false
-                has_eq = false
-                j = i
-                while j <= length(lines)
-                    occursin("@test_throws", lines[j]) && (has_throws = true)
-                    occursin(r"@test\b[^=]*==", lines[j]) && (has_eq = true)
-                    occursin(r"\bend\b", lines[j]) && j > i && break
-                    j += 1
-                    j - i > 40 && break
-                end
-                if has_eq && !has_throws
-                    push!(hits, (path, i, "env-default"))
-                end
-            end
-            i += 1
-        end
+        walk_env_default_test!(parse_tree(src), src, path, added, hits)
     end
     return unique(hits)
 end
@@ -3725,6 +3996,8 @@ function report_hits(hits)
         "addprocs-kwargs" => "addprocs keyword not in Distributed allowlist",
         "addprocs-kwargs-splat" => "unverifiable kwargs splat passed to addprocs",
         "weak-assertion" => "vague or tautological test assertion",
+        "literal-string-concat" => "string built only from string literals",
+        "env-table" => "DISTSSH_* name string is not listed in the user env table",
     )
     n = 0
     for (path, line, rule) in hits
@@ -3778,6 +4051,34 @@ function grep_token(root, tok, dirs)
     return hits
 end
 
+function removed_name_src_ok(line::AbstractString, tok::AbstractString)::Bool
+    occursin("throw_renamed_env!", line) && return true
+    occursin("_reject_obsolete", line) && return true
+    occursin("_throw_if_obsolete", line) && return true
+    occursin("LEGACY_ENV_RENAMES", line) && return true
+    occursin("is no longer used", line) && return true
+    occursin("was renamed to", line) && return true
+    occursin(Regex("\\Q\"$(tok)\"\\s*=>"), line) && return true
+    occursin(Regex("=>\\s*\"\\Q$(tok)\""), line) && return true
+    return false
+end
+
+function grep_token_removed(root, tok, dirs)
+    hits = grep_token(root, tok, dirs)
+    out = String[]
+    for hit in hits
+        m = match(r"^([^:]+):[0-9]+:", hit)
+        m === nothing && (push!(out, hit); continue)
+        path = String(m.captures[1])
+        line = occursin(":", hit) ? split(hit, ":", limit = 3)[3] : ""
+        if startswith(replace(path, '\\' => '/'), "src/") && removed_name_src_ok(line, tok)
+            continue
+        end
+        push!(out, hit)
+    end
+    return out
+end
+
 function lint_removed_names(root::AbstractString, extra_root::AbstractString = "")
     n = 0
     diff = read(`git -C $root diff -U0 --no-color origin/main...HEAD -- changelog.d`, String)
@@ -3797,12 +4098,12 @@ function lint_removed_names(root::AbstractString, extra_root::AbstractString = "
     end
     names = unique(names)
     for tok in names
-        for hit in grep_token(root, tok, ("README.md", "README.ja.md", "docs", "src"))
+        for hit in grep_token_removed(root, tok, ("README.md", "README.ja.md", "docs", "src"))
             println(stderr, "lint: removed name $(tok) still in $(hit)")
             n += 1
         end
         if !isempty(extra_root)
-            for hit in grep_token(extra_root, tok, ("src", "test", "README.md", "README.ja.md", "docs"))
+            for hit in grep_token_removed(extra_root, tok, ("src", "test", "README.md", "README.ja.md", "docs"))
                 println(stderr, "lint: removed name $(tok) still in downstream $(hit)")
                 n += 1
             end
@@ -3953,6 +4254,20 @@ function lint_excuse_ceiling(root)
     return check_ceiling("CEILING_EXCUSE_PHRASES", collect_excuse_phrases(root), CEILING_EXCUSE_PHRASES)
 end
 
+function lint_literal_string_concat(root, files, src_for_path)
+    return lint_mode_zero(
+        root,
+        files,
+        src_for_path,
+        collect_literal_string_concat,
+        "CEILING_LITERAL_STRING_CONCAT",
+    )
+end
+
+function lint_env_table(root, files, src_for_path)
+    return lint_mode_zero(root, files, src_for_path, collect_env_table_names, "CEILING_ENV_TABLE")
+end
+
 const GATE_LINT_NAMES = (
     "banned-words",
     "agents-md",
@@ -3982,6 +4297,8 @@ const GATE_LINT_NAMES = (
     "dead-version-gate",
     "addprocs-kwargs",
     "weak-assertion",
+    "literal-string-concat",
+    "env-table",
 )
 
 function lint_diff_mode(mode, root, files, src_for)
@@ -4011,6 +4328,8 @@ function lint_diff_mode(mode, root, files, src_for)
     mode == "dead-version-gate" && return lint_dead_version(root, files, src_for)
     mode == "addprocs-kwargs" && return lint_addprocs_kwargs(root, files, src_for)
     mode == "weak-assertion" && return lint_weak_assertion(root, files, src_for)
+    mode == "literal-string-concat" && return lint_literal_string_concat(root, files, src_for)
+    mode == "env-table" && return lint_env_table(root, files, src_for)
     return die("unknown mode $(mode)")
 end
 

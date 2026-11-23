@@ -50,7 +50,7 @@ function user_env_table()::Vector{EnvRow}
     push!(
         rows,
         EnvRow(
-            string("DISTSSH_", "SKIP_GLOBAL_WORKER_P", "KILL"),
+            "DISTSSH_SKIP_GLOBAL_WORKER_PKILL",
             "bool",
             "false",
             "—",

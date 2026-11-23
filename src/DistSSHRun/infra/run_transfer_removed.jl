@@ -10,10 +10,7 @@ end
 
 function _hint_setup_ship_tree(command::AbstractString)::String
     m = _run_transfer_m()
-    return string(
-        "Run `$m setup ship-tree HOST`, then `$m setup instantiate HOST`, ",
-        "then `$m $command --ship-id ID`.",
-    )
+    return "Run `$m setup ship-tree HOST`, then `$m setup instantiate HOST`, then `$m $command --ship-id ID`."
 end
 
 function _hint_setup_skip_git_guard()::String

@@ -826,10 +826,10 @@ end
 
 function _throw_if_obsolete_source_env!()
     for (old, new) in (
-            string("DISTSSH_", "SOURCE_COMMIT") => "DISTSSH_INTERNAL_SOURCE_COMMIT",
-            string("DISTSSH_", "SOURCE_DIRTY") => "DISTSSH_INTERNAL_SOURCE_DIRTY",
-            string("DISTSSH_", "SOURCE_CAPTURED") => "DISTSSH_INTERNAL_SOURCE_CAPTURED",
-            string("DISTSSH_", "SOURCE_UNTRACKED") => "DISTSSH_INTERNAL_SOURCE_UNTRACKED",
+            "DISTSSH_SOURCE_COMMIT" => "DISTSSH_INTERNAL_SOURCE_COMMIT",
+            "DISTSSH_SOURCE_DIRTY" => "DISTSSH_INTERNAL_SOURCE_DIRTY",
+            "DISTSSH_SOURCE_CAPTURED" => "DISTSSH_INTERNAL_SOURCE_CAPTURED",
+            "DISTSSH_SOURCE_UNTRACKED" => "DISTSSH_INTERNAL_SOURCE_UNTRACKED",
         )
         haskey(ENV, old) && DistSSHBase.throw_renamed_env!(old, new)
     end
