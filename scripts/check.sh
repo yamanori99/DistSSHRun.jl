@@ -352,6 +352,7 @@ else
 fi
 
 gate_capture "shellcheck" "${ROOT}/scripts/gate/shellcheck.sh"
+gate_capture "gitleaks" "${ROOT}/scripts/gate/gitleaks.sh"
 
 gate_capture "removed names" "${ROOT}/scripts/lint/run.sh" removed-names
 
