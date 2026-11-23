@@ -58,10 +58,10 @@ function _parse_output_lock(text::AbstractString)
         line = String(raw)
         i = findfirst(==('='), line)
         i === nothing && return nothing
-        key = line[1:(i - 1)]
+        key = line[1:prevind(line, i)]
         key in ("writer", "host", "pid", "start", "id") || return nothing
         haskey(fields, key) && return nothing
-        fields[key] = line[(i + 1):end]
+        fields[key] = line[nextind(line, i):end]
     end
     for key in ("writer", "host", "pid", "start", "id")
         haskey(fields, key) || return nothing
@@ -104,7 +104,11 @@ function _excl_write_lock(path::AbstractString, body::AbstractString)::Bool
         write(io, body)
     end
     rc = ccall(:link, Cint, (Cstring, Cstring), tmp, path)
-    rm(tmp; force = true)
+    try
+        rm(tmp; force = true)
+    catch
+        rc == 0 || rethrow()
+    end
     return rc == 0
 end
 
@@ -134,8 +138,8 @@ end
 Exclusive `.distssh.lock` in `output_dir`. The record stores writer, host, pid,
 start key, and an optional job id. A live same-host owner or a foreign host
 throws. A dead same-host owner, or the same pid with a different start key,
-is replaced. The release removes the file only when it is still the acquired
-inode and host, pid, and start key still match.
+is replaced. The release keeps a hard link to the acquired inode and removes
+the path only when that inode is still there and host, pid, and start key match.
 """
 function output_dir_lock!(
         output_dir::AbstractString;
@@ -154,31 +158,42 @@ function output_dir_lock!(
         _parse_kit_job_id(String(id))
     end
     body = _output_lock_text(host, mypid, start, id_s)
-    function _release_acquired(dev, ino)
+    function _release_acquired(token::AbstractString)
         return () -> begin
             try
-                isfile(lock_path) || return nothing
-                st = stat(lock_path)
-                (st.device == dev && st.inode == ino) || return nothing
-                raw = read(lock_path, String)
-                rec = _parse_output_lock(raw)
-                rec === nothing && return nothing
-                (rec.host == host && rec.pid == mypid && rec.start == start) || return nothing
-                _unlink_output_lock_if_record!(lock_path, raw)
+                ispath(token) || return nothing
+                st_tok = stat(token)
+                if !islink(lock_path) && isfile(lock_path)
+                    st = stat(lock_path)
+                    if st.device == st_tok.device && st.inode == st_tok.inode
+                        raw = read(lock_path, String)
+                        rec = _parse_output_lock(raw)
+                        if rec !== nothing &&
+                                rec.host == host &&
+                                rec.pid == mypid &&
+                                rec.start == start
+                            _unlink_output_lock_if_record!(lock_path, raw)
+                        end
+                    end
+                end
             catch e
                 e isa InterruptException && rethrow()
                 @debug "output lock: release skipped" exception = (e, catch_backtrace())
+            finally
+                rm(token; force = true)
             end
             return nothing
         end
     end
     function _acquired()
-        st = stat(lock_path)
-        return _release_acquired(st.device, st.inode)
+        token = string(lock_path, ".hold.", mypid, ".", time_ns())
+        rc = ccall(:link, Cint, (Cstring, Cstring), lock_path, token)
+        rc == 0 || throw(ArgumentError("output lock: could not pin $(lock_path)"))
+        return _release_acquired(token)
     end
     for _ in 1:_OUTPUT_LOCK_TRIES
         _excl_write_lock(lock_path, body) && return _acquired()
-        if ispath(lock_path) && !isfile(lock_path)
+        if islink(lock_path) || (ispath(lock_path) && !isfile(lock_path))
             throw(ArgumentError("output lock: malformed lock $(lock_path)"))
         end
         raw = try
@@ -420,16 +435,18 @@ function _output_lock_hold_shell_helpers()::String
           _writer=$writer_q
           _distssh_write_lock "\$_dir" "\$_id" "\$_writer" "\$_me" "\$_hex" && return 0
           _lf="\$_dir/.distssh.lock"
+          [ -L "\$_lf" ] && return 1
           [ -f "\$_lf" ] || return 1
+          _snap=\$(cat "\$_lf") || return 1
           _distssh_lock_complete "\$_lf" || return 1
-          _hpid=\$(sed -n 's/^pid=//p' "\$_lf")
-          _hstart=\$(sed -n 's/^start=//p' "\$_lf")
-          _hhost=\$(sed -n 's/^host=//p' "\$_lf")
-          _hwriter=\$(sed -n 's/^writer=//p' "\$_lf")
+          _hpid=\$(printf '%s\\n' "\$_snap" | sed -n 's/^pid=//p')
+          _hstart=\$(printf '%s\\n' "\$_snap" | sed -n 's/^start=//p')
+          _hhost=\$(printf '%s\\n' "\$_snap" | sed -n 's/^host=//p')
+          _hwriter=\$(printf '%s\\n' "\$_snap" | sed -n 's/^writer=//p')
           if [ "\$_hpid" = "\$\$" ] && [ "\$_hstart" = "\$_hex" ] && [ "\$_hhost" = "\$_me" ] && [ "\$_hwriter" = "\$_writer" ]; then
             return 0
           fi
-          _obs=\$(cat "\$_lf") || return 1
+          _obs="\$_snap"
           if _distssh_one_blocks "\$_lf"; then
             printf 'output lock held by pid %s on %s\\n' "\$_hpid" "\$_hhost" >&2
             return 1

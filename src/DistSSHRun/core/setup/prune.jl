@@ -64,7 +64,7 @@ function prune_kit_leaf_dirs!(
             push!(refused, reason)
             continue
         end
-        born = mtime(p)
+        born_st = stat(p)
         release = try
             output_dir_lock!(p)
         catch e
@@ -80,20 +80,29 @@ function prune_kit_leaf_dirs!(
                 push!(refused, reason)
                 continue
             end
-            aside = _prune_aside_path(p)
-            mv(p, aside)
+            stage = mktempdir(dirname(p); prefix = ".prune-")
+            aside = joinpath(stage, basename(p))
             try
-                rm(aside; recursive = true, force = true)
+                mv(p, aside)
+                rm(stage; recursive = true, force = true)
             catch err
-                ispath(p) || mv(aside, p)
+                if !ispath(p) && isdir(aside)
+                    mv(aside, p)
+                end
+                if isdir(stage) && isempty(readdir(stage))
+                    rm(stage)
+                end
                 rethrow(err)
             end
             removed = true
             n += 1
         finally
             release()
-            if !removed && isdir(p)
-                _restore_dir_mtime(p, born)
+            if !removed && isdir(p) && !islink(p)
+                st = stat(p)
+                if st.device == born_st.device && st.inode == born_st.inode
+                    _restore_dir_mtime(p, born_st.mtime)
+                end
             end
         end
     end
@@ -138,11 +147,6 @@ function _restore_dir_mtime(path::AbstractString, stamp::Real)
     ccall(:utime, Cint, (Cstring, Ptr{Clong}), path, buf) == 0 ||
         throw(ArgumentError("prune: could not restore mtime $path"))
     return nothing
-end
-
-"""Sibling name used so removal does not delete the lock while the leaf path still exists."""
-function _prune_aside_path(path::AbstractString)::String
-    return joinpath(dirname(path), string(".prune-", getpid(), "-", time_ns()))
 end
 
 """
@@ -425,7 +429,6 @@ function _prune_remote_shell(
       _distssh_restore_mtime "\$_leaf" "\$_when"
     }
     _distssh_rm_fail=0
-    _distssh_seq=0
     while IFS= read -r _child; do
       if [ -L "\$_child" ]; then
         printf 'refusing to prune symlink leaf %s\\n' "\$_child" >&2
@@ -449,18 +452,24 @@ function _prune_remote_shell(
         printf '%s\\n' "\$_child" >> "\$_distssh_refused" || _distssh_record_fail
         continue
       fi
-      _distssh_seq=\$((_distssh_seq + 1))
-      _aside="\$(dirname "\$_child")/.prune-\$\$-\${_distssh_seq}"
-      if ! mv "\$_child" "\$_aside"; then
+      _stage=\$(mktemp -d "\$(dirname "\$_child")/.prune-XXXXXX") || {
         _distssh_rm_fail=1
         _distssh_release_held "\$_child" "\$_mine" "\$_born"
         continue
+      }
+      _aside="\$_stage/\$(basename "\$_child")"
+      if ! mv "\$_child" "\$_aside"; then
+        _distssh_rm_fail=1
+        rmdir "\$_stage"
+        _distssh_release_held "\$_child" "\$_mine" "\$_born"
+        continue
       fi
-      if ! rm -rf "\$_aside"; then
+      if ! rm -rf "\$_stage"; then
         _distssh_rm_fail=1
         if [ ! -e "\$_child" ]; then
           mv "\$_aside" "\$_child" || true
         fi
+        rmdir "\$_stage" 2>/dev/null || true
         _distssh_release_held "\$_child" "\$_mine" "\$_born"
       fi
     done < "\$_distssh_victims"

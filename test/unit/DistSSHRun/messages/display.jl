@@ -692,6 +692,7 @@ using Test
                 @test isfile(lock_path)
                 release_c()
                 @test !isfile(lock_path)
+                @test !any(name -> startswith(name, ".distssh.lock.hold."), readdir(tmp))
             end
             _with_tempdir() do tmp
                 pid_only = joinpath(tmp, ".distssh.lock")
@@ -742,6 +743,7 @@ using Test
                 bad = joinpath(tmp, ".distssh.lock")
                 host = DistSSHRun._output_lock_host()
                 write(bad, "writer=$(DistSSHRun._output_lock_writer())\nhost=$(host)\npid=1\nstart=aa\nid=bad id\n")
+                @test DistSSHRun._parse_output_lock("é=x\n") === nothing
                 @test DistSSHRun._parse_output_lock(read(bad, String)) === nothing
                 @test_throws ArgumentError DistSSHRun.output_dir_lock!(tmp)
                 @test isfile(bad)
@@ -750,6 +752,14 @@ using Test
                 @test_throws ArgumentError DistSSHRun.output_dir_lock!(tmp; id = "   ")
                 @test_throws ArgumentError DistSSHRun.output_lock_hold_shell("slot", "   ")
                 @test !ispath(joinpath(tmp, ".distssh.lock"))
+            end
+            _with_tempdir() do tmp
+                payload = joinpath(tmp, "payload")
+                link = joinpath(tmp, ".distssh.lock")
+                write(payload, "x")
+                symlink(payload, link)
+                @test_throws ArgumentError DistSSHRun.output_dir_lock!(tmp)
+                @test islink(link)
             end
             _with_tempdir() do tmp
                 fifo = joinpath(tmp, ".distssh.lock")
@@ -939,7 +949,10 @@ using Test
                 dir_q = DistSSHRun.posix_quote(tmp)
                 host = strip(read(`hostname`, String))
                 current = DistSSHRun._output_lock_writer()
-                old = replace(current, r"\d+(\D*)$" => s"9\1")
+                m = match(r"^(.*?)(\d+)(\D*)$", current)
+                @test m !== nothing
+                npatch = parse(Int, m.captures[2])
+                old = string(m.captures[1], npatch == 9 ? 8 : npatch + 1, m.captures[3])
                 @test old != current
                 raw = replace(
                     DistSSHRun._output_lock_text(host, 999999999, "deadbeef", ""),

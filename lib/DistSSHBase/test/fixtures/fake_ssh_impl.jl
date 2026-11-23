@@ -381,7 +381,8 @@ function main()
         exit(0)
     end
 
-    if occursin("rmdir ", script)
+    # Prune removes an empty staging directory with rmdir. That is not the rmdir probe.
+    if occursin("rmdir ", script) && !occursin("DISTSSH_INTERNAL_PRUNE_LEAVES", script)
         if isdir(tree) && isempty(readdir(tree))
             rm(tree)
         end
