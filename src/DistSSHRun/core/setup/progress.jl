@@ -19,8 +19,8 @@ end
 
 """Log `current-step/host` when the live run is `kind=:setup`."""
 function _setup_host_span!(host::AbstractString, status::Symbol)
-    raw = KIT_PROGRESS[]
-    raw isa KitProgressState || return nothing
+    raw = CURRENT_PROGRESS[]
+    raw isa ProgressState || return nothing
     raw.kind === :setup || return nothing
     step = raw.label
     isempty(step) && (step = raw.title)
@@ -43,7 +43,7 @@ end
 """
 Run `f()` as one setup mode: sidecar, begin/step/done, Time table.
 
-If `KIT_PROGRESS` is already set (nested `setup!`, or drive/go), just `f()`.
+If `CURRENT_PROGRESS` is already set (nested `setup!`, or drive/go), just `f()`.
 Opens the kit log when none is open (API path); CLI already opened it.
 """
 function with_kit_setup_progress(
@@ -52,7 +52,7 @@ function with_kit_setup_progress(
         step::AbstractString;
         path_anchor::Union{Nothing, AbstractString} = nothing,
     )
-    KIT_PROGRESS[] isa KitProgressState && return f()
+    CURRENT_PROGRESS[] isa ProgressState && return f()
     dir = _as_string(log_dir)
     opened_log = LOG_FILE_HANDLE[] === nothing
     if opened_log
@@ -81,7 +81,7 @@ function with_kit_setup_progress(
         threw = true
         rethrow()
     finally
-        kit_progress_done!(; ok = ok_ref[])
+        progress_done!(; ok = ok_ref[])
         threw || _maybe_print_kit_progress_phases(dir)
         _set_kit_progress_sidecar!(nothing)
         opened_log && close_log_file()

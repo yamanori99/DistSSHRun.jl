@@ -68,7 +68,7 @@ using DistSSHRun
         end
         withenv("DISTRIBUTED_OUTPUT_DIR" => "/tmp/old-out") do
             @test_throws ArgumentError DistSSHRun.DistSSHBase.stored_path("a.bin")
-            @test_throws ArgumentError DistSSHRun.resolve_distributed_output_dir!(
+            @test_throws ArgumentError DistSSHRun.resolve_output_dir!(
                 String[],
                 mktempdir(),
             )

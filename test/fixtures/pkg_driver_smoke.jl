@@ -4,7 +4,7 @@ using DistSSHRun
 using JSON
 
 function init_output_dir!(_script_args::Vector{String})
-    return DistSSHRun.resolve_distributed_output_dir!(_script_args, mktempdir())
+    return DistSSHRun.resolve_output_dir!(_script_args, mktempdir())
 end
 
 function roundtrip_value(x::Int)

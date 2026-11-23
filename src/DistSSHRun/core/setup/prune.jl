@@ -177,7 +177,7 @@ function prune_kit_leaves(
             id !== nothing && println_fatal("  id: $id")
             println_fatal("  Deploy tree and output/ are left alone.")
             println_fatal()
-            kit_confirm("Type 'prune' to confirm: "; keyword = "prune") || begin
+            cli_confirm("Type 'prune' to confirm: "; keyword = "prune") || begin
                 println_fatal("Cancelled.")
                 return true
             end
@@ -198,7 +198,7 @@ function prune_kit_leaves(
             return nothing
         end
         print_ok("✓")
-        kit_println()
+        cli_println()
     end
 
     cmd = _prune_remote_shell(remote_path; older_days = older_days, id = id)
@@ -214,7 +214,7 @@ function prune_kit_leaves(
                 return nothing
             end
             print_ok("✓")
-            kit_println()
+            cli_println()
             succeeded += 1
             push!(host_results, HostResult(host, true, "pruned"))
             _setup_host_span!(host, :ok)

@@ -4,7 +4,7 @@ using .DistSSHRun:
     juliaup_align_remotes,
     juliaup_update_remotes,
     juliaup_verb_remotes,
-    kit_println,
+    cli_println,
     parse_up_args,
     preflight_setup_ssh,
     print_err,

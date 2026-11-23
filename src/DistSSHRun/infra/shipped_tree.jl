@@ -290,7 +290,7 @@ function note_controller_shipped_tree_drift!(project::AbstractString)
     got == want && return nothing
     msg = "controller source tree changed after ship (content_tree_hash $(got) != deployed $(want))"
     _note_provenance_shipped_tree_drift!(got, want)
-    kit_println(msg)
+    cli_println(msg)
     return nothing
 end
 public note_controller_shipped_tree_drift!
@@ -313,7 +313,7 @@ function announce_forced_ignore_ship!(forced::AbstractVector{<:AbstractString})
     isempty(forced) && return nothing
     rels = sort(String[string(p) for p in forced])
     line = string("ship includes ignore-rule files: ", join(rels, ", "))
-    kit_println(line)
+    cli_println(line)
     _note_forced_ignore_ship_provenance!(rels)
     return nothing
 end

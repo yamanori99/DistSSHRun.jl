@@ -169,7 +169,7 @@ end
             me = getpid()
             write(joinpath(d, "kit.pid"), string(me, '\n'))
             @test DistSSHRun.kit_pid_file_running(d) === true
-            st = DistSSHRun.kit_process_start_key(me)
+            st = DistSSHRun.process_start_key(me)
             if st !== nothing
                 write(joinpath(d, "kit.pid"), string(me, '\n', st, '\n'))
                 @test DistSSHRun.kit_pid_file_running(d) === true

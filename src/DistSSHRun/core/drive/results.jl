@@ -183,7 +183,7 @@ function run_driver_script!(enable_log::Bool; script_main::Union{Nothing, Method
                 # `main` own stdout/stderr on their original destinations.
                 # Capturing would hide flushed prompts, merge stderr into the
                 # replay buffer, and retain unbounded driver output in memory.
-                # `kit_progress_done!` draws the finished bar on a later line.
+                # `progress_done!` draws the finished bar on a later line.
                 DistSSHRun._progress_release_line!()
                 try
                     call_main()

@@ -2,7 +2,7 @@ using Distributed
 using Random: copy, copy!, default_rng, seed!
 
 """
-    resolve_distributed_output_dir!(script_args, default_dir)
+    resolve_output_dir!(script_args, default_dir)
 
 Set `ENV["DISTSSH_OUTPUT_DIR"]` for a driver run and return the canonical path.
 
@@ -14,7 +14,7 @@ Priority (first match wins):
 
 Creates the directory when missing. Drivers should call this from `init_output_dir!`.
 """
-function resolve_distributed_output_dir!(
+function resolve_output_dir!(
         script_args::Vector{String},
         default_dir::AbstractString,
     )::String

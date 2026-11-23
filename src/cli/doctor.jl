@@ -86,9 +86,9 @@ if !isdefined(@__MODULE__, :doctor_main)
         end
 
         print_header("$(DistSSHRun.cli_heading("doctor")) · deploy")
-        kit_println()
+        cli_println()
         writeln_field("Remote path", op_path)
-        kit_println()
+        cli_println()
 
         session = DistSSHRun.DistSSHSession(
             project = project,
@@ -120,12 +120,12 @@ if !isdefined(@__MODULE__, :doctor_main)
             if selection_err !== nothing
                 DistSSHRun.print_err("Error: "; bold = true)
                 DistSSHRun.println_fatal(selection_err.msg)
-                DistSSHRun.kit_println()
+                DistSSHRun.cli_println()
                 return Cint(1)
             end
             DistSSHRun._warn_git_worktree_ship!(project)
             print_ok("All prerequisites met.")
-            kit_println()
+            cli_println()
             return Cint(0)
         catch e
             DistSSHRun._report_manifest_refusal(e) || rethrow()

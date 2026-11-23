@@ -259,7 +259,7 @@ only return numbers. Collect tests use files workers write.
   `--collect-missing` restores; skip keeps junk;
   `--collect-overwrite` replaces; `kit.result` `hosts` names both
   remotes
-- `kit.progress`: `kit_progress_latest` last event is `done` after demo
+- `kit.progress`: `progress_latest` last event is `done` after demo
   drive / go
 - worker `error(...)`: non-zero
 - mixed `--local-workers 1` + two remotes: smoke `nw=3`
@@ -336,7 +336,7 @@ Do not search-replace a host name into a token (that produced
 3. Subprocess helpers in `support/`; one-off scripts in `fixtures/`.
 4. Short Oracle / non-guarantee comment at the top of the file.
 5. Pin verbosity with `with_kit_verbosity` if you assert kit detail
-   lines. `Pkg.test` defaults to `:progress`. `kit_confirm` and consent
+   lines. `Pkg.test` defaults to `:progress`. `cli_confirm` and consent
    warnings must show in `:quiet`, `:progress`, and `:verbose`.
 6. `integration/setup/progress_tty.jl` and
    `integration/drive/progress_tty.jl`: `script` typescripts stack each

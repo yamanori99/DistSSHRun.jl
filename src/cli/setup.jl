@@ -240,9 +240,9 @@ if !isdefined(@__MODULE__, :setup_main)
                 end
             end
             print_header("$(DistSSHRun.cli_heading("setup")) · $mode_name")
-            kit_println()
+            cli_println()
             writeln_field("Remote path", op_path)
-            kit_println()
+            cli_println()
 
             # Mutating / multi-host SSH ops: fail fast before confirmations.
             # `--delete` and `--prune` stay off SSH until `--confirm-path` matches.
@@ -250,7 +250,7 @@ if !isdefined(@__MODULE__, :setup_main)
                     mode === :instantiate || mode === :runtest
                 if !preflight_setup_ssh(opts.hosts)
                     print_err("SSH preflight failed. Fix connectivity, then retry.\n")
-                    kit_println()
+                    cli_println()
                     return Cint(1)
                 end
             end
@@ -263,7 +263,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 plan isa Cint && return plan
                 if plan !== nothing && !preflight_setup_ssh(opts.hosts)
                     print_err("SSH preflight failed. Fix connectivity, then retry.\n")
-                    kit_println()
+                    cli_println()
                     return Cint(1)
                 end
                 result = plan === nothing ?
@@ -298,11 +298,11 @@ if !isdefined(@__MODULE__, :setup_main)
                             opts.deploy_root !== nothing ||
                                 !isempty(strip(get(ENV, "DISTSSH_REMOTE_PROJECT_ROOT", "")))
                         )
-                        kit_println(
+                        cli_println(
                             "  Tip: export DISTSSH_REMOTE_PROJECT_ROOT=$(DistSSHRun.posix_quote(deploy_path))",
                         )
-                        kit_println("       so drive.jl uses the same remote root for workers / collect.")
-                        kit_println()
+                        cli_println("       so drive.jl uses the same remote root for workers / collect.")
+                        cli_println()
                     end
                 end
                 return Cint(ok ? 0 : 1)
@@ -326,22 +326,22 @@ if !isdefined(@__MODULE__, :setup_main)
                     src = sel.work_root
                     path_flag = _setup_next_deploy_root_flag(opts.deploy_root)
                     if rid isa AbstractString && !isempty(rid)
-                        kit_println(
+                        cli_println(
                             "  Next: $(DistSSHRun.cli_m()) setup instantiate --ship-id $rid$path_flag",
                         )
-                        kit_println(
+                        cli_println(
                             "        $(DistSSHRun.cli_m()) doctor --deploy --ship-id $rid$path_flag",
                         )
                     elseif src isa AbstractString
                         flag = _setup_next_deploy_root_flag(src)
-                        kit_println(
+                        cli_println(
                             "  Next: $(DistSSHRun.cli_m()) setup instantiate$flag",
                         )
-                        kit_println(
+                        cli_println(
                             "        $(DistSSHRun.cli_m()) doctor --deploy$flag",
                         )
                     end
-                    kit_println()
+                    cli_println()
                 end
                 return Cint(ok ? 0 : 1)
             end
@@ -403,7 +403,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 plan isa Cint && return plan
                 if plan !== nothing && !preflight_setup_ssh(opts.hosts)
                     print_err("SSH preflight failed. Fix connectivity, then retry.\n")
-                    kit_println()
+                    cli_println()
                     return Cint(1)
                 end
                 result = plan === nothing ?
@@ -447,8 +447,8 @@ if !isdefined(@__MODULE__, :setup_main)
             # Hashes already matching still run: the remote must be detached at
             # that commit, and a dirty remote tree is refused.
             print_ok("Ready to proceed.")
-            kit_println()
-            kit_println()
+            cli_println()
+            cli_println()
 
             # --git-sync also pushes the local branch to origin.
             # --git-pull does not. Neither mode runs git pull.
@@ -464,7 +464,7 @@ if !isdefined(@__MODULE__, :setup_main)
             raw.cancelled && return Cint(0)
             if !raw.ok
                 print_err("$mode_name failed.")
-                kit_println()
+                cli_println()
                 return Cint(1)
             end
 
@@ -477,7 +477,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 dirty = mode === :git_sync && opts.skip_git_guard,
             )
             print_ok("$mode_name complete.")
-            kit_println()
+            cli_println()
             return Cint(0)
         end
 

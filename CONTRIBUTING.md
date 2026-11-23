@@ -328,7 +328,7 @@ These run as jobs of the `Test` workflow
 ([`.github/workflows/CI.yml`](.github/workflows/CI.yml)). Ubuntu:
 `Pkg.test` 1.13, `Pkg.test` 1.14-pre, `Registry install (1.13, ubuntu-latest, x64)`, JETLS 1.13, Aqua 1.13, Gitleaks. macOS (`xcode-27`):
 `Pkg.test` 1.13 after Runic, JETLS 1.13, and Aqua 1.13, same heavy gate, no coverage
-upload. macOS runs `/bin/ps -o lstart=` in `kit_process_start_key`. macOS is
+upload. macOS runs `/bin/ps -o lstart=` in `process_start_key`. macOS is
 required. WSL2 1.13 is a main push and CI weekly, not a pull request.
 Gitleaks also rejects `< 0.0.1` in `Project.toml`. Documenter 1.13 is
 [`.github/workflows/Documentation.yml`](.github/workflows/Documentation.yml).

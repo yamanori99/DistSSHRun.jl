@@ -35,7 +35,7 @@ using Test
         @test DistSSHRun.kit_pid_alive(-1) === false
         if Sys.isunix()
             @test DistSSHRun.kit_pid_alive(getpid()) === true
-            @test DistSSHRun.kit_process_start_key(getpid()) isa String
+            @test DistSSHRun.process_start_key(getpid()) isa String
         end
     end
 
@@ -218,7 +218,7 @@ using Test
             @test collect(half)[DistSSHRun._progress_head_index(3, 6, 0)] ==
                 DistSSHRun.PROGRESS_HEAD_CHAR
 
-            let st = DistSSHRun.KitProgressState("drive", 6, 3, "workers")
+            let st = DistSSHRun.ProgressState("drive", 6, 3, "workers")
                 line = DistSSHRun._progress_line(st)
                 @test startswith(line, "  ")
                 @test occursin("workers", line)
@@ -257,7 +257,7 @@ using Test
                         DistSSHRun.kit_progress_begin!("drive"; steps = 2, kind = :drive)
                         DistSSHRun.kit_progress_step!("sync")
                         DistSSHRun.kit_progress_step!("run")
-                        DistSSHRun.kit_progress_done!(; ok = true, footer = "out/batch")
+                        DistSSHRun.progress_done!(; ok = true, footer = "out/batch")
                     end
                     DistSSHRun.close_log_file()
                     body = read(log_path, String)
@@ -282,7 +282,7 @@ using Test
                         )
                         DistSSHRun.kit_progress_item!("local-1"; status = :ok)
                         DistSSHRun.kit_progress_item!("local-2"; status = :ok)
-                        DistSSHRun.kit_progress_done!(; ok = true, footer = "out/batch")
+                        DistSSHRun.progress_done!(; ok = true, footer = "out/batch")
                     end
                     DistSSHRun.close_log_file()
                     body = read(log_path, String)
@@ -295,9 +295,9 @@ using Test
                         "progress: item kind=go label=local-2 status=ok done=2 total=2",
                         body
                     )
-                    st = DistSSHRun.KitProgressState("go", 2, 0, "go")
-                    push!(st.items, DistSSHRun.KitProgressItem("local-1", :running, 0))
-                    push!(st.items, DistSSHRun.KitProgressItem("local-2", :running, 0))
+                    st = DistSSHRun.ProgressState("go", 2, 0, "go")
+                    push!(st.items, DistSSHRun.ProgressItem("local-1", :running, 0))
+                    push!(st.items, DistSSHRun.ProgressItem("local-2", :running, 0))
                     @test DistSSHRun._progress_current(st) == 0
                     st.done = 1
                     @test DistSSHRun._progress_current(st) == 1
@@ -315,7 +315,7 @@ using Test
                                 DistSSHRun.kit_progress_begin!(
                                     "drive"; steps = 1, kind = :drive, job_id = "q-42"
                                 )
-                                DistSSHRun.kit_progress_done!(; ok = true)
+                                DistSSHRun.progress_done!(; ok = true)
                             end
                         end
                         DistSSHRun.close_log_file()
@@ -340,7 +340,7 @@ using Test
                                 "DISTSSH_JOB_ID" => "env-7",
                             ) do
                                 DistSSHRun.kit_progress_begin!("go"; steps = 1, kind = :go)
-                                DistSSHRun.kit_progress_done!(; ok = true)
+                                DistSSHRun.progress_done!(; ok = true)
                             end
                         end
                         DistSSHRun.close_log_file()
@@ -358,7 +358,7 @@ using Test
                                 "DISTSSH_JOB_ID" => nothing,
                             ) do
                                 DistSSHRun.kit_progress_begin!("go"; steps = 1, kind = :go)
-                                DistSSHRun.kit_progress_done!(; ok = true)
+                                DistSSHRun.progress_done!(; ok = true)
                             end
                         end
                         DistSSHRun.close_log_file()
@@ -375,7 +375,7 @@ using Test
                             p = DistSSHRun.init_log_file(tmp; prefix = "progress_done_$v")
                             DistSSHRun.kit_progress_begin!("drive"; steps = 2, kind = :drive)
                             DistSSHRun.kit_progress_step!("sync")
-                            DistSSHRun.kit_progress_done!(; ok = false)
+                            DistSSHRun.progress_done!(; ok = false)
                             p
                         end
                         DistSSHRun.close_log_file()
@@ -391,7 +391,7 @@ using Test
             end
         end
 
-        @testset "parse_progress_line / kit_progress_latest" begin
+        @testset "parse_progress_line / progress_latest" begin
             @test DistSSHRun.parse_progress_line("not progress") === nothing
             rec = DistSSHRun.parse_progress_line(
                 "progress: step kind=drive job=q-1 label=sync done=0 total=2 cur=1"
@@ -602,42 +602,42 @@ using Test
                 b = joinpath(tmp, "b.log")
                 write(a, "noise\nprogress: begin kind=drive job=old label=drive total=1\n")
                 write(b, "progress: done kind=drive job=new ok=true done=1 total=1\n")
-                latest = DistSSHRun.kit_progress_latest(tmp)
+                latest = DistSSHRun.progress_latest(tmp)
                 @test latest isa NamedTuple
                 if latest isa NamedTuple
                     @test latest.event === :done
                     @test latest.job == "new"
                 end
-                oldrec = DistSSHRun.kit_progress_latest(a)
+                oldrec = DistSSHRun.progress_latest(a)
                 @test oldrec isa NamedTuple
                 if oldrec isa NamedTuple
                     @test oldrec.event === :begin
                 end
-                by_job = DistSSHRun.kit_progress_latest(tmp; job_id = "old")
+                by_job = DistSSHRun.progress_latest(tmp; job_id = "old")
                 @test by_job isa NamedTuple
                 if by_job isa NamedTuple
                     @test by_job.job == "old"
                 end
-                @test DistSSHRun.kit_progress_latest(tmp; job_id = "missing") === nothing
+                @test DistSSHRun.progress_latest(tmp; job_id = "missing") === nothing
             end
             _with_tempdir() do tmp
                 DistSSHRun._set_kit_progress_sidecar!(tmp)
                 try
                     with_kit_verbosity(:quiet) do
                         DistSSHRun.kit_progress_begin!("drive"; steps = 1, kind = :drive)
-                        DistSSHRun.kit_progress_done!(; ok = true)
+                        DistSSHRun.progress_done!(; ok = true)
                     end
                     sidecar = joinpath(tmp, "kit.progress")
                     @test isfile(sidecar)
                     body = read(sidecar, String)
                     @test occursin("progress: begin kind=drive", body)
                     @test occursin("progress: done kind=drive ok=true", body)
-                    got = DistSSHRun.kit_progress_latest(tmp)
+                    got = DistSSHRun.progress_latest(tmp)
                     @test got isa NamedTuple
                     if got isa NamedTuple
                         @test got.event === :done
                     end
-                    side = DistSSHRun.kit_progress_latest(sidecar)
+                    side = DistSSHRun.progress_latest(sidecar)
                     @test side isa NamedTuple
                     if side isa NamedTuple
                         @test side.event === :done
@@ -652,7 +652,7 @@ using Test
                     redirect_stdout(devnull) do
                         with_kit_verbosity(:progress) do
                             DistSSHRun.kit_progress_begin!("drive"; steps = 1, kind = :drive)
-                            DistSSHRun.kit_progress_done!(; ok = true)
+                            DistSSHRun.progress_done!(; ok = true)
                         end
                     end
                     body = read(joinpath(tmp, "kit.progress"), String)
@@ -1008,20 +1008,20 @@ using Test
         end
 
         @testset "with_kit_progress_suspended resets item-bar cursor" begin
-            prev = DistSSHRun.KIT_PROGRESS[]
+            prev = DistSSHRun.CURRENT_PROGRESS[]
             try
-                st = DistSSHRun.KitProgressState("go", 2, 0, "go")
-                push!(st.items, DistSSHRun.KitProgressItem("local-1", :running, 0))
+                st = DistSSHRun.ProgressState("go", 2, 0, "go")
+                push!(st.items, DistSSHRun.ProgressItem("local-1", :running, 0))
                 st.drawn = 3
                 st.cursor_hidden = true
-                DistSSHRun.KIT_PROGRESS[] = st
+                DistSSHRun.CURRENT_PROGRESS[] = st
                 DistSSHRun.with_kit_progress_suspended() do
                     return nothing
                 end
                 @test st.drawn == 0
                 @test !st.cursor_hidden
             finally
-                DistSSHRun.KIT_PROGRESS[] = prev
+                DistSSHRun.CURRENT_PROGRESS[] = prev
             end
         end
 

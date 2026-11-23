@@ -593,7 +593,7 @@ function _print_git_sync_banner!(
         do_push::Bool,
         do_pull::Bool,
     )
-    # Consent text: always on the terminal (same gate as `kit_confirm`).
+    # Consent text: always on the terminal (same gate as `cli_confirm`).
     println_fatal("  Repository: $(_git_remote_url(project))")
     println_fatal("  Remote path: $remote_path")
     println_fatal("  Hosts: $(join(hosts, ", "))")
@@ -654,7 +654,7 @@ function git_sync_project_to_hosts!(
                 hosts, proj, remote;
                 do_push = do_push, do_pull = do_pull,
             )
-            kit_confirm("Proceed? [y/N]: ") || begin
+            cli_confirm("Proceed? [y/N]: ") || begin
                 println_fatal("Cancelled.")
                 return true
             end
@@ -670,7 +670,7 @@ function git_sync_project_to_hosts!(
         end
         if push_r.ok
             print_ok("✓")
-            kit_println()
+            cli_println()
         else
             print_err("✗")
             println_fatal()
@@ -699,12 +699,12 @@ function git_sync_project_to_hosts!(
             end
             if detached.ok
                 print_ok("✓")
-                kit_println()
+                cli_println()
                 println_fatal("    Detached HEAD at $sha.")
                 push!(host_results, HostResult(String(host), true, detached.message))
             else
                 print_progress_err("✗")
-                kit_println()
+                cli_println()
                 println_fatal(detached.message)
                 push!(host_results, HostResult(String(host), false, detached.message))
                 return (; ok = false, cancelled = false, host_results = host_results)
@@ -712,6 +712,6 @@ function git_sync_project_to_hosts!(
         end
     end
 
-    kit_println()
+    cli_println()
     return (; ok = true, cancelled = false, host_results = host_results)
 end

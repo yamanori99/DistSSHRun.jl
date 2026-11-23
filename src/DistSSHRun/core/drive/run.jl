@@ -868,7 +868,7 @@ function _run_drive_parsed_locked!(
         if resolved_log_dir !== nothing
             resolved_log_dir[] = enable_log ? DistSSHRun.resolve_drive_log_dir(log_dir, script_dir) : nothing
         end
-        kit_progress_done!(; ok = progress_ok)
+        progress_done!(; ok = progress_ok)
         # Replay any job-stdout capture (log-enabled `:progress`, worker sync).
         # `--no-log` drivers print live after `_progress_release_line!` instead.
         DistSSHRun._print_job_stdout_after_progress!()

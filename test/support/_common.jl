@@ -100,7 +100,7 @@ if !isdefined(@__MODULE__, :_test_root)
 
     # Last `progress:` in `dir` (`kit.progress` even with `--no-log`) is `done`.
     function _assert_kit_progress_done(dir::AbstractString; kind::Symbol)
-        rec = DistSSHRun.kit_progress_latest(dir)
+        rec = DistSSHRun.progress_latest(dir)
         @test rec !== nothing
         rec === nothing && return
         @test rec.event === :done

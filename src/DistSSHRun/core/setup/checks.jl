@@ -13,7 +13,7 @@ end
 """Indented detail under a check line. Visible at `:progress` via the payload path."""
 function _host_check_detail(msg)
     if kit_output_detail()
-        kit_println("    $msg")
+        cli_println("    $msg")
     else
         kit_payload_println("    $msg")
     end
@@ -36,7 +36,7 @@ function _report_local_host_tools!(warnings::Vector{SetupWarning} = SetupWarning
                 warn(msg)
                 push!(warnings, SetupWarning(PARENT_HOST_NAME, :tool_missing, msg))
             end
-            kit_println("    $(explain_host_tool_hint(name))")
+            cli_println("    $(explain_host_tool_hint(name))")
         else
             ok("$name ($exe)")
         end
@@ -399,8 +399,8 @@ function check_prerequisites(
         check_code_sync::Bool = true,
         ignore_julia_version::Bool = false,
     )
-    kit_println("Checking prerequisites...")
-    kit_println()
+    cli_println("Checking prerequisites...")
+    cli_println()
 
     all_ok = true
     needs_sync = false
@@ -410,7 +410,7 @@ function check_prerequisites(
     anchor = canonical_local_path(path_anchor)
 
     # Local checks
-    kit_println("Local:")
+    cli_println("Local:")
     local_tools = _report_local_host_tools!(warnings)
     !local_tools.ssh && (all_ok = false)
 
@@ -427,13 +427,13 @@ function check_prerequisites(
             ok("Git working tree clean")
         elseif require_clean_git
             fail("Git has uncommitted changes")
-            kit_println("    Fix: git add -A && git commit -m 'your message'")
+            cli_println("    Fix: git add -A && git commit -m 'your message'")
             all_ok = false
         else
             msg = "Git has uncommitted changes"
             warn(msg)
             push!(warnings, SetupWarning(PARENT_HOST_NAME, :git_dirty, msg))
-            kit_println("    Fix: git add -A && git commit -m 'your message'")
+            cli_println("    Fix: git add -A && git commit -m 'your message'")
         end
         local_hash = get_local_git_hash(proj; short = 12)
         if local_hash === nothing
@@ -441,19 +441,19 @@ function check_prerequisites(
             msg = "Could not get local git commit"
             warn(msg)
             push!(warnings, SetupWarning(PARENT_HOST_NAME, :git_commit_unknown, msg))
-            kit_println("    Skip hash check (not a git commit); instantiate still proceeds")
+            cli_println("    Skip hash check (not a git commit); instantiate still proceeds")
         else
             ok("Git commit: $local_hash")
         end
     end
-    kit_println()
+    cli_println()
 
     # Remote checks
     local_tools.ssh || return (ok = false, needs_sync = needs_sync, warnings = warnings)
     for host in hosts
         host_ok = Ref(true)
         _setup_host_span!(host, :running)
-        kit_println("$host:")
+        cli_println("$host:")
 
         ssh_err = probe_setup_ssh(host)
         if ssh_err === nothing
@@ -463,7 +463,7 @@ function check_prerequisites(
             _host_check_detail(ssh_err)
             all_ok = false
             host_ok[] = false
-            kit_println()
+            cli_println()
             _setup_host_span!(host, :fail)
             continue
         end
@@ -478,7 +478,7 @@ function check_prerequisites(
                 _fail_host(host, e.msg)
                 all_ok = false
                 host_ok[] = false
-                kit_println()
+                cli_println()
                 _setup_host_span!(host, :fail)
                 continue
             end
@@ -502,7 +502,7 @@ function check_prerequisites(
             )
             all_ok = false
             host_ok[] = false
-            kit_println()
+            cli_println()
             _setup_host_span!(host, :fail)
             continue
         end
@@ -565,7 +565,7 @@ function check_prerequisites(
             end
         end
 
-        kit_println()
+        cli_println()
         _setup_host_span!(host, host_ok[] ? :ok : :fail)
     end
 

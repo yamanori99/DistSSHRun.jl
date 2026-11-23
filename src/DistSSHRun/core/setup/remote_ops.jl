@@ -328,7 +328,7 @@ function delete_remotes(
             println_fatal("  Hosts: $(join(hosts, ", "))")
             println_fatal("  Note: pass `NAME` for SSH hosts; `parent` only with up.")
             println_fatal()
-            kit_confirm("Type 'delete' to confirm: "; keyword = "delete") || begin
+            cli_confirm("Type 'delete' to confirm: "; keyword = "delete") || begin
                 println_fatal("Cancelled.")
                 return true
             end
@@ -358,7 +358,7 @@ function delete_remotes(
                 return nothing
             end
             print_ok("✓")
-            kit_println()
+            cli_println()
             succeeded += 1
             push!(host_results, HostResult(host, true, "deleted"))
             _setup_host_span!(host, :ok)
@@ -399,7 +399,7 @@ function clone_to_remotes(
             print_warn("  Safety: refuses if the remote path already has any files.\n")
             println_fatal("  To replace an existing tree, run `setup delete` first, then `setup git-clone`.")
             println_fatal()
-            kit_confirm("Proceed? [y/N]: ") || begin
+            cli_confirm("Proceed? [y/N]: ") || begin
                 println_fatal("Cancelled.")
                 return true
             end
@@ -454,7 +454,7 @@ function clone_to_remotes(
                 continue
             end
             print_ok("✓")
-            kit_println()
+            cli_println()
             succeeded += 1
             push!(host_results, HostResult(host, true, "cloned"))
             _setup_host_span!(host, :ok)
@@ -544,7 +544,7 @@ function cleanup_remote_workers(hosts::Vector{String}, job_id::AbstractString)::
         return nothing
     end
     print_ok("✓")
-    kit_println()
+    cli_println()
 
     n = length(hosts)
     oks = fill(false, n)
@@ -557,7 +557,7 @@ function cleanup_remote_workers(hosts::Vector{String}, job_id::AbstractString)::
         end
         return nothing
     end
-    kit_println()
+    cli_println()
 
     succeeded = 0
     failed = 0
@@ -594,12 +594,12 @@ function _pkg_e_on_remotes(
         pkg_e::AbstractString,
         spin_label::AbstractString,
     )::NamedTuple
-    kit_println("  Local project: $(cli_project_disp(project, path_anchor))")
-    kit_println("  Remote --project: $remote_path")
-    kit_println()
+    cli_println("  Local project: $(cli_project_disp(project, path_anchor))")
+    cli_println("  Remote --project: $remote_path")
+    cli_println()
 
     for host in hosts
-        kit_println("  $host: queued")
+        cli_println("  $host: queued")
     end
 
     pq = _remote_shell_path_word(remote_path)
@@ -658,7 +658,7 @@ function _pkg_e_on_remotes(
         end
         return nothing
     end
-    kit_println()
+    cli_println()
 
     succeeded = 0
     failed = 0
@@ -672,11 +672,11 @@ function _pkg_e_on_remotes(
         else
             fail("$host: failed")
             msg = fail_msgs[i]
-            !isempty(msg) && kit_println("    $msg")
+            !isempty(msg) && cli_println("    $msg")
             if occursin("credential", lowercase(msg)) || occursin("Permission denied", msg) ||
                     occursin("failed to clone", lowercase(msg))
-                kit_println("    Hint: remote needs a deploy key or HTTPS token for private deps.")
-                kit_println("          (JULIA_PKG_USE_CLI_GIT is already set for this step)")
+                cli_println("    Hint: remote needs a deploy key or HTTPS token for private deps.")
+                cli_println("          (JULIA_PKG_USE_CLI_GIT is already set for this step)")
             end
             failed += 1
             push!(host_results, HostResult(host, false, isempty(msg) ? "failed" : msg))

@@ -22,46 +22,6 @@ function kit_pid_alive(pid::Integer)::Bool
     end
 end
 
-"""Linux `/proc/<pid>/stat` starttime field (clock ticks since boot), or `nothing`."""
-function _linux_proc_start_key(pid::Integer)::Union{Nothing, String}
-    path = string("/proc/", Int(pid), "/stat")
-    isfile(path) || return nothing
-    s = try
-        read(path, String)
-    catch
-        return nothing
-    end
-    r = findlast(')', s)
-    r === nothing && return nothing
-    parts = split(SubString(s, Int(r) + 1))
-    length(parts) < 20 && return nothing
-    key = String(parts[20])
-    return isempty(key) ? nothing : key
-end
-
-"""
-    kit_process_start_key(pid) -> Union{Nothing,String}
-
-Identity of this OS pid's start (Linux `/proc` starttime, else `TZ=UTC LC_ALL=C /bin/ps -o lstart=`).
-`nothing` if the pid is gone, unreadable, or Windows.
-"""
-function kit_process_start_key(pid::Integer)::Union{Nothing, String}
-    pid <= 0 && return nothing
-    Sys.iswindows() && return nothing
-    if isfile(string("/proc/", Int(pid), "/stat"))
-        return _linux_proc_start_key(pid)
-    end
-    isfile("/bin/ps") || return nothing
-    try
-        s = withenv("TZ" => "UTC", "LC_ALL" => "C") do
-            strip(read(`/bin/ps -o lstart= -p $(Int(pid))`, String))
-        end
-        return isempty(s) ? nothing : s
-    catch
-        return nothing
-    end
-end
-
 # One in-process Kit job at a time (`go!` / `drive!` / `pool!` / …).
 # `.distssh.lock` is per `output_dir` and pid; it does not serialize two runs in
 # this process. Nested calls on the same task (`pipeline!` → `drive!`) are ok.
@@ -1335,61 +1295,6 @@ function _print_progress_accent(io::IO, x)
     return nothing
 end
 
-mutable struct KitProgressItem
-    label::String
-    status::Symbol
-    tick::Int
-end
-
-mutable struct KitProgressState
-    title::String
-    steps::Int
-    done::Int
-    label::String
-    kind::Symbol
-    active::Bool
-    t0::Float64
-    tick::Int
-    spinning::Bool
-    spinner_task::Union{Task, Nothing}
-    items::Vector{KitProgressItem}
-    drawn::Int
-    cursor_hidden::Bool
-    job_id::Union{Nothing, String}
-    # Phase bar has no trailing newline. Set once that line is finished so a
-    # later diagnostic is not glued on, and so a second diagnostic does not
-    # insert a blank line.
-    released::Bool
-end
-
-function KitProgressState(
-        title::AbstractString,
-        steps::Int,
-        done::Int,
-        label::AbstractString;
-        kind::Symbol = :unknown,
-        job_id::Union{Nothing, AbstractString} = nothing,
-    )
-    return KitProgressState(
-        String(title),
-        steps,
-        done,
-        String(label),
-        kind,
-        false,
-        time(),
-        0,
-        false,
-        nothing,
-        KitProgressItem[],
-        0,
-        false,
-        job_id === nothing ? nothing : String(job_id),
-        false,
-    )
-end
-
-const KIT_PROGRESS = Ref{Union{Nothing, KitProgressState}}(nothing)
 const KIT_PROGRESS_LOCK = ReentrantLock()
 # Live bar stays on this IO when job stdout/stderr are redirected (Distributed
 # `From worker` uses `println` → stdout). Do not use this Ref for
@@ -1399,9 +1304,9 @@ const KIT_PROGRESS_IO = Ref{IO}(stdout)
 
 _progress_io()::IO = KIT_PROGRESS_IO[]
 
-function _progress_is_current(state::KitProgressState)::Bool
-    cur = KIT_PROGRESS[]
-    return cur isa KitProgressState && objectid(cur) === objectid(state)
+function _progress_is_current(state::ProgressState)::Bool
+    cur = CURRENT_PROGRESS[]
+    return cur isa ProgressState && objectid(cur) === objectid(state)
 end
 
 function _progress_filled(done::Int, total::Int; width::Int = PROGRESS_BAR_WIDTH)::Int
@@ -1442,7 +1347,7 @@ function _progress_elapsed(t0::Float64)::String
     return string(h, ":", lpad(m2, 2, '0'), ":", lpad(r, 2, '0'))
 end
 
-function _progress_current(state::KitProgressState)::Int
+function _progress_current(state::ProgressState)::Int
     isempty(state.items) || return state.done
     return state.done >= state.steps ? state.steps : state.done + 1
 end
@@ -1464,7 +1369,7 @@ function _progress_fit_label(raw::String; width::Int = PROGRESS_LABEL_WIDTH)::St
     return join(out) * "…" * " "^(max(0, width - w - ell))
 end
 
-function _progress_item_glyph(item::KitProgressItem)::String
+function _progress_item_glyph(item::ProgressItem)::String
     item.status === :ok && return "✓"
     item.status === :fail && return "✗"
     item.status === :running &&
@@ -1472,24 +1377,24 @@ function _progress_item_glyph(item::KitProgressItem)::String
     return "·"
 end
 
-function _progress_item_color(item::KitProgressItem)::Symbol
+function _progress_item_color(item::ProgressItem)::Symbol
     item.status === :ok && return :green
     item.status === :fail && return :red
     return :light_black
 end
 
-function _progress_header_label(state::KitProgressState; finished::Bool = false)::String
+function _progress_header_label(state::ProgressState; finished::Bool = false)::String
     use_title = finished || !isempty(state.items)
     return _progress_fit_label(use_title ? state.title : state.label)
 end
 
-function _progress_glyph(state::KitProgressState; finished::Bool = false, ok::Bool = true)::String
+function _progress_glyph(state::ProgressState; finished::Bool = false, ok::Bool = true)::String
     finished && return ok ? "✓" : "✗"
     return string(SPINNER_FRAMES[mod1(state.tick, length(SPINNER_FRAMES))])
 end
 
 function _progress_line(
-        state::KitProgressState;
+        state::ProgressState;
         finished::Bool = false,
         ok::Bool = true,
     )::String
@@ -1507,7 +1412,7 @@ end
 
 function _progress_print_header!(
         io::IO,
-        state::KitProgressState;
+        state::ProgressState;
         finished::Bool = false,
         ok::Bool = true,
     )
@@ -1542,7 +1447,7 @@ function _progress_print_header!(
 end
 
 function _progress_draw_items!(
-        state::KitProgressState;
+        state::ProgressState;
         finished::Bool = false,
         ok::Bool = true,
     )
@@ -1576,14 +1481,14 @@ function _progress_draw_items!(
 end
 
 function _progress_draw!(
-        state::KitProgressState;
+        state::ProgressState;
         newline::Bool = false,
         finished::Bool = false,
         ok::Bool = true,
     )
     !_progress_can_draw() && return nothing
     # After a diagnostic releases the live bar, skip redraws so payload lines
-    # are not overwritten. `kit_progress_done!` still draws with `finished=true`.
+    # are not overwritten. `progress_done!` still draws with `finished=true`.
     state.released && !finished && return nothing
     if !isempty(state.items)
         _progress_draw_items!(state; finished = finished, ok = ok)
@@ -1608,11 +1513,11 @@ _progress_can_draw()::Bool =
 
 A phase bar is redrawn with `\r` and no newline. Printing on that line glues
 the text to the bar. Item rows already end with a newline. The spinner is not
-started again; [`kit_progress_done!`](@ref) draws the finished line later.
+started again; [`progress_done!`](@ref) draws the finished line later.
 """
 function _progress_release_line!()
-    raw = KIT_PROGRESS[]
-    raw isa KitProgressState || return nothing
+    raw = CURRENT_PROGRESS[]
+    raw isa ProgressState || return nothing
     _progress_can_draw() || return nothing
     _progress_stop_spinner!(raw)
     raw.released && return nothing
@@ -1629,7 +1534,7 @@ function _progress_release_line!()
     return nothing
 end
 
-function _progress_stop_spinner!(state::KitProgressState)
+function _progress_stop_spinner!(state::ProgressState)
     state.spinning || return nothing
     state.spinning = false
     t = state.spinner_task
@@ -1642,7 +1547,7 @@ function _progress_stop_spinner!(state::KitProgressState)
     return nothing
 end
 
-function _progress_spinner_tick!(state::KitProgressState)
+function _progress_spinner_tick!(state::ProgressState)
     state.spinning || return nothing
     _progress_is_current(state) || return nothing
     state.tick += 1
@@ -1653,7 +1558,7 @@ function _progress_spinner_tick!(state::KitProgressState)
     return nothing
 end
 
-function _progress_start_spinner!(state::KitProgressState)
+function _progress_start_spinner!(state::ProgressState)
     (_progress_can_draw() && !state.spinning && !state.released) || return nothing
     state.spinning = true
     state.spinner_task = @async begin
@@ -1672,21 +1577,20 @@ function _progress_start_spinner!(state::KitProgressState)
     return nothing
 end
 
-# Nested `kit_confirm` / consent: stop the `\r` bar so the prompt stays visible.
-const KIT_PROGRESS_SUSPEND = Ref(0)
+# Nested `cli_confirm` / consent: stop the `\r` bar so the prompt stays visible.
 
 """
 Pause the live `\r` bar while `f()` prints to the TTY and reads stdin.
 
 The spinner redraws the current line. After consent text moves the cursor,
-that wipes `kit_confirm` and looks like a hung job (`readline` still waits).
+that wipes `cli_confirm` and looks like a hung job (`readline` still waits).
 """
 function with_kit_progress_suspended(f)
-    raw = KIT_PROGRESS[]
-    KIT_PROGRESS_SUSPEND[] += 1
-    first = KIT_PROGRESS_SUSPEND[] == 1
+    raw = CURRENT_PROGRESS[]
+    PROGRESS_SUSPEND[] += 1
+    first = PROGRESS_SUSPEND[] == 1
     try
-        if first && raw isa KitProgressState
+        if first && raw isa ProgressState
             _progress_stop_spinner!(raw)
             if _progress_can_draw()
                 io = _progress_io()
@@ -1697,10 +1601,10 @@ function with_kit_progress_suspended(f)
         end
         return f()
     finally
-        KIT_PROGRESS_SUSPEND[] -= 1
-        if KIT_PROGRESS_SUSPEND[] == 0
-            cur = KIT_PROGRESS[]
-            if cur isa KitProgressState && _progress_is_current(cur)
+        PROGRESS_SUSPEND[] -= 1
+        if PROGRESS_SUSPEND[] == 0
+            cur = CURRENT_PROGRESS[]
+            if cur isa ProgressState && _progress_is_current(cur)
                 cur.drawn = 0
                 cur.cursor_hidden = false
                 _progress_draw!(cur)
@@ -1727,7 +1631,7 @@ function _progress_print_bar!(io::IO, done::Int, total::Int, tick::Int)
     return nothing
 end
 
-function _progress_log_line(state::KitProgressState, event::AbstractString, kvs::Pair...)
+function _progress_log_line(state::ProgressState, event::AbstractString, kvs::Pair...)
     parts = String["progress:", String(event), "kind=$(state.kind)"]
     if state.job_id !== nothing
         push!(parts, "job=$(state.job_id)")
@@ -1740,7 +1644,7 @@ function _progress_log_line(state::KitProgressState, event::AbstractString, kvs:
 end
 
 function _progress_log_writeln(
-        state::KitProgressState,
+        state::ProgressState,
         event::AbstractString,
         kvs::Pair...;
         to_log::Bool = true,
@@ -1751,7 +1655,7 @@ function _progress_log_writeln(
     return nothing
 end
 
-function _progress_log_begin!(state::KitProgressState)
+function _progress_log_begin!(state::ProgressState)
     _kit_progress_sidecar_truncate!()
     _progress_log_writeln(
         state,
@@ -1763,7 +1667,7 @@ function _progress_log_begin!(state::KitProgressState)
     return nothing
 end
 
-function _progress_log_step!(state::KitProgressState)
+function _progress_log_step!(state::ProgressState)
     _progress_log_writeln(
         state,
         "step",
@@ -1778,8 +1682,8 @@ end
 
 """Write a `progress: step` timing mark without changing the live bar."""
 function _kit_progress_mark!(label::AbstractString)
-    raw = KIT_PROGRESS[]
-    raw isa KitProgressState || return nothing
+    raw = CURRENT_PROGRESS[]
+    raw isa ProgressState || return nothing
     lab = String(label)
     lock(KIT_PROGRESS_LOCK) do
         _progress_is_current(raw) || return nothing
@@ -1799,8 +1703,8 @@ end
 """Log an `item` span (`slot/run`, `slot/collect`) without moving the live bar."""
 function _kit_progress_span!(label::AbstractString, status::Symbol)
     status in (:running, :ok, :fail) || return nothing
-    raw = KIT_PROGRESS[]
-    raw isa KitProgressState || return nothing
+    raw = CURRENT_PROGRESS[]
+    raw isa ProgressState || return nothing
     lab = String(label)
     lock(KIT_PROGRESS_LOCK) do
         _progress_is_current(raw) || return nothing
@@ -1817,7 +1721,7 @@ function _kit_progress_span!(label::AbstractString, status::Symbol)
     return nothing
 end
 
-function _progress_log_item!(state::KitProgressState, item::KitProgressItem)
+function _progress_log_item!(state::ProgressState, item::ProgressItem)
     _progress_log_writeln(
         state,
         "item",
@@ -1830,7 +1734,7 @@ function _progress_log_item!(state::KitProgressState, item::KitProgressItem)
     return nothing
 end
 
-function _progress_log_done!(state::KitProgressState; ok::Bool)
+function _progress_log_done!(state::ProgressState; ok::Bool)
     _progress_log_writeln(
         state,
         "done",
@@ -1951,13 +1855,13 @@ function _kit_progress_records(
 end
 
 """
-    kit_progress_latest(log_dir_or_file; job_id=nothing) -> Union{Nothing,NamedTuple}
+    progress_latest(log_dir_or_file; job_id=nothing) -> Union{Nothing,NamedTuple}
 
 Last `parse_progress_line` hit in a kit log file, `kit.progress`,
 or `*.log` under a directory (files in `mtime` order). `job_id` keeps only
 `job=<id>` lines.
 """
-function kit_progress_latest(
+function progress_latest(
         log_dir_or_file::AbstractString;
         job_id::Union{Nothing, AbstractString} = nothing,
     )
@@ -2389,23 +2293,23 @@ function kit_progress_begin!(
         job_id::Union{Nothing, AbstractString} = nothing,
     )
     steps < 1 && throw(ArgumentError("kit_progress_begin!: steps must be ≥ 1"))
-    prev = KIT_PROGRESS[]
-    prev isa KitProgressState && _progress_stop_spinner!(prev)
+    prev = CURRENT_PROGRESS[]
+    prev isa ProgressState && _progress_stop_spinner!(prev)
     _reset_job_stdout_capture!()
     resolved_job_id = job_id
     if resolved_job_id === nothing
         env_job_id = get(ENV, "DISTSSH_JOB_ID", "")
         isempty(env_job_id) || (resolved_job_id = env_job_id)
     end
-    state = KitProgressState(
+    state = ProgressState(
         String(title), steps, 0, String(title); kind = kind, job_id = resolved_job_id,
     )
     for name in items
-        push!(state.items, KitProgressItem(String(name), :pending, 0))
+        push!(state.items, ProgressItem(String(name), :pending, 0))
     end
     lock(KIT_PROGRESS_LOCK) do
         KIT_PROGRESS_IO[] = stdout
-        KIT_PROGRESS[] = state
+        CURRENT_PROGRESS[] = state
         _progress_log_begin!(state)
         if kit_output_progress()
             _progress_draw!(state)
@@ -2420,17 +2324,17 @@ Set the in-progress label.
 
 The first call does not increment `done`. Later calls mark the previous phase
 complete (`done += 1`) then switch the label. Pass `done` to set completed
-count absolutely (in-progress is still `done + 1` until [`kit_progress_done!`](@ref)).
+count absolutely (in-progress is still `done + 1` until [`progress_done!`](@ref)).
 """
 function kit_progress_step!(label::AbstractString; done::Union{Nothing, Int} = nothing)
-    raw = KIT_PROGRESS[]
-    raw isa KitProgressState || return nothing
+    raw = CURRENT_PROGRESS[]
+    raw isa ProgressState || return nothing
     _kit_progress_step!(raw, label; done)
     return nothing
 end
 
 function _kit_progress_step!(
-        state::KitProgressState,
+        state::ProgressState,
         label::AbstractString;
         done::Union{Nothing, Int},
     )
@@ -2463,15 +2367,15 @@ Update one concurrent item (`:running` / `:ok` / `:fail`). Completing an item
 function kit_progress_item!(label::AbstractString; status::Symbol)
     status in (:pending, :running, :ok, :fail) ||
         throw(ArgumentError("kit_progress_item!: status must be :pending, :running, :ok, or :fail"))
-    raw = KIT_PROGRESS[]
-    raw isa KitProgressState || return nothing
+    raw = CURRENT_PROGRESS[]
+    raw isa ProgressState || return nothing
     _kit_progress_item!(raw, label, status)
     return nothing
 end
 
 function _kit_progress_apply_item!(
-        item::KitProgressItem,
-        state::KitProgressState,
+        item::ProgressItem,
+        state::ProgressState,
         status::Symbol,
     )
     prev = item.status
@@ -2486,7 +2390,7 @@ function _kit_progress_apply_item!(
     return nothing
 end
 
-function _kit_progress_item!(state::KitProgressState, label::AbstractString, status::Symbol)
+function _kit_progress_item!(state::ProgressState, label::AbstractString, status::Symbol)
     lock(KIT_PROGRESS_LOCK) do
         _progress_is_current(state) || return nothing
         target = String(label)
@@ -2506,15 +2410,15 @@ end
 Finish the status line (newline, ✓/✗, elapsed; no track). Optional `footer`
 prints under the line (`:progress` only; also kit log). Clears progress state.
 """
-function kit_progress_done!(; ok::Bool = true, footer::Union{Nothing, AbstractString} = nothing)
-    raw = KIT_PROGRESS[]
-    raw isa KitProgressState || return nothing
-    _kit_progress_done!(raw; ok = ok, footer = footer)
+function progress_done!(; ok::Bool = true, footer::Union{Nothing, AbstractString} = nothing)
+    raw = CURRENT_PROGRESS[]
+    raw isa ProgressState || return nothing
+    _progress_done!(raw; ok = ok, footer = footer)
     return nothing
 end
 
-function _kit_progress_done!(
-        state::KitProgressState;
+function _progress_done!(
+        state::ProgressState;
         ok::Bool,
         footer::Union{Nothing, AbstractString},
     )
@@ -2532,7 +2436,7 @@ function _kit_progress_done!(
             end
             _progress_print_footer(footer)
         end
-        KIT_PROGRESS[] = nothing
+        CURRENT_PROGRESS[] = nothing
         KIT_PROGRESS_IO[] = stdout
     end
     return nothing

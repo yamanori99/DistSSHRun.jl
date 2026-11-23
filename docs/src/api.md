@@ -292,6 +292,7 @@ Filter = function (x)
         :wait, :shell_status, :run_identity, :identity_mismatches, :LoadedCodeMismatchError,
         :ConfirmPathMismatch, :normalize_remote_confirm_path,
         :NO_COMMAND_HINT_LINES, :RUN_SUBCOMMAND_EXPECTATION,
+        :process_start_key, :CLI,
     )
     n = try
         nameof(x)
@@ -315,10 +316,14 @@ RUN_SUBCOMMAND_EXPECTATION
 ```
 
 `shell_status` is public on DistSSHBase and is not exported.
+`process_start_key` and `DistSSHBase.CLI` are the 0.2.0 console and start-key
+contract for Queue and Kit.
 
 ```@docs
 DistSSHBase.HostResult
 DistSSHBase.shell_status
+DistSSHBase.process_start_key
+DistSSHBase.CLI
 ```
 
 ## Identity
