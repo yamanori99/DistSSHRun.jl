@@ -3,6 +3,7 @@
 # An agent does not start it unless the person asked. OS and CURSOR_AGENT do not grant that.
 # On Linux, the shellcheck package comes from apt.
 # Runic pin: .github/runic/Project.toml [compat] (CI reads the same file). JETLS: jetls-check/action.yml.
+# actionlint / zizmor / pinact: .github/actions-lint.env (CI reads the same file).
 # Julia 1.13 is `julia +1.13` on PATH, or a 1.13 julia already on PATH. No fixed install path.
 #
 # Optional INSTALL_AGENT_TOOLS_DEPOT: depot root for this script only (testing; no symlinks).
@@ -83,6 +84,29 @@ fi
 link_into_path() {
   local name="$1"
   local source="${APPS_BIN}/${name}"
+  local dest="/usr/local/bin/${name}"
+  [[ -x "${source}" ]] || return 0
+  if [[ -L "${dest}" ]] && [[ "$(readlink -f "${dest}")" == "$(readlink -f "${source}")" ]]; then
+    return 0
+  fi
+  if [[ -e "${dest}" && ! -L "${dest}" ]]; then
+    die "refusing to replace non-symlink ${dest}"
+  fi
+  if [[ -w "$(dirname "${dest}")" ]]; then
+    ln -sfn "${source}" "${dest}"
+    return 0
+  fi
+  if sudo -n true 2>/dev/null; then
+    sudo -n ln -sfn "${source}" "${dest}"
+  else
+    die "could not link ${dest} (no sudo)"
+  fi
+}
+
+link_tool_from() {
+  local name="$1"
+  local source_dir="$2"
+  local source="${source_dir}/${name}"
   local dest="/usr/local/bin/${name}"
   [[ -x "${source}" ]] || return 0
   if [[ -L "${dest}" ]] && [[ "$(readlink -f "${dest}")" == "$(readlink -f "${source}")" ]]; then
@@ -217,9 +241,19 @@ if ! jetls_app_ok; then
 fi
 section "install-agent-tools: jetls ok"
 
+section "install-agent-tools: workflow lint"
+# shellcheck source=actions-lint-setup.sh
+source "${ROOT}/.github/actions-lint-setup.sh"
+actions_lint_install_tools
+WORKFLOW_LINT_BIN="$(actions_lint_bin_dir)"
+section "install-agent-tools: workflow lint ok"
+
 if [[ "${LINK_TOOLS}" == true && "$(uname -s)" == Linux ]]; then
   link_into_path runic
   link_into_path jetls
+  link_tool_from actionlint "${WORKFLOW_LINT_BIN}"
+  link_tool_from pinact "${WORKFLOW_LINT_BIN}"
+  link_tool_from zizmor "${HOME}/.local/bin"
 fi
 
 runic_bin_ver="$(runic_app_version || true)"
@@ -254,4 +288,4 @@ if ! jetls_app_ok; then
 fi
 
 section "install-agent-tools: ok"
-echo "install-agent-tools: ok (depot=${DEPOT}, runic=${RUNIC_PIN}, jetls_rev=${jetls_rev})"
+echo "install-agent-tools: ok (depot=${DEPOT}, runic=${RUNIC_PIN}, jetls_rev=${jetls_rev}, actionlint=${ACTIONLINT_VERSION}, pinact=${PINACT_VERSION}, zizmor=${ZIZMOR_VERSION})"

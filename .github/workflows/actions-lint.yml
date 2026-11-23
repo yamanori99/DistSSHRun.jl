@@ -39,25 +39,13 @@ jobs:
           sudo apt-get install -y shellcheck python3-pip
           shellcheck --version
 
-          # Go toolchain from go.dev (not GitHub Releases). pinact@v5 needs Go ≥1.27.1.
-          go_ver=1.27.3
-          go_sum=65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40
-          go_archive="${RUNNER_TEMP}/go${go_ver}.linux-amd64.tar.gz"
-          curl -fsSL --connect-timeout 30 --retry 8 --retry-all-errors \
-            --retry-max-time 180 -o "$go_archive" \
-            "https://go.dev/dl/go${go_ver}.linux-amd64.tar.gz"
-          echo "${go_sum}  ${go_archive}" | sha256sum -c -
-          sudo rm -rf /usr/local/go
-          sudo tar -C /usr/local -xzf "$go_archive"
-          export PATH="/usr/local/go/bin:${PATH}"
+          export ACTIONS_LINT_GO_SYSTEM=1
+          export ACTIONS_LINT_BIN="${RUNNER_TEMP}/gopath/bin"
           export GOPATH="${RUNNER_TEMP}/gopath"
-          export GOBIN="${GOPATH}/bin"
-          mkdir -p "$GOBIN"
-          export PATH="${GOBIN}:${HOME}/.local/bin:${PATH}"
-
-          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
-          go install github.com/suzuki-shunsuke/pinact/v5/cmd/pinact@v5.0.0
-          python3 -m pip install --user --break-system-packages "zizmor==1.30.1"
+          mkdir -p "${ACTIONS_LINT_BIN}"
+          # shellcheck source=actions-lint-setup.sh
+          source .github/actions-lint-setup.sh
+          actions_lint_install_tools
 
           actionlint -version
           zizmor --version
