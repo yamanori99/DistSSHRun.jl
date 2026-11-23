@@ -1,7 +1,7 @@
 ## Source churn
 
 Lines are non-blank `*.jl` under `src/` and `lib/*/src/`, grouped by package and area.
-Columns use git history through `3047b13` as of 2026-11-23 (JST).
+Columns use git history through `45f4edf` as of 2026-11-23 (JST).
 Areas list only directories that hold at least one `*.jl` directly and show any 7d or 30d added/deleted lines.
 
 **(root files)** lists `.jl` files sitting directly in a package `src/` directory, not in a subfolder.
@@ -17,12 +17,12 @@ Interactive charts (hover for values): [summary](charts/churn-summary.html) · [
 ### DistSSHBase
 | area | files | LOC | +7d | −7d | net7 | +30d | −30d | net30 | %≥30d old | last touch |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| ssh/ | 9 | 2259 | 649 | 141 | 508 | 1518 | 343 | 1175 | 44.4 | 2026-11-22 |
+| ssh/ | 9 | 2259 | 650 | 142 | 508 | 1519 | 344 | 1175 | 44.4 | 2026-11-23 |
 | hosts/ | 6 | 1091 | 559 | 147 | 412 | 1093 | 216 | 877 | 18.9 | 2026-11-21 |
 | messages/ | 4 | 403 | 80 | 15 | 65 | 193 | 67 | 126 | 61.7 | 2026-11-22 |
 | (root files) | 5 | 288 | 227 | 3 | 224 | 240 | 11 | 229 | 25.5 | 2026-11-21 |
 | procs/ | 2 | 233 | 250 | 0 | 250 | 250 | 0 | 250 | 0.0 | 2026-11-21 |
-| DistSSHBase.jl | 1 | 83 | 35 | 6 | 29 | 83 | 34 | 49 | 25.8 | 2026-11-21 |
+| DistSSHBase.jl | 1 | 86 | 39 | 6 | 33 | 87 | 34 | 53 | 24.7 | 2026-11-23 |
 | argv/ | 1 | 31 | 0 | 0 | 0 | 1 | 1 | 0 | 97.4 | 2026-11-08 |
 
 *(root files)*: component_id.jl, component_src.jl, namespace.jl, record_writer.jl, tool_require.jl.
@@ -38,17 +38,17 @@ Interactive charts (hover for values): [summary](charts/churn-summary.html) · [
 ### DistSSHRun
 | area | files | LOC | +7d | −7d | net7 | +30d | −30d | net30 | %≥30d old | last touch |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| infra/ | 25 | 9941 | 3789 | 586 | 3203 | 11473 | 2273 | 9200 | 11.7 | 2026-11-23 |
-| (root files) | 11 | 5502 | 1126 | 757 | 369 | 3740 | 1751 | 1989 | 50.6 | 2026-11-23 |
-| core/drive/ | 12 | 3445 | 916 | 362 | 554 | 2921 | 1270 | 1651 | 40.3 | 2026-11-23 |
-| core/setup/ | 10 | 4168 | 626 | 98 | 528 | 2575 | 507 | 2068 | 46.2 | 2026-11-22 |
-| argv/ | 8 | 2507 | 871 | 387 | 484 | 2047 | 934 | 1113 | 40.7 | 2026-11-22 |
-| drive/ | 7 | 2155 | 725 | 426 | 299 | 1781 | 990 | 791 | 44.8 | 2026-11-23 |
-| cli/ | 15 | 1157 | 426 | 287 | 139 | 1106 | 687 | 419 | 43.1 | 2026-11-22 |
-| options/ | 8 | 1048 | 965 | 77 | 888 | 1126 | 107 | 1019 | 7.4 | 2026-11-23 |
+| infra/ | 25 | 9935 | 3981 | 783 | 3198 | 11665 | 2470 | 9195 | 11.7 | 2026-11-23 |
+| (root files) | 11 | 5502 | 1228 | 859 | 369 | 3842 | 1853 | 1989 | 50.3 | 2026-11-23 |
+| core/drive/ | 12 | 3445 | 956 | 402 | 554 | 2961 | 1310 | 1651 | 40.3 | 2026-11-23 |
+| core/setup/ | 10 | 4170 | 646 | 116 | 530 | 2595 | 525 | 2070 | 46.2 | 2026-11-23 |
+| argv/ | 8 | 2515 | 922 | 430 | 492 | 2098 | 977 | 1121 | 40.5 | 2026-11-23 |
+| drive/ | 7 | 2155 | 762 | 463 | 299 | 1818 | 1027 | 791 | 44.8 | 2026-11-23 |
+| cli/ | 15 | 1157 | 435 | 296 | 139 | 1115 | 696 | 419 | 43.1 | 2026-11-23 |
+| options/ | 8 | 1049 | 973 | 84 | 889 | 1134 | 114 | 1020 | 7.4 | 2026-11-23 |
 | messages/ | 3 | 2763 | 457 | 36 | 421 | 767 | 151 | 616 | 77.5 | 2026-11-22 |
-| DistSSHRun.jl | 1 | 541 | 111 | 67 | 44 | 365 | 214 | 151 | 54.7 | 2026-11-23 |
-| core/ | 1 | 172 | 207 | 21 | 186 | 207 | 21 | 186 | 0.0 | 2026-11-23 |
+| DistSSHRun.jl | 1 | 541 | 114 | 70 | 44 | 368 | 217 | 151 | 54.3 | 2026-11-23 |
+| core/ | 1 | 172 | 213 | 27 | 186 | 213 | 27 | 186 | 0.0 | 2026-11-23 |
 
 *(root files)*: DistSSHRun/drive.jl, DistSSHRun/execute.jl, DistSSHRun/execute_envelope.jl, DistSSHRun/go.jl, DistSSHRun/heartbeat_module.jl, DistSSHRun/hostinfo.jl, DistSSHRun/pool.jl, DistSSHRun/provenance.jl, DistSSHRun/setup.jl, DistSSHRun/ship_module.jl, DistSSHRun/up_module.jl.
 
