@@ -205,7 +205,7 @@ jobs:
           else
             echo "coverage=false" >> "$GITHUB_OUTPUT"
           fi
-          # Disabled until DistSSHQueue locksteps with removed ride demos and the DISTSSH_ env prefix.
+          # Paused: DistSSHQueue main still expects ride demos and DISTRIBUTED_*; Run uses DISTSSH_* only.
           echo "queue_e2e=false" >> "$GITHUB_OUTPUT"
           # Ordinary pull requests only. Push, dispatch, and a version cut run all three.
           # CI weekly is a separate workflow and does not read these outputs.
@@ -1637,7 +1637,7 @@ jobs:
   queue-ssh-e2e:
     name: Downstream SSH E2E (DistSSHQueue, 1.13)
     needs: [detect, runic, jetls, aqua]
-    # Disabled until DistSSHQueue locksteps with removed ride demos and the DISTSSH_ env prefix.
+    # Paused: DistSSHQueue main still expects ride demos and DISTRIBUTED_*; Run uses DISTSSH_* only.
     if: false && needs.detect.outputs.queue_e2e == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 45
