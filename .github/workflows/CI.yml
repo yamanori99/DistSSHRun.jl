@@ -1448,7 +1448,7 @@ jobs:
             ~/.julia/registries
             ~/.julia/environments/apps
             ~/.julia/bin
-          key: jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-${{ hashFiles('Project.toml', 'test/Project.toml', 'lib/DistSSHBase/Project.toml', 'lib/DistSSHBase/test/Project.toml', 'lib/DistSSHUp/Project.toml', 'lib/DistSSHUp/test/Project.toml', 'lib/DistSSHShip/Project.toml', 'lib/DistSSHShip/test/Project.toml', 'lib/DistSSHHeartbeat/Project.toml', 'lib/DistSSHHeartbeat/test/Project.toml') }}
+          key: jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-${{ hashFiles('Project.toml', 'test/Project.toml', 'bench/compile/Project.toml', 'lib/DistSSHBase/Project.toml', 'lib/DistSSHBase/test/Project.toml', 'lib/DistSSHUp/Project.toml', 'lib/DistSSHUp/test/Project.toml', 'lib/DistSSHShip/Project.toml', 'lib/DistSSHShip/test/Project.toml', 'lib/DistSSHHeartbeat/Project.toml', 'lib/DistSSHHeartbeat/test/Project.toml') }}
           restore-keys: |
             jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-
       - uses: ./.github/actions/jetls-check
@@ -1525,7 +1525,7 @@ jobs:
             ~/.julia/registries
             ~/.julia/environments/apps
             ~/.julia/bin
-          key: jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-${{ hashFiles('Project.toml', 'test/Project.toml', 'lib/DistSSHBase/Project.toml', 'lib/DistSSHBase/test/Project.toml', 'lib/DistSSHUp/Project.toml', 'lib/DistSSHUp/test/Project.toml', 'lib/DistSSHShip/Project.toml', 'lib/DistSSHShip/test/Project.toml', 'lib/DistSSHHeartbeat/Project.toml', 'lib/DistSSHHeartbeat/test/Project.toml') }}
+          key: jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-${{ hashFiles('Project.toml', 'test/Project.toml', 'bench/compile/Project.toml', 'lib/DistSSHBase/Project.toml', 'lib/DistSSHBase/test/Project.toml', 'lib/DistSSHUp/Project.toml', 'lib/DistSSHUp/test/Project.toml', 'lib/DistSSHShip/Project.toml', 'lib/DistSSHShip/test/Project.toml', 'lib/DistSSHHeartbeat/Project.toml', 'lib/DistSSHHeartbeat/test/Project.toml') }}
           restore-keys: |
             jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-
       - uses: ./.github/actions/jetls-check

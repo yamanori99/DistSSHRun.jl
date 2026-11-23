@@ -133,3 +133,7 @@ pass_scenario "fix_title_self_test"
 
 "${ROOT}/scripts/gate/pr-body_gh_self_test.sh" >/dev/null || fail_scenario "pr-body_gh_self_test"
 pass_scenario "pr-body_gh_self_test"
+
+chmod +x "${ROOT}/scripts/gate/jetls_log_gate_self_test.sh"
+"${ROOT}/scripts/gate/jetls_log_gate_self_test.sh" >/dev/null || fail_scenario "jetls_log_gate_self_test"
+pass_scenario "jetls_log_gate_self_test"
