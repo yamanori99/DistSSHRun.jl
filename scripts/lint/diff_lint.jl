@@ -5,6 +5,7 @@
 #   modes: all, banned-words, agents-md, skip-reasons, new-comments, stdlib-compat, self-test, pr-body
 
 using Dates
+using Distributed
 using JuliaSyntax
 using TOML
 import Pkg
@@ -1409,7 +1410,7 @@ function self_test_body_main()
     for line in judge_lines
         startswith(line, "ok  ") || die("self-test: judge_self_test unexpected line $(line)")
     end
-    length(GATE_LINT_NAMES) == 15 || die("self-test: GATE_LINT_NAMES $(length(GATE_LINT_NAMES))")
+    length(GATE_LINT_NAMES) == 28 || die("self-test: GATE_LINT_NAMES $(length(GATE_LINT_NAMES))")
     "all" in GATE_LINT_NAMES && die("self-test: all is not a per-mode name")
     lint_sh = read(joinpath(@__DIR__, "..", "gate", "lint.sh"), String)
     occursin("run.sh\" all", lint_sh) || die("self-test: lint.sh must run all in one process")
@@ -1533,6 +1534,36 @@ function self_test_body_main()
     hdr_in_fence = "## Summary\n\n```markdown\n## Testing\n```\n\n## Risk\n"
     testing_section_present(hdr_in_fence) && die("self-test: testing heading in fence")
     banned_hit("# until later") == "until" || die("self-test: until phrase $(repr(banned_hit("# until later")))")
+    verify_addprocs_kw_allowlist!()
+    h_cd = Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])])
+    length(collect_ban_cd("", h_cd, _ -> "cd(pwd())\n"; whole = false)) >= 1 || die("self-test: ban-cd hit")
+    isempty(collect_ban_cd("", h_cd, _ -> "chdir(pwd())\n"; whole = false)) || die("self-test: ban-cd negative")
+    length(collect_invokelatest("", h_cd, _ -> "Base.invokelatest(f)\n"; whole = false)) >= 1 ||
+        die("self-test: invokelatest hit")
+    dv_path = "test/fixtures/_lint_dead_version_gate.jl"
+    dv_h = Dict(dv_path => [Hunk(1, 0, 1, 2, String[])])
+    dead_src = "if VERSION < v\"1.14.0-\"\nend\n"
+    length(collect_dead_version("", dv_h, _ -> dead_src; whole = false)) >= 1 ||
+        die("self-test: dead-version-gate hit")
+    live_src = "if VERSION < v\"1.13.5\"\nend\n"
+    isempty(collect_dead_version("", dv_h, _ -> live_src; whole = false)) ||
+        die("self-test: dead-version-gate negative")
+    addprocs_bad = "addprocs(1; not_a_kw=1)\n"
+    bad_a, splat_a = collect_addprocs_bad_kw("", h_cd, _ -> addprocs_bad; whole = false)
+    length(bad_a) >= 1 || die("self-test: addprocs-kwargs bad")
+    addprocs_splat = "addprocs(1; exename=x, other()...)\n"
+    _, splat_b = collect_addprocs_bad_kw("", h_cd, _ -> addprocs_splat; whole = false)
+    length(splat_b) >= 1 || die("self-test: addprocs-kwargs-splat")
+    weak_path = "test/fixtures/_lint_weak_assertion.jl"
+    weak_h = Dict(weak_path => [Hunk(1, 0, 1, 4, String[])])
+    weak_bad = "@test true\n@test_throws Exception f()\n@test x == x\n"
+    length(collect_weak_assertion("", weak_h, _ -> weak_bad; whole = false)) >= 3 ||
+        die("self-test: weak-assertion hit")
+    weak_ok = "@test_throws ErrorException f()\n@test 1 + 1 == 2\n"
+    isempty(collect_weak_assertion("", weak_h, _ -> weak_ok; whole = false)) ||
+        die("self-test: weak-assertion negative")
+    count_swallowed_catch_legacy(repo_root()) <= 138 ||
+        die("self-test: swallowed legacy above main")
     println("self-test: passed")
     return 0
 end
@@ -2370,16 +2401,816 @@ function short_skip_paths_from_common(src::AbstractString)
 end
 
 
+# Inserted into scripts/lint/diff_lint.jl before `const BANNED_NEW`
+
+function library_src_path(path::AbstractString)::Bool
+    p = replace(String(path), '\\' => '/')
+    startswith(p, "src/") && return true
+    return occursin(r"^lib/[^/]+/src/", p)
+end
+
+const EXIT_SRC_ALLOWLIST = Set{String}([
+    "src/cli/_checkout.jl",
+    "src/cli/doctor.jl",
+    "src/cli/drive.jl",
+    "src/cli/go.jl",
+    "src/cli/hostinfo.jl",
+    "src/cli/pool.jl",
+    "src/cli/setup.jl",
+    "src/cli/up.jl",
+    "src/DistSSHRun/core/drive/cancel_frame.jl",
+    "src/DistSSHRun/core/drive/run.jl",
+    "src/DistSSHRun/infra/go_handshake.jl",
+    "src/DistSSHRun/infra/namespace_sync.jl",
+    "src/DistSSHRun/infra/ship.jl",
+    "lib/DistSSHHeartbeat/src/worker.jl",
+])
+
+function macro_head_name(node)
+    kind(node) == K"macrocall" || return nothing
+    numchildren(node) >= 1 || return nothing
+    head = node[1]
+    kind(head) == K"MacroName" && return sourcetext(head)
+    return ident_leaf(head)
+end
+
+function call_head_name(node)
+    kind(node) == K"call" || return nothing
+    numchildren(node) >= 1 || return nothing
+    return ident_leaf(node[1])
+end
+
+function call_is_meta_dir_macro(node)
+    kind(node) != K"macrocall" && return false
+    head = macro_head_name(node)
+    return head in ("@__DIR__", "@__FILE__", "@__MODULE__")
+end
+
+function call_ispkgdir(node)
+    name = call_head_name(node)
+    name in ("pkgdir", "Pkg.pkgdir") && return true
+    kind(node) == K"call" || return false
+    numchildren(node) >= 2 || return false
+    return kind(node[1]) == K"." && sourcetext(node[1]) == "Base.pkgdir"
+end
+
+function rhs_bakes_runtime(node)
+    function walk(node)
+        call_is_meta_dir_macro(node) && return false
+        call_ispkgdir(node) && return false
+        kind(node) == K"macrocall" && return true
+        if kind(node) == K"call"
+            name = call_head_name(node)
+            if name in ("homedir", "gethostname", "tempdir", "pwd", "getpid", "CPU_THREADS")
+                return true
+            end
+            if kind(node[1]) == K"."
+                right = sourcetext(node[numchildren(node)])
+                right == "CPU_THREADS" && occursin("Sys", sourcetext(node[1])) && return true
+            end
+        end
+        if kind(node) == K"ref"
+            numchildren(node) >= 1 && sourcetext(node[1]) == "ENV" && return true
+        end
+        for i in 1:numchildren(node)
+            walk(node[i]) && return true
+        end
+        return false
+    end
+    return walk(node)
+end
+
+const INIT_WORKLOAD_FORBIDDEN_CALLS = Set{String}([
+    "run",
+    "addprocs",
+    "connect",
+    "listen",
+    "atexit",
+    "Timer",
+])
+
+function init_workload_forbidden_node(node)
+    if kind(node) == K"macrocall"
+        head = macro_head_name(node)
+        head == "@async" && return true
+        if head == "@spawn"
+            return occursin("Threads", sourcetext(node[1]))
+        end
+        return false
+    end
+    kind(node) == K"call" || return false
+    return call_head_name(node) in INIT_WORKLOAD_FORBIDDEN_CALLS
+end
+
+function collect_src_walk(
+    root,
+    files,
+    src_for_path;
+    whole::Bool,
+    rule::AbstractString,
+    walk_fn,
+)
+    hits = Tuple{String, Int, String}[]
+    paths = whole ? filter(library_src_path, tracked_jl(root)) : collect(keys(files))
+    for path in paths
+        library_src_path(path) || continue
+        skipped_path(path) && continue
+        endswith(path, ".jl") || continue
+        whole || (isempty(added_lines(get(files, path, Hunk[]))) && continue)
+        src = lint_file_src(root, path, src_for_path)
+        src === nothing && continue
+        added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
+        whole || (isempty(added) && continue)
+        walk_fn(parse_tree(src), src, path, added, rule, hits)
+    end
+    return unique(hits)
+end
+
+struct LibraryWalkCtx
+    func_depth::Int
+    in_init::Bool
+    workload_depth::Int
+end
+
+function tree_function_name(node)
+    k = kind(node)
+    (k == K"function" || k == K"=") || return nothing
+    numchildren(node) < 1 && return nothing
+    sig = node[1]
+    while (kind(sig) == K"where" || kind(sig) == K"::") && numchildren(sig) >= 1
+        sig = sig[1]
+    end
+    kind(sig) == K"call" || return nothing
+    return ident_leaf(sig[1])
+end
+
+function walk_ban_cd!(node, src, path, added, rule, hits)
+    if kind(node) == K"call" && call_head_name(node) == "cd" && node_touches_added(src, node, added)
+        a = line_of(src, Int(first(byte_range(node))))
+        push!(hits, (path, a, rule))
+    end
+    for i in 1:numchildren(node)
+        walk_ban_cd!(node[i], src, path, added, rule, hits)
+    end
+    return
+end
+
+function collect_ban_cd(root, files, src_for_path; whole::Bool)
+    return collect_src_walk(root, files, src_for_path; whole, rule = "ban-cd", walk_fn = walk_ban_cd!)
+end
+
+function assign_lhs_is_const_container(node)
+    kind(node) != K"=" && return false
+    numchildren(node) >= 2 || return false
+    rhs = node[2]
+    if kind(rhs) == K"call"
+        return call_head_name(rhs) in ("Ref", "Dict", "Set", "IdDict", "Vector", "Array", "BitSet")
+    end
+    return kind(rhs) in (K"vect", K"curly")
+end
+
+function descend_library_ctx(node, ctx::LibraryWalkCtx)
+    fn = tree_function_name(node)
+    fn == "__init__" && return LibraryWalkCtx(ctx.func_depth + 1, true, ctx.workload_depth)
+    fn !== nothing && return LibraryWalkCtx(ctx.func_depth + 1, false, ctx.workload_depth)
+    if kind(node) == K"macrocall"
+        head = macro_head_name(node)
+        head in ("@setup_workload", "setup_workload", "@compile_workload", "compile_workload") &&
+            return LibraryWalkCtx(ctx.func_depth, ctx.in_init, ctx.workload_depth + 1)
+    end
+    return ctx
+end
+
+function module_level_parent(parent)
+    kind(parent) in (K"toplevel", K"module")
+end
+
+function walk_ban_global!(node, parent, src, path, added, rule, hits, ctx::LibraryWalkCtx = LibraryWalkCtx(0, false, 0))
+    if ctx.func_depth > 0 && kind(node) == K"global" && node_touches_added(src, node, added)
+        push!(hits, (path, line_of(src, Int(first(byte_range(node)))), rule))
+    end
+    if ctx.func_depth == 0 && module_level_parent(parent) && kind(node) == K"=" &&
+            tree_function_name(node) === nothing && !assign_lhs_is_const_container(node) &&
+            numchildren(node) >= 1 && kind(node[1]) != K"ref" &&
+            node_touches_added(src, node, added)
+        push!(hits, (path, line_of(src, Int(first(byte_range(node)))), rule))
+    end
+    child_ctx = descend_library_ctx(node, ctx)
+    for i in 1:numchildren(node)
+        walk_ban_global!(node[i], node, src, path, added, rule, hits, child_ctx)
+    end
+    return
+end
+
+function collect_ban_global(root, files, src_for_path; whole::Bool)
+    hits = Tuple{String, Int, String}[]
+    paths = whole ? filter(library_src_path, tracked_jl(root)) : collect(keys(files))
+    for path in paths
+        library_src_path(path) || continue
+        skipped_path(path) && continue
+        endswith(path, ".jl") || continue
+        whole || (isempty(added_lines(get(files, path, Hunk[]))) && continue)
+        src = lint_file_src(root, path, src_for_path)
+        src === nothing && continue
+        added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
+        whole || (isempty(added) && continue)
+        tree = parse_tree(src)
+        walk_ban_global!(tree, tree, src, path, added, "ban-global", hits)
+    end
+    return unique(hits)
+end
+
+function walk_ban_const_bake!(node, src, path, added, rule, hits, ctx::LibraryWalkCtx = LibraryWalkCtx(0, false, 0))
+    if kind(node) == K"const" && ctx.func_depth == 0 && numchildren(node) >= 2
+        rhs_bakes_runtime(node[2]) && node_touches_added(src, node, added) &&
+            push!(hits, (path, line_of(src, Int(first(byte_range(node)))), rule))
+    end
+    child_ctx = descend_library_ctx(node, ctx)
+    for i in 1:numchildren(node)
+        walk_ban_const_bake!(node[i], src, path, added, rule, hits, child_ctx)
+    end
+    return
+end
+
+function collect_ban_const_bake(root, files, src_for_path; whole::Bool)
+    return collect_src_walk(root, files, src_for_path; whole, rule = "ban-const-bake", walk_fn = walk_ban_const_bake!)
+end
+
+function in_init_or_workload(ctx::LibraryWalkCtx)
+    return ctx.in_init || ctx.workload_depth > 0
+end
+
+function walk_ban_init_sidefx!(node, src, path, added, rule, hits, ctx::LibraryWalkCtx = LibraryWalkCtx(0, false, 0))
+    if in_init_or_workload(ctx) && init_workload_forbidden_node(node) && node_touches_added(src, node, added)
+        push!(hits, (path, line_of(src, Int(first(byte_range(node)))), rule))
+    end
+    child_ctx = descend_library_ctx(node, ctx)
+    for i in 1:numchildren(node)
+        walk_ban_init_sidefx!(node[i], src, path, added, rule, hits, child_ctx)
+    end
+    return
+end
+
+function collect_ban_init_sidefx(root, files, src_for_path; whole::Bool)
+    return collect_src_walk(root, files, src_for_path; whole, rule = "ban-init-sidefx", walk_fn = walk_ban_init_sidefx!)
+end
+
+function walk_ban_assert!(node, src, path, added, rule, hits)
+    if kind(node) == K"macrocall" && macro_head_name(node) in ("assert", "@assert") &&
+            node_touches_added(src, node, added)
+        push!(hits, (path, line_of(src, Int(first(byte_range(node)))), rule))
+    end
+    for i in 1:numchildren(node)
+        walk_ban_assert!(node[i], src, path, added, rule, hits)
+    end
+    return
+end
+
+function collect_ban_assert(root, files, src_for_path; whole::Bool)
+    return collect_src_walk(root, files, src_for_path; whole, rule = "ban-assert", walk_fn = walk_ban_assert!)
+end
+
+function is_invokelatest_node(node)
+    if kind(node) == K"macrocall"
+        return macro_head_name(node) == "@invokelatest"
+    end
+    kind(node) == K"call" || return false
+    name = call_head_name(node)
+    name in ("invokelatest", "invoke_in_world") && return true
+    if kind(node[1]) == K"."
+        return ident_leaf(node[1]) == "invokelatest"
+    end
+    return false
+end
+
+function walk_invokelatest!(node, src, path, added, rule, hits)
+    is_invokelatest_node(node) && node_touches_added(src, node, added) &&
+        push!(hits, (path, line_of(src, Int(first(byte_range(node)))), rule))
+    for i in 1:numchildren(node)
+        walk_invokelatest!(node[i], src, path, added, rule, hits)
+    end
+    return
+end
+
+function collect_invokelatest(root, files, src_for_path; whole::Bool)
+    return collect_src_walk(root, files, src_for_path; whole, rule = "invokelatest", walk_fn = walk_invokelatest!)
+end
+
+function is_env_write_node(node)
+    if kind(node) == K"="
+        numchildren(node) >= 1 || return false
+        lhs = node[1]
+        return kind(lhs) == K"ref" && numchildren(lhs) >= 1 && sourcetext(lhs[1]) == "ENV"
+    end
+    if kind(node) == K"call"
+        name = call_head_name(node)
+        name in ("delete!", "pop!") || return false
+        numchildren(node) >= 2 || return false
+        return sourcetext(node[2]) == "ENV"
+    end
+    return false
+end
+
+function walk_env_write!(node, src, path, added, rule, hits)
+    is_env_write_node(node) && node_touches_added(src, node, added) &&
+        push!(hits, (path, line_of(src, Int(first(byte_range(node)))), rule))
+    for i in 1:numchildren(node)
+        walk_env_write!(node[i], src, path, added, rule, hits)
+    end
+    return
+end
+
+function collect_env_write(root, files, src_for_path; whole::Bool)
+    return collect_src_walk(root, files, src_for_path; whole, rule = "env-write", walk_fn = walk_env_write!)
+end
+
+function function_has_kwargs_splat(node)
+    kind(node) in (K"function", K"=") || return false
+    st = sourcetext(node)
+    return occursin(r";\s*kwargs\.\.\.", st) || occursin(r",\s*kwargs\.\.\.", st)
+end
+
+function walk_kwargs_splat!(node, src, path, added, rule, hits)
+    if function_has_kwargs_splat(node) && node_touches_added(src, node, added)
+        push!(hits, (path, line_of(src, Int(first(byte_range(node)))), rule))
+    end
+    for i in 1:numchildren(node)
+        walk_kwargs_splat!(node[i], src, path, added, rule, hits)
+    end
+    return
+end
+
+function collect_kwargs_splat(root, files, src_for_path; whole::Bool)
+    return collect_src_walk(root, files, src_for_path; whole, rule = "kwargs-splat", walk_fn = walk_kwargs_splat!)
+end
+
+function walk_ban_exit!(node, src, path, added, rule, hits)
+    if kind(node) == K"call" && call_head_name(node) == "exit" && node_touches_added(src, node, added)
+        p = replace(path, '\\' => '/')
+        p in EXIT_SRC_ALLOWLIST && return
+        push!(hits, (path, line_of(src, Int(first(byte_range(node)))), rule))
+    end
+    for i in 1:numchildren(node)
+        walk_ban_exit!(node[i], src, path, added, rule, hits)
+    end
+    return
+end
+
+function collect_ban_exit(root, files, src_for_path; whole::Bool)
+    return collect_src_walk(root, files, src_for_path; whole, rule = "ban-exit", walk_fn = walk_ban_exit!)
+end
+
+function catch_stmt_log_only(node)
+    k = kind(node)
+    if k == K"macrocall"
+        head = macro_head_name(node)
+        return head in ("@warn", "@error", "@info", "@debug")
+    end
+    if k == K"call" && call_head_name(node) == "println"
+        return occursin("stderr", sourcetext(node))
+    end
+    return false
+end
+
+function catch_body_statement_nodes(node)
+    kind(node) == K"catch" || return SyntaxNode[]
+    out = SyntaxNode[]
+    function walk(node)
+        k = kind(node)
+        if k == K"macrocall" || k == K"call"
+            push!(out, node)
+            return
+        end
+        for i in 1:numchildren(node)
+            walk(node[i])
+        end
+        return
+    end
+    for i in 1:numchildren(node)
+        walk(node[i])
+    end
+    return out
+end
+
+function catch_body_log_only(node)
+    stmts = catch_body_statement_nodes(node)
+    isempty(stmts) && return false
+    for st in stmts
+        catch_stmt_log_only(st) || return false
+    end
+    return true
+end
+
+function swallowed_catch_hit_legacy(src::AbstractString, node)::Bool
+    kind(node) == K"catch" || return false
+    st = strip(sourcetext(node))
+    body = replace(st, r"^catch(?:\s+\w+)?" => "")
+    body = strip(body)
+    body = replace(body, r"^\w+\s+isa\s+InterruptException\s*&&\s*rethrow\(\)\s*" => "")
+    body = strip(body)
+    isempty(body) && return true
+    body == "nothing" && return true
+    occursin(r"^return\s+\S+$", body) && return true
+    lines = [strip(l) for l in eachsplit(body, '\n'; keepempty = false)]
+    !isempty(lines) && all(l -> isempty(l) || startswith(l, "#"), lines) && return true
+    return false
+end
+
+function verify_addprocs_kw_allowlist!()
+    lm = Distributed.LocalManager(1, true)
+    sm = Distributed.SSHManager(["localhost"])
+    live = Set{Symbol}()
+    union!(live, keys(Distributed.default_addprocs_params(lm)))
+    union!(live, keys(Distributed.default_addprocs_params(sm)))
+    live == ADDDROCS_KW_ALLOWLIST || die("self-test: addprocs allowlist $(live)")
+    return
+end
+
+function version_string_literal(node)
+    kind(node) == K"macrocall" || return nothing
+    numchildren(node) >= 2 || return nothing
+    head_txt = sourcetext(node[1])
+    head_txt in ("v", "@v_str", "v_str") || return nothing
+    inner = strip(sourcetext(node[2]), '"')
+    isempty(inner) && return nothing
+    try
+        return VersionNumber(inner)
+    catch
+        return nothing
+    end
+end
+
+function version_compare_sides(node)
+    kind(node) == K"call" || return nothing
+    numchildren(node) >= 3 || return nothing
+    op = sourcetext(node[2])
+    op in ("<", ">", "<=", ">=", "==", "===", "!=", "!==") || return nothing
+    a, b = node[1], node[3]
+    if sourcetext(a) == "VERSION"
+        v = version_string_literal(b)
+        v === nothing && return nothing
+        return (op, v)
+    end
+    if sourcetext(b) == "VERSION"
+        v = version_string_literal(a)
+        v === nothing && return nothing
+        return (flip_op(op), v)
+    end
+    return nothing
+end
+
+function flip_op(op::AbstractString)
+    op == "<" && return ">"
+    op == ">" && return "<"
+    op == "<=" && return ">="
+    op == ">=" && return "<="
+    return op
+end
+
+function version_compare_result(op::AbstractString, ver::VersionNumber, v::VersionNumber)
+    op == "<" && return ver < v
+    op == ">" && return ver > v
+    op == "<=" && return ver <= v
+    op == ">=" && return ver >= v
+    op == "==" && return ver == v
+    op == "===" && return ver == v
+    op == "!=" && return ver != v
+    op == "!==" && return ver != v
+    return ver < v
+end
+
+function project_julia_compat_bounds(root::AbstractString)
+    path = joinpath(root, "Project.toml")
+    isfile(path) || return nothing
+    data = TOML.parsefile(path)
+    compat = get(data, "compat", Dict{String, Any}())
+    spec = get(compat, "julia", nothing)
+    spec === nothing && return nothing
+    s = strip(String(spec))
+    isempty(s) && return nothing
+    m = match(r"^(\d+)\.(\d+)(?:\.(\d+))?", s)
+    m === nothing && return nothing
+    major = Base.parse(Int, m.captures[1])
+    minor = Base.parse(Int, m.captures[2])
+    patch = m.captures[3] === nothing ? 0 : Base.parse(Int, m.captures[3])
+    lo = VersionNumber(major, minor, patch)
+    hi = VersionNumber(major, minor + 1, 0)
+    return (lo, hi)
+end
+
+function dead_version_compare(bounds, op::AbstractString, literal::VersionNumber)
+    lo, _ = bounds
+    probe_hi = VersionNumber(lo.major, lo.minor, 999)
+    return version_compare_result(op, lo, literal) == version_compare_result(op, probe_hi, literal)
+end
+
+function dead_version_path(path::AbstractString)
+    p = replace(String(path), '\\' => '/')
+    startswith(p, "src/") && return true
+    startswith(p, "test/") && return true
+    startswith(p, "lib/") && return true
+    return false
+end
+
+function walk_dead_version!(node, bounds, src, path, added, hits)
+    sides = version_compare_sides(node)
+    if sides !== nothing && node_touches_added(src, node, added)
+        op, literal = sides
+        dead_version_compare(bounds, op, literal) &&
+            push!(hits, (path, line_of(src, Int(first(byte_range(node)))), "dead-version-gate"))
+    end
+    for i in 1:numchildren(node)
+        walk_dead_version!(node[i], bounds, src, path, added, hits)
+    end
+    return
+end
+
+function collect_dead_version(root, files, src_for_path; whole::Bool)
+    bounds_root = isempty(root) ? repo_root() : root
+    bounds = project_julia_compat_bounds(bounds_root)
+    bounds === nothing && return [("Project.toml", 1, "dead-version-gate")]
+    hits = Tuple{String, Int, String}[]
+    paths = whole ? filter(dead_version_path, tracked_jl(root)) : collect(keys(files))
+    for path in paths
+        dead_version_path(path) || continue
+        skipped_path(path) && continue
+        endswith(path, ".jl") || continue
+        whole || (isempty(added_lines(get(files, path, Hunk[]))) && continue)
+        src = lint_file_src(root, path, src_for_path)
+        src === nothing && continue
+        added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
+        whole || (isempty(added) && continue)
+        walk_dead_version!(parse_tree(src), bounds, src, path, added, hits)
+    end
+    return unique(hits)
+end
+
+function addprocs_kw_child_kw(node)
+    st = sourcetext(node)
+    occursin(r"\)\.\.\.", st) && return :splat
+    kind(node) == K"=" || return nothing
+    numchildren(node) >= 1 || return nothing
+    id = ident_leaf(node[1])
+    id === nothing && return nothing
+    return Symbol(id)
+end
+
+function addprocs_call_kws(node)
+    kind(node) == K"call" || return (Symbol[], false)
+    call_head_name(node) == "addprocs" || return (Symbol[], false)
+    has_splat = false
+    keys = Symbol[]
+    for i in 1:numchildren(node)
+        child = node[i]
+        kind(child) == K"parameters" || continue
+        for j in 1:numchildren(child)
+            kw = addprocs_kw_child_kw(child[j])
+            kw === nothing && continue
+            kw == :splat && (has_splat = true; continue)
+            push!(keys, kw)
+        end
+    end
+    return (keys, has_splat)
+end
+
+function walk_addprocs!(node, src, path, added, bad_hits, splat_hits)
+    if kind(node) == K"call" && call_head_name(node) == "addprocs"
+        keys, has_splat = addprocs_call_kws(node)
+        line = line_of(src, Int(first(byte_range(node))))
+        if has_splat && node_touches_added(src, node, added)
+            push!(splat_hits, (path, line, "addprocs-kwargs-splat"))
+        end
+        for k in keys
+            k in ADDDROCS_KW_ALLOWLIST && continue
+            node_touches_added(src, node, added) || continue
+            push!(bad_hits, (path, line, "addprocs-kwargs"))
+        end
+    end
+    for i in 1:numchildren(node)
+        walk_addprocs!(node[i], src, path, added, bad_hits, splat_hits)
+    end
+    return
+end
+
+function collect_addprocs_bad_kw(root, files, src_for_path; whole::Bool)
+    bad = Tuple{String, Int, String}[]
+    splat = Tuple{String, Int, String}[]
+    paths = whole ? filter(library_src_path, tracked_jl(root)) : collect(keys(files))
+    for path in paths
+        library_src_path(path) || continue
+        skipped_path(path) && continue
+        endswith(path, ".jl") || continue
+        whole || (isempty(added_lines(get(files, path, Hunk[]))) && continue)
+        src = lint_file_src(root, path, src_for_path)
+        src === nothing && continue
+        added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
+        whole || (isempty(added) && continue)
+        walk_addprocs!(parse_tree(src), src, path, added, bad, splat)
+    end
+    return unique(bad), unique(splat)
+end
+
+function collect_addprocs_kwargs_bad(root, files, src_for_path; whole::Bool)
+    bad, _ = collect_addprocs_bad_kw(root, files, src_for_path; whole)
+    return bad
+end
+
+function collect_addprocs_kwargs_splat(root, files, src_for_path; whole::Bool)
+    _, splat = collect_addprocs_bad_kw(root, files, src_for_path; whole)
+    return splat
+end
+
+function weak_assertion_hit(node, src, path, added)
+    kind(node) == K"macrocall" || return false
+    head = macro_head_name(node)
+    head in ("test", "@test") || return false
+    node_touches_added(src, node, added) || return false
+    numchildren(node) >= 2 || return false
+    arg = node[2]
+    if sourcetext(arg) == "true" || kind(arg) == K"Bool"
+        return true
+    end
+    if kind(arg) == K"call" && call_head_name(arg) == "isa" && numchildren(arg) >= 3
+        tail = ident_leaf(arg[3])
+        return tail == "Any"
+    end
+    if kind(arg) == K"call" && numchildren(arg) >= 3
+        op = sourcetext(arg[2])
+        op in ("==", "===") && return expr_same(arg[1], arg[3])
+    end
+    return false
+end
+
+function expr_same(node_a, node_b)
+    return sourcetext(node_a) == sourcetext(node_b)
+end
+
+function weak_assertion_throws_hit(node, src, path, added)
+    kind(node) == K"macrocall" || return false
+    macro_head_name(node) in ("@test_throws", "test_throws") || return false
+    node_touches_added(src, node, added) || return false
+    numchildren(node) < 2 && return false
+    arg = node[2]
+    kind(arg) == K"Identifier" && sourcetext(arg) == "Exception" && return true
+    return false
+end
+
+function walk_weak_assertion!(node, src, path, added, hits)
+    if weak_assertion_hit(node, src, path, added) || weak_assertion_throws_hit(node, src, path, added)
+        push!(hits, (path, line_of(src, Int(first(byte_range(node)))), "weak-assertion"))
+    end
+    for i in 1:numchildren(node)
+        walk_weak_assertion!(node[i], src, path, added, hits)
+    end
+    return
+end
+
+function collect_weak_assertion(root, files, src_for_path; whole::Bool)
+    whole && die("weak-assertion is diff-only")
+    hits = Tuple{String, Int, String}[]
+    for path in collect(keys(files))
+        test_path(path) || continue
+        skipped_path(path) && continue
+        endswith(path, ".jl") || continue
+        isempty(added_lines(get(files, path, Hunk[]))) && continue
+        src = lint_file_src(root, path, src_for_path)
+        src === nothing && continue
+        added = added_lines(get(files, path, Hunk[]))
+        walk_weak_assertion!(parse_tree(src), src, path, added, hits)
+    end
+    return unique(hits)
+end
+
+function count_swallowed_catch_legacy(root::AbstractString)
+    n = 0
+    for path in tracked_jl(root)
+        skipped_path(path) && continue
+        startswith(replace(path, '\\' => '/'), ".github/") && continue
+        src = read(joinpath(root, path), String)
+        function walk(node)
+            if kind(node) == K"catch" && swallowed_catch_hit_legacy(src, node)
+                n += 1
+            end
+            for i in 1:numchildren(node)
+                walk(node[i])
+            end
+            return
+        end
+        walk(parse_tree(src))
+    end
+    return n
+end
+
+function suppression_line_hit(line::AbstractString)
+    occursin("shellcheck disable=", line) && return true
+    occursin("zizmor: ignore", line) && return true
+    occursin(r"#\s*! format: off", line) && return true
+    occursin("runic: off", line) && return true
+    occursin("gitleaks:allow", line) && return true
+    occursin("treat_as_own", line) && return true
+    occursin(r"broken\s*=\s*true", line) && return true
+    occursin(r"ambiguities\s*=\s*false", line) && return true
+    return false
+end
+
+function collect_suppression_markers(root::AbstractString)
+    n = 0
+    for path in readlines(`git -C $root ls-files`)
+        skipped_path(path) && continue
+        full = joinpath(root, path)
+        isfile(full) || continue
+        if path == ".github/zizmor.yml"
+            src = read(full, String)
+            n += count(==("disable: true"), split(src, '\n'))
+            continue
+        end
+        if path == ".JETLSConfig.toml"
+            n += count(==("[[diagnostic.patterns]]"), split(read(full, String), '\n'))
+            continue
+        end
+        if path == ".github/aqua-check.sh"
+            occursin("stale_deps", read(full, String)) && occursin("ignore", read(full, String)) && (n += 1)
+            continue
+        end
+        endswith(path, ".jl") || endswith(path, ".sh") || endswith(path, ".yml") || endswith(path, ".yaml") ||
+            continue
+        for line in eachsplit(read(full, String), '\n')
+            suppression_line_hit(line) && (n += 1)
+        end
+    end
+    return n
+end
+
+function lint_mode_zero(root, files, src_for_path, collect_fn, ceiling_name)
+    added = collect_fn(root, files, src_for_path; whole = false)
+    n = report_hits(added)
+    whole = collect_fn(root, files, src_for_path; whole = true)
+    n += check_ceiling(ceiling_name, length(whole), 0)
+    return n
+end
+
+function main_ceiling_int(name::AbstractString, default::Int)
+    v = main_ceiling(name)
+    v === :unread && return -1
+    v === nothing && return default
+    return v
+end
+
+function check_swallowed_ceiling(measured::Int, constant::Int)
+    n = 0
+    if measured != constant
+        println(stderr, "lint: CEILING_SWALLOWED_CATCH: measured $(measured), constant $(constant)")
+        n += 1
+    end
+    prev = main_ceiling("CEILING_SWALLOWED_CATCH")
+    if prev === :unread
+        println(stderr, "lint: CEILING_SWALLOWED_CATCH: could not read the ceiling on origin/main")
+        n += 1
+    elseif prev !== nothing && constant > prev
+        main_rev = main_ceiling_int("CEILING_SWALLOWED_CATCH_RULE_REV", 1)
+        if CEILING_SWALLOWED_CATCH_RULE_REV <= main_rev || measured != constant
+            println(
+                stderr,
+                "lint: CEILING_SWALLOWED_CATCH: constant $(constant) above origin/main $(prev) without rule revision",
+            )
+            n += 1
+        end
+    end
+    return n
+end
+
 const BANNED_NEW = ("best-effort", "until", "lockstep", "pending", "known failure", "pre-existing")
 const CEILING_ID_MATCH = 4
 const CEILING_PROCESS_PATTERN = 37
 const CEILING_LOCK_CREATE = 2
 const CEILING_ENV_DEFAULT = 5
 const CEILING_ENV_DEFAULT_TEST = 12
-const CEILING_SWALLOWED_CATCH = 138
+const CEILING_SWALLOWED_CATCH_RULE_REV = 2
+const CEILING_SWALLOWED_CATCH = 146
 const CEILING_LOOP_SKIP = 0
 const CEILING_PR_REFS = 2
 const CEILING_EXCUSE_PHRASES = 24
+const CEILING_INVOKELATEST = 19
+const CEILING_ENV_WRITE = 38
+const CEILING_KWARGS_SPLAT = 22
+const CEILING_SUPPRESSION = 18
+const CEILING_ADDPROCS_KW_SPLAT = 2
+const ADDDROCS_KW_ALLOWLIST = Set{Symbol}([
+    :cmdline_cookie,
+    :dir,
+    :enable_threaded_blas,
+    :env,
+    :exeflags,
+    :exename,
+    :lazy,
+    :max_parallel,
+    :multiplex,
+    :shell,
+    :ssh,
+    :sshflags,
+    :topology,
+    :tunnel,
+])
 
 function tracked_jl(root::AbstractString)
     return filter(p -> endswith(p, ".jl") && !skipped_path(p), readlines(`git -C $root ls-files '*.jl'`))
@@ -2657,6 +3488,7 @@ end
 
 function swallowed_catch_hit(src::AbstractString, node)::Bool
     kind(node) == K"catch" || return false
+    catch_body_log_only(node) && return true
     st = strip(sourcetext(node))
     body = replace(st, r"^catch(?:\s+\w+)?" => "")
     body = strip(body)
@@ -2667,7 +3499,13 @@ function swallowed_catch_hit(src::AbstractString, node)::Bool
     occursin(r"^return\s+\S+$", body) && return true
     lines = [strip(l) for l in eachsplit(body, '\n'; keepempty = false)]
     !isempty(lines) && all(l -> isempty(l) || startswith(l, "#"), lines) && return true
-    return false
+    !isempty(lines) && all(
+        l ->
+            isempty(l) || startswith(l, "#") || occursin(r"^@(warn|error|info|debug)\b", l) ||
+                occursin(r"^println\s*\(\s*stderr", l),
+        lines,
+    ) && return true
+    return catch_body_log_only(node)
 end
 
 function walk_catch!(node, src, path, added, hits)
@@ -2868,6 +3706,19 @@ function report_hits(hits)
         "swallowed-catch" => "catch body drops the error",
         "skip-reasons" => "continue without a reason",
         "pr-refs" => "pull request or lockstep reference",
+        "ban-cd" => "cd() changes process working directory in library code",
+        "ban-global" => "global statement or mutable module-level binding",
+        "ban-const-bake" => "const initializer bakes runtime state into precompile",
+        "ban-init-sidefx" => "forbidden side effect in __init__ or precompile workload",
+        "ban-assert" => "@assert may be disabled at run time",
+        "invokelatest" => "invokelatest or invoke_in_world call",
+        "env-write" => "mutation of process ENV",
+        "kwargs-splat" => "function accepts kwargs... (unknown keywords pass silently)",
+        "ban-exit" => "exit() outside CLI entry-point allowlist",
+        "dead-version-gate" => "VERSION compare is constant on julia compat",
+        "addprocs-kwargs" => "addprocs keyword not in Distributed allowlist",
+        "addprocs-kwargs-splat" => "unverifiable kwargs splat passed to addprocs",
+        "weak-assertion" => "vague or tautological test assertion",
     )
     n = 0
     for (path, line, rule) in hits
@@ -3024,7 +3875,68 @@ function lint_env_default(root, files, src_for_path)
 end
 
 function lint_swallowed_catch(root, files, src_for_path)
-    return lint_mode_dual(root, files, src_for_path, collect_swallowed_catch, "CEILING_SWALLOWED_CATCH", CEILING_SWALLOWED_CATCH)
+    added = collect_swallowed_catch(root, files, src_for_path; whole = false)
+    n = report_hits(added)
+    whole = collect_swallowed_catch(root, files, src_for_path; whole = true)
+    n += check_swallowed_ceiling(length(whole), CEILING_SWALLOWED_CATCH)
+    return n
+end
+
+function lint_ban_cd(root, files, src_for_path)
+    return lint_mode_zero(root, files, src_for_path, collect_ban_cd, "CEILING_BAN_CD")
+end
+
+function lint_ban_global(root, files, src_for_path)
+    return lint_mode_zero(root, files, src_for_path, collect_ban_global, "CEILING_BAN_GLOBAL")
+end
+
+function lint_ban_const_bake(root, files, src_for_path)
+    return lint_mode_zero(root, files, src_for_path, collect_ban_const_bake, "CEILING_BAN_CONST_BAKE")
+end
+
+function lint_ban_init_sidefx(root, files, src_for_path)
+    return lint_mode_zero(root, files, src_for_path, collect_ban_init_sidefx, "CEILING_BAN_INIT_SIDEFX")
+end
+
+function lint_ban_assert(root, files, src_for_path)
+    return lint_mode_zero(root, files, src_for_path, collect_ban_assert, "CEILING_BAN_ASSERT")
+end
+
+function lint_invokelatest(root, files, src_for_path)
+    return lint_mode_dual(root, files, src_for_path, collect_invokelatest, "CEILING_INVOKELATEST", CEILING_INVOKELATEST)
+end
+
+function lint_env_write(root, files, src_for_path)
+    return lint_mode_dual(root, files, src_for_path, collect_env_write, "CEILING_ENV_WRITE", CEILING_ENV_WRITE)
+end
+
+function lint_kwargs_splat(root, files, src_for_path)
+    return lint_mode_dual(root, files, src_for_path, collect_kwargs_splat, "CEILING_KWARGS_SPLAT", CEILING_KWARGS_SPLAT)
+end
+
+function lint_ban_exit(root, files, src_for_path)
+    return lint_mode_zero(root, files, src_for_path, collect_ban_exit, "CEILING_BAN_EXIT")
+end
+
+function lint_suppression(root)
+    return check_ceiling("CEILING_SUPPRESSION", collect_suppression_markers(root), CEILING_SUPPRESSION)
+end
+
+function lint_dead_version(root, files, src_for_path)
+    return lint_mode_zero(root, files, src_for_path, collect_dead_version, "CEILING_DEAD_VERSION")
+end
+
+function lint_addprocs_kwargs(root, files, src_for_path)
+    bad_add, splat_add = collect_addprocs_bad_kw(root, files, src_for_path; whole = false)
+    n = report_hits(bad_add) + report_hits(splat_add)
+    bad_whole, splat_whole = collect_addprocs_bad_kw(root, files, src_for_path; whole = true)
+    n += check_ceiling("CEILING_ADDPROCS_KW_BAD", length(bad_whole), 0)
+    n += check_ceiling("CEILING_ADDPROCS_KW_SPLAT", length(splat_whole), CEILING_ADDPROCS_KW_SPLAT)
+    return n
+end
+
+function lint_weak_assertion(root, files, src_for_path)
+    return report_hits(collect_weak_assertion(root, files, src_for_path; whole = false))
 end
 
 function lint_pr_refs(root, files, src_for_path)
@@ -3051,6 +3963,19 @@ const GATE_LINT_NAMES = (
     "env-default",
     "swallowed-catch",
     "pr-refs",
+    "ban-cd",
+    "ban-global",
+    "ban-const-bake",
+    "ban-init-sidefx",
+    "ban-assert",
+    "invokelatest",
+    "env-write",
+    "kwargs-splat",
+    "ban-exit",
+    "suppression",
+    "dead-version-gate",
+    "addprocs-kwargs",
+    "weak-assertion",
 )
 
 function lint_diff_mode(mode, root, files, src_for)
@@ -3067,6 +3992,19 @@ function lint_diff_mode(mode, root, files, src_for)
     mode == "env-default" && return lint_env_default(root, files, src_for)
     mode == "swallowed-catch" && return lint_swallowed_catch(root, files, src_for)
     mode == "pr-refs" && return lint_pr_refs(root, files, src_for)
+    mode == "ban-cd" && return lint_ban_cd(root, files, src_for)
+    mode == "ban-global" && return lint_ban_global(root, files, src_for)
+    mode == "ban-const-bake" && return lint_ban_const_bake(root, files, src_for)
+    mode == "ban-init-sidefx" && return lint_ban_init_sidefx(root, files, src_for)
+    mode == "ban-assert" && return lint_ban_assert(root, files, src_for)
+    mode == "invokelatest" && return lint_invokelatest(root, files, src_for)
+    mode == "env-write" && return lint_env_write(root, files, src_for)
+    mode == "kwargs-splat" && return lint_kwargs_splat(root, files, src_for)
+    mode == "ban-exit" && return lint_ban_exit(root, files, src_for)
+    mode == "suppression" && return lint_suppression(root)
+    mode == "dead-version-gate" && return lint_dead_version(root, files, src_for)
+    mode == "addprocs-kwargs" && return lint_addprocs_kwargs(root, files, src_for)
+    mode == "weak-assertion" && return lint_weak_assertion(root, files, src_for)
     return die("unknown mode $(mode)")
 end
 
@@ -3083,6 +4021,8 @@ function lint_all(root)
             lint_stdlib_compat(root)
         elseif mode == "runtests"
             lint_runtests(root)
+        elseif mode == "suppression"
+            lint_suppression(root)
         else
             lint_diff_mode(mode, root, files, src_for)
         end

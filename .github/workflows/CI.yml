@@ -1276,7 +1276,7 @@ jobs:
           git fetch --no-tags origin main
           julia --project=.github/runic --startup-file=no -e 'using Pkg; Pkg.instantiate()'
           julia --project=.github/runic --startup-file=no scripts/lint/diff_lint.jl self-test
-          for mode in banned-words skip-reasons id-match process-pattern lock-create env-default swallowed-catch pr-refs; do
+          for mode in banned-words skip-reasons id-match process-pattern lock-create env-default swallowed-catch pr-refs dead-version-gate addprocs-kwargs weak-assertion; do
             julia --project=.github/runic --startup-file=no scripts/lint/diff_lint.jl "$mode"
           done
 

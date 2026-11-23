@@ -126,7 +126,7 @@ end
 end
 
 @testset "pmap cancel stays within interrupt_grace + 11s" begin
-    if VERSION < v"1.14.0-"
+    if !isdefined(Base, :CANCEL_TOKEN)
         @test_skip "Julia 1.13: pmap SIGINT budget not exercised here (#123); builds with Base.CANCEL_TOKEN run it"
     else
         grace = DistSSHRun._resolve_interrupt_grace(nothing)

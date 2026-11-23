@@ -9,6 +9,9 @@ if !isdefined(@__MODULE__, :_assert_no_binding_world_stderr!)
             )
             occursin(pat, text) && return pat
         end
+        if occursin("Method definition", text) && occursin("overwritten", text)
+            return "Method definition overwritten"
+        end
         return nothing
     end
 
