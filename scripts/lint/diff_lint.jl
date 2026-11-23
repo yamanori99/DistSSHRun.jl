@@ -1484,8 +1484,9 @@ function self_test_body_main()
     ev_ok = excuse_word_errors("This is known on main https://github.com/yamanori99/DistSSHRun.jl/actions/runs/1\n")
     isempty(ev_ok) || die("self-test: evidence pass $(ev_ok)")
     has_main_run_url("main https://githubXcom/t/p/actions/runs/1") && die("self-test: github host")
-    markdown_removed_names("removed `old_api` in favor of `new_api`") == ["old_api"] ||
-        die("self-test: removed names favor")
+    markdown_removed_names("Removed: `old_api`") == ["old_api"] || die("self-test: removed names Removed line")
+    isempty(markdown_removed_names("removed `old_api` in favor of `new_api`")) ||
+        die("self-test: removed names prose ignored")
     fence_ev = "## Testing\n\n```text\n## Worker output\n```\n\nKnown failure.\n\n## Risk\n"
     any(endswith(e, "known") for e in excuse_word_errors(section_named_text(fence_ev, "Testing"))) ||
         die("self-test: evidence after fence heading")
@@ -3747,10 +3748,10 @@ end
 function markdown_removed_names(src::AbstractString)
     names = String[]
     for line in eachsplit(src, '\n'; keepempty = false)
-        occursin(r"removed|no longer", line) || continue
-        head = first(split(line, r"in favor of|replaced by"; limit = 2))
-        for m in eachmatch(r"`([^`]+)`", head)
-            tok = m.captures[1]
+        m = match(r"^Removed:\s*(.*)$", strip(line))
+        m === nothing && continue
+        for mm in eachmatch(r"`([^`]+)`", m.captures[1])
+            tok = mm.captures[1]
             occursin(r"^[A-Za-z_][A-Za-z0-9_!]*$", tok) || continue
             push!(names, tok)
         end

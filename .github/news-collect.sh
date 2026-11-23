@@ -6,6 +6,7 @@
 # A fragment is changelog.d/<slug>.md. No YAML and no package field:
 #   category: breaking|planned|added|fixed|changed|skip
 #   <one-line reason, only for skip>
+#   optional: Removed: `name` `other` (lint audit for retired API names; not a NEWS bullet)
 #   <blank line>
 #   bullet text
 #
@@ -81,7 +82,10 @@ validate_file() {
     die "${base} must not contain a ## heading"
     return 1
   fi
-  mapfile -t lines <"$file"
+  lines=()
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    lines+=("${line}")
+  done <"$file"
   if [[ ${#lines[@]} -lt 3 ]]; then
     die "${base} needs a category, a blank line, and bullet text"
     return 1
@@ -159,7 +163,10 @@ print_bodies() {
   if [[ ${#files[@]} -eq 0 ]]; then
     return 0
   fi
-  mapfile -t sorted < <(printf '%s\n' "${files[@]}" | LC_ALL=C sort)
+  sorted=()
+  while IFS= read -r line; do
+    [[ -n "${line}" ]] && sorted+=("${line}")
+  done < <(printf '%s\n' "${files[@]}" | LC_ALL=C sort)
   for path in "${sorted[@]}"; do
     cat "$path"
   done
@@ -366,7 +373,9 @@ check_refs() {
   git cat-file -p "$new:NEWS.md" >"$work/head-news"
   version="$(version_of "$work/Project.toml")"
   local -a paths=()
-  mapfile -t paths < <(
+  while IFS= read -r line; do
+    [[ -n "${line}" ]] && paths+=("${line}")
+  done < <(
     {
       list_fragment_paths "$old"
       list_fragment_paths "$new"

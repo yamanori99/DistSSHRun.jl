@@ -1,0 +1,4 @@
+# CI.yml jobs omitted from gate.needs, RESULT_* on the gate job, and judge.sh.
+# One job id per line (hyphenated id as in the workflow). Blank lines and # comments are ignored.
+gate
+notify

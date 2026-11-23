@@ -83,7 +83,11 @@ EOF
   shopt -u nullglob
   # LC_ALL=C so CI merge checkouts and local filesystems emit the same order.
   if ((${#test_entries[@]} > 0)); then
-    mapfile -t test_entries < <(printf '%s\n' "${test_entries[@]}" | LC_ALL=C sort)
+  sorted_tmp=()
+  while IFS= read -r line; do
+    [[ -n "${line}" ]] && sorted_tmp+=("${line}")
+  done < <(printf '%s\n' "${test_entries[@]}" | LC_ALL=C sort)
+    test_entries=("${sorted_tmp[@]}")
   fi
   for entry in "${test_entries[@]}"; do
     name="$(basename "$entry")"

@@ -291,7 +291,10 @@ if [[ "$RUN_E2E" -eq 1 ]]; then
   '
   julia_e2e=(julia --project=. --color=yes)
   if [[ "${DISTSSH_CODE_COVERAGE:-}" == "1" ]]; then
-    mapfile -d '' _cov_flags < <("${DOCKER_ROOT}/../scripts/e2e-coverage-flags.sh" "${KIT_ROOT}")
+    _cov_flags=()
+    while IFS= read -r -d '' _cov_line; do
+      _cov_flags+=("${_cov_line}")
+    done < <("${DOCKER_ROOT}/../scripts/e2e-coverage-flags.sh" "${KIT_ROOT}")
     julia_e2e+=("${_cov_flags[@]}")
   fi
   e2e_status=0
