@@ -42,7 +42,7 @@ end
 """
     kit_process_start_key(pid) -> Union{Nothing,String}
 
-Identity of this OS pid's start (Linux `/proc` starttime, else `ps -o lstart=`).
+Identity of this OS pid's start (Linux `/proc` starttime, else `TZ=UTC LC_ALL=C /bin/ps -o lstart=`).
 `nothing` if the pid is gone, unreadable, or Windows.
 """
 function kit_process_start_key(pid::Integer)::Union{Nothing, String}
@@ -51,67 +51,19 @@ function kit_process_start_key(pid::Integer)::Union{Nothing, String}
     if isfile(string("/proc/", Int(pid), "/stat"))
         return _linux_proc_start_key(pid)
     end
+    isfile("/bin/ps") || return nothing
     try
-        s = strip(read(`ps -o lstart= -p $(Int(pid))`, String))
+        s = withenv("TZ" => "UTC", "LC_ALL" => "C") do
+            strip(read(`/bin/ps -o lstart= -p $(Int(pid))`, String))
+        end
         return isempty(s) ? nothing : s
     catch
         return nothing
     end
 end
 
-"""
-    kit_output_dir_lock!(output_dir) -> release::Function
-
-Best-effort exclusive lock on `output_dir` for the duration of one `go!` /
-`drive!` run, so a caller that (mistakenly) schedules two runs into the same
-`output_dir` concurrently fails fast instead of interleaving/overwriting
-results — the failure mode a queue would otherwise only notice by diffing
-corrupted output.
-
-Writes `output_dir/.kit.lock` (this process's pid, plain text). An existing
-lock naming a still-alive **other** pid throws `ArgumentError` immediately. A lock
-naming a dead pid is stale and gets overwritten. Same-pid re-lock does not throw;
-overlapping in-process `go!` / `drive!` (and hostinfo / pool / setup /
-sync / collect / pipeline) throw.
-
-Returns a zero-arg closure that releases the lock; call it in a `finally`.
-Removal only happens if the file still names this process's pid (avoids
-deleting a newer run's lock after, e.g., a slow filesystem or a bug).
-"""
-function kit_output_dir_lock!(output_dir::AbstractString)
-    mkpath(output_dir)
-    lock_path = joinpath(output_dir, ".kit.lock")
-    mypid = getpid()
-    if isfile(lock_path)
-        existing = try
-            strip(read(lock_path, String))
-        catch
-            ""
-        end
-        existing_pid = tryparse(Int, existing)
-        if existing_pid !== nothing && existing_pid != mypid && kit_pid_alive(existing_pid)
-            throw(
-                ArgumentError(
-                    "another DistSSHRun run (pid $(existing_pid)) already holds " *
-                        "$(lock_path) — refusing to run concurrently against the same output_dir",
-                )
-            )
-        end
-    end
-    write(lock_path, string(mypid))
-    return () -> begin
-        try
-            if isfile(lock_path) && strip(read(lock_path, String)) == string(mypid)
-                rm(lock_path; force = true)
-            end
-        catch
-            # best-effort only
-        end
-    end
-end
-
 # One in-process Kit job at a time (`go!` / `drive!` / `pool!` / …).
-# `.kit.lock` is per `output_dir` and pid; it does not serialize two runs in
+# `.distssh.lock` is per `output_dir` and pid; it does not serialize two runs in
 # this process. Nested calls on the same task (`pipeline!` → `drive!`) are ok.
 const _KIT_INPROC_GATE = ReentrantLock()
 const _KIT_INPROC_OWNER = Ref{Union{Nothing, Task}}(nothing)

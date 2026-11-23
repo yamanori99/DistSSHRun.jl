@@ -79,13 +79,17 @@ using Test
     @testset "prune leaves" begin
         _with_tempdir() do proj
             go_old = joinpath(proj, ".distssh", "go", "job_20200101T000000Z")
-            go_keep = joinpath(proj, "scripts", ".distssh", "go", "job_keep_id")
+            go_keep = joinpath(proj, "scripts", ".distssh", "go", "job_20200101T000000Z_keep_id")
+            go_exp10 = joinpath(proj, ".distssh", "go", "job_20200101T000000Z_exp10")
+            go_exp1b = joinpath(proj, ".distssh", "go", "job_20260101T000000Z_exp1-b")
             drive = joinpath(proj, "scripts", ".distssh", "drive")
             mkpath(go_old)
             mkpath(go_keep)
+            mkpath(go_exp10)
+            mkpath(go_exp1b)
             mkpath(drive)
             write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
-            run_keep = joinpath(proj, "scripts", ".distssh", "runs", "go", "job_keep_id")
+            run_keep = joinpath(proj, "scripts", ".distssh", "runs", "go", "job_20200101T000000Z_keep_id")
             run_old = joinpath(proj, ".distssh", "runs", "drive", "job_20200101T000000Z")
             mkpath(run_keep)
             mkpath(run_old)
@@ -93,7 +97,12 @@ using Test
             @test n == 2
             @test isdir(go_old)
             @test !isdir(go_keep)
+            @test isdir(go_exp10)
+            @test isdir(go_exp1b)
             @test isdir(drive)
+            n_year = DistSSHRun.prune_kit_leaf_dirs!(proj; id = "2026")
+            @test n_year == 0
+            @test isdir(go_exp1b)
             @test isdir(run_old)
             @test !isdir(run_keep)
             fake = joinpath(proj, ".distssh", "go", "job_fake")
@@ -199,6 +208,103 @@ using Test
             @test !isdir(run_old)
             @test !isdir(fake)
             @test isfile(joinpath(proj, "Project.toml"))
+        end
+
+        _with_tempdir() do proj
+            live = joinpath(proj, ".distssh", "go", "job_20200101T000000Z_exp1")
+            dead = joinpath(proj, ".distssh", "go", "job_20200101T000000Z_exp10")
+            mkpath(live)
+            mkpath(dead)
+            release = DistSSHRun.output_dir_lock!(live; id = "exp1")
+            n_dead = DistSSHRun.prune_kit_leaf_dirs!(proj; id = "exp10")
+            @test n_dead == 1
+            @test !isdir(dead)
+            @test isdir(live)
+            err = try
+                DistSSHRun.prune_kit_leaf_dirs!(proj)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("live lock", err.msg)
+            @test isdir(live)
+            release()
+            @test DistSSHRun.prune_kit_leaf_dirs!(proj) >= 1
+            @test !isdir(live)
+        end
+
+        _with_tempdir() do proj
+            parent = joinpath(proj, ".distssh", "go")
+            leaf = joinpath(parent, "job_20200101T000000Z_old")
+            mkpath(leaf)
+            write(joinpath(leaf, "keep.txt"), "x")
+            DistSSHRun._restore_dir_mtime(leaf, time() - 10 * 86400)
+            born = mtime(leaf)
+            chmod(parent, 0o555)
+            err = try
+                DistSSHRun.prune_kit_leaf_dirs!(proj)
+                nothing
+            catch e
+                e
+            finally
+                chmod(parent, 0o755)
+            end
+            @test err isa Base.IOError
+            @test isdir(leaf)
+            @test isfile(joinpath(leaf, "keep.txt"))
+            @test abs(mtime(leaf) - born) < 2
+        end
+
+        _with_tempdir() do proj
+            untagged = joinpath(
+                proj, ".distssh", "go", "job_20200101T000000Z_report_20260803T134428Z",
+            )
+            tagged = joinpath(proj, ".distssh", "go", "job_20260803T134428Z_exp1")
+            mkpath(untagged)
+            mkpath(tagged)
+            write(joinpath(untagged, "keep.txt"), "x")
+            @test DistSSHRun._leaf_job_id(basename(untagged)) === nothing
+            @test DistSSHRun._leaf_job_id(basename(tagged)) == "exp1"
+            @test DistSSHRun._leaf_job_id("job_20200101T000000Z-99_exp1") == "exp1"
+            @test DistSSHRun._leaf_job_id("job_20200101T000000Z-99") === nothing
+            @test DistSSHRun._leaf_job_id("job_20200101T000000Z_ exp1") === nothing
+            @test DistSSHRun._leaf_job_id(
+                "job_20200101T000000Z_report_20260803T134428Z-99",
+            ) === nothing
+            n_untagged = DistSSHRun.prune_kit_leaf_dirs!(proj; id = "report_20260803T134428Z")
+            @test n_untagged == 0
+            @test isdir(untagged)
+            @test isfile(joinpath(untagged, "keep.txt"))
+            n_tagged = DistSSHRun.prune_kit_leaf_dirs!(proj; id = "exp1")
+            @test n_tagged == 1
+            @test !isdir(tagged)
+            @test isdir(untagged)
+            outside = joinpath(proj, "outside")
+            mkpath(outside)
+            linked = joinpath(proj, ".distssh", "go", "job_20200101T000000Z_link")
+            symlink(outside, linked)
+            err_link = try
+                DistSSHRun.prune_kit_leaf_dirs!(proj)
+                nothing
+            catch e
+                e
+            end
+            @test err_link isa ArgumentError
+            @test occursin("symlink leaf", err_link.msg)
+            @test islink(linked)
+            @test !isfile(joinpath(outside, ".distssh.lock"))
+            spaced = joinpath(proj, ".distssh", "go", "job_20200101T000000Z_exp1")
+            mkpath(spaced)
+            DistSSHRun.prune_kit_leaves(
+                String[], "~/App.jl", proj; confirm = false, id = " exp1 ",
+            )
+            @test !isdir(spaced)
+            nasty = "release' \$(echo pwned) ~"
+            @test DistSSHRun._prune_remote_shell("~/App.jl"; id = nasty) isa String
+            @test_throws ArgumentError DistSSHRun.prune_kit_leaves(
+                String[], "~/App.jl", proj; confirm = false, id = nasty,
+            )
         end
 
         _with_fake_remotes() do state_dir

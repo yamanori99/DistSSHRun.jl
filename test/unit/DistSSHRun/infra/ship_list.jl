@@ -679,8 +679,12 @@ end
                 run(`git -C $repo commit --quiet -m ignore`)
                 write(joinpath(repo, "extra.jl"), "e = 1\n")
                 plain = joinpath(tmp, "plain")
-                cp(repo, plain)
-                rm(joinpath(plain, ".git"); force = true, recursive = true)
+                mkpath(plain)
+                for name in readdir(repo)
+                    if name != ".git"
+                        cp(joinpath(repo, name), joinpath(plain, name))
+                    end
+                end
                 listed = DistSSHRun.ship_send_list(repo)
                 @test listed == DistSSHRun.ship_send_list(plain)
                 @test "tracked.jl" in listed

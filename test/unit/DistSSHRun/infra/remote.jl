@@ -363,8 +363,8 @@ end
     @testset "delete shell refuses an unowned run leaf stamp" begin
         script = DistSSHRun._remote_delete_shell("/tmp/app")
         @test occursin("refusing to delete unowned run leaf", script)
-        @test occursin("_dsk_assert_run_leaves_owned", script)
-        @test occursin("_dsk_first_unowned_stamp", script)
+        @test occursin("_distssh_assert_run_leaves_owned", script)
+        @test occursin("_distssh_first_unowned_stamp", script)
         @test occursin("DistSSHRun ", script)
         owned_sh = DistSSHRun._remote_run_toml_owned_check_sh()
         @test occursin(DistSSHRun._run_toml_writer_awk_ere(), owned_sh)
@@ -902,6 +902,51 @@ end
         end
     end
 
+    @testset "prune shell exits before rm when a leaf list write fails" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, ".distssh", "go", "job_ok")
+            mkpath(leaf)
+            write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            bin = joinpath(d, "bin")
+            mkpath(bin)
+            write(
+                joinpath(bin, "mktemp"),
+                """
+                #!/bin/sh
+                nfile="\$TMPDIR/distssh-mktemp-n"
+                n=0
+                [ -f "\$nfile" ] && n=\$(cat "\$nfile")
+                n=\$((n + 1))
+                printf '%s\\n' "\$n" > "\$nfile"
+                f=\$(/usr/bin/mktemp)
+                if [ "\$n" = 1 ]; then
+                  chmod 444 "\$f"
+                fi
+                printf '%s\\n' "\$f"
+                """,
+            )
+            chmod(joinpath(bin, "mktemp"), 0o755)
+            err = IOBuffer()
+            proc = withenv("PATH" => bin * ":" * ENV["PATH"], "TMPDIR" => d) do
+                run(
+                    ignorestatus(
+                        pipeline(
+                            `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                            stdout = devnull,
+                            stderr = err,
+                        ),
+                    );
+                    wait = true,
+                )
+            end
+            @test proc.exitcode != 0
+            @test occursin("could not record a leaf", String(take!(err)))
+            @test isdir(leaf)
+            @test isfile(joinpath(leaf, "run.toml"))
+        end
+    end
+
     @testset "delete shell scans nested deploy runs not the git root" begin
         mktempdir() do d
             gitroot = joinpath(d, "Repo")
@@ -984,11 +1029,161 @@ end
     @testset "delete shell ignores a project run.toml under the shipped src tree" begin
         delete_sh = DistSSHRun._remote_delete_shell("/tmp/app")
         @test occursin("-mindepth 2 -maxdepth 2", delete_sh)
-        @test occursin("""_dsk_first_unowned_stamp "\$_root" "\$_layout\"""", delete_sh)
+        @test occursin("""_distssh_first_unowned_stamp "\$_root" "\$_layout\"""", delete_sh)
         @test occursin("for _layout in ships runs", delete_sh)
         prune_sh = DistSSHRun._prune_remote_shell("/tmp/app")
-        @test occursin("""_bad=\$(_dsk_first_unowned_stamp "\$_child")""", prune_sh)
-        @test !occursin("""_dsk_first_unowned_stamp "\$_child" ships""", prune_sh)
+        @test occursin("""_bad=\$(_distssh_first_unowned_stamp "\$_child")""", prune_sh)
+        @test !occursin("""_distssh_first_unowned_stamp "\$_child" ships""", prune_sh)
+        # The setup SSH double matches `mkdir -p` before DISTSSH_PRUNE_LEAVES and exits 0.
+        @test !occursin("mkdir -p", prune_sh)
+        mktempdir() do d
+            root = joinpath(d, "app")
+            hit = joinpath(root, ".distssh", "go", "job_20200101T000000Z_exp1")
+            miss = joinpath(root, ".distssh", "go", "job_20200101T000000Z_exp10")
+            year = joinpath(root, ".distssh", "go", "job_20260101T000000Z")
+            mkpath(hit)
+            mkpath(miss)
+            mkpath(year)
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root; id = "exp1"))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode == 0
+            @test !isdir(hit)
+            @test isdir(miss)
+            @test isdir(year)
+            spaced = joinpath(root, ".distssh", "go", "job_20200101T000000Z-99_exp1")
+            mkpath(spaced)
+            proc_sp = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root; id = DistSSHRun._parse_kit_job_id(" exp1 ")))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc_sp.exitcode == 0
+            @test !isdir(spaced)
+            outside = joinpath(d, "outside-leaf")
+            mkpath(outside)
+            linked = joinpath(root, ".distssh", "go", "job_20200101T000000Z_link")
+            symlink(outside, linked)
+            err_l = IOBuffer()
+            proc_l = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root; id = "link"))`;
+                        stdout = devnull,
+                        stderr = err_l,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc_l.exitcode != 0
+            @test occursin("symlink leaf", String(take!(err_l)))
+            @test islink(linked)
+            @test isdir(outside)
+            @test !isfile(joinpath(outside, ".distssh.lock"))
+            rm(linked)
+            release = DistSSHRun.output_dir_lock!(miss)
+            err = IOBuffer()
+            proc2 = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc2.exitcode != 0
+            @test occursin("live lock", String(take!(err)))
+            @test isdir(miss)
+            release()
+            untagged = joinpath(
+                root, ".distssh", "go", "job_20200101T000000Z_report_20260803T134428Z",
+            )
+            mkpath(untagged)
+            write(joinpath(untagged, "keep.txt"), "x")
+            proc_u = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root; id = "report_20260803T134428Z"))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc_u.exitcode == 0
+            @test isdir(untagged)
+            @test isfile(joinpath(untagged, "keep.txt"))
+            suffix_only = joinpath(
+                root, ".distssh", "go", "job_20200101T000000Z_report_20260803T134428Z-99",
+            )
+            mkpath(suffix_only)
+            proc_s = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root; id = "report_20260803T134428Z-99"))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc_s.exitcode == 0
+            @test isdir(suffix_only)
+            drive = joinpath(root, ".distssh", "drive")
+            mkpath(drive)
+            write(joinpath(drive, "keep.txt"), "x")
+            release_d = DistSSHRun.output_dir_lock!(drive)
+            err_d = IOBuffer()
+            proc_d = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = err_d,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc_d.exitcode != 0
+            @test occursin("live lock", String(take!(err_d)))
+            @test isdir(drive)
+            @test isfile(joinpath(drive, "keep.txt"))
+            release_d()
+            stuck = joinpath(root, ".distssh", "go", "job_20200101T000000Z_stuck")
+            mkpath(stuck)
+            write(joinpath(stuck, "keep.txt"), "x")
+            parent = joinpath(root, ".distssh", "go")
+            chmod(parent, 0o555)
+            err_r = IOBuffer()
+            proc_r = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = err_r,
+                    ),
+                );
+                wait = true,
+            )
+            chmod(parent, 0o755)
+            @test proc_r.exitcode != 0
+            @test occursin("could not remove a leaf", String(take!(err_r)))
+            @test isdir(stuck)
+        end
         mktempdir() do d
             root = joinpath(d, "app")
             leaf = joinpath(root, "ships", "20260101T000000Z-abcd")

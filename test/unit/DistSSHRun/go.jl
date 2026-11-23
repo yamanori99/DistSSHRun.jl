@@ -397,9 +397,14 @@ using Dates
             String[],
             "julia"
         )
-        @test startswith(inner, "cd ")
+        @test startswith(inner, "_distssh_start_hex()")
+        @test occursin("cd ", inner)
         slot = "demos/output/go_sim/root@192.0.2.10-1"
-        @test occursin("cd $(DistSSHRun._remote_shell_path_word("~/proj")) && mkdir -p $(DistSSHRun._remote_shell_path_word(slot))", inner)
+        slot_q = DistSSHRun._remote_shell_path_word(slot)
+        @test occursin("_distssh_hold_lock $(slot_q)", inner)
+        @test occursin("output lock: refusing", inner)
+        @test !occursin("\$(dirname", inner)
+        @test occursin("cd $(DistSSHRun._remote_shell_path_word("~/proj")) && mkdir -p $(slot_q)", inner)
         @test occursin("mkdir -p $(DistSSHRun._remote_shell_path_word(slot * "/.distssh"))", inner)
         log_q = DistSSHRun._remote_shell_path_word(slot * "/julia.stdout.log")
         @test occursin("tee $log_q", inner) || occursin("tee " * log_q, inner)
@@ -773,7 +778,7 @@ using Dates
             @test occursin("Run `julia -m DistSSHKit help go` for flags.", err.msg)
             @test !occursin("--help", err.msg)
             @test isfile(joinpath(dirty, "stale.txt"))
-            @test !isfile(joinpath(dirty, ".kit.lock"))
+            @test !isfile(joinpath(dirty, ".distssh.lock"))
             spec_err = try
                 DistSSHRun.go!(
                     script;
@@ -856,7 +861,7 @@ using Dates
                 end
                 @test err !== nothing
                 @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
-                @test !isfile(joinpath(out, ".kit.lock"))
+                @test !isfile(joinpath(out, ".distssh.lock"))
 
                 bad = @async error("hash failed early")
                 lock(DistSSHRun._PENDING_INPUT_HASH_LOCK) do
@@ -881,7 +886,7 @@ using Dates
                 end
                 @test err2 isa TaskFailedException
                 @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
-                @test !isfile(joinpath(out2, ".kit.lock"))
+                @test !isfile(joinpath(out2, ".distssh.lock"))
             finally
                 try
                     DistSSHRun.await_declared_input_hashes!()
@@ -971,10 +976,10 @@ using Dates
             rm(proj; recursive = true, force = true)
             function release()
                 released[] = true
-                lock_path = joinpath(batch, ".kit.lock")
+                lock_path = joinpath(batch, ".distssh.lock")
                 isfile(lock_path) && rm(lock_path; force = true)
             end
-            DistSSHRun.kit_output_dir_lock!(batch)
+            DistSSHRun.output_dir_lock!(batch)
             result = DistSSHRun.GoResult(
                 true,
                 nothing,
@@ -993,7 +998,7 @@ using Dates
                 String[],
             )
             @test released[]
-            @test DistSSHRun.kit_output_dir_lock!(batch) isa Function
+            @test DistSSHRun.output_dir_lock!(batch) isa Function
             rm(pack.directory; recursive = true, force = true)
         finally
             DistSSHRun._clear_active_deploy_record!()

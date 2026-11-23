@@ -8,7 +8,7 @@ function prune_kit_leaf_dirs!(
         skip_setup::Union{Nothing, AbstractString} = nothing,
     )::Int
     isdir(root) || return 0
-    idn = id === nothing ? nothing : String(id)
+    idn = id === nothing ? nothing : _parse_kit_job_id(String(id))
     skip = skip_setup === nothing ? nothing : realpath(String(skip_setup))
     victims = String[]
     for (dir, _, _) in walkdir(String(root); onerror = Returns(nothing))
@@ -51,12 +51,62 @@ function prune_kit_leaf_dirs!(
         isdir(p) || continue
         _assert_kit_tree_stamps_owned!(p)
     end
+    refused = String[]
     n = 0
     for p in victims
         isdir(p) || continue
-        rm(p; recursive = true, force = true)
-        n += 1
+        if islink(p)
+            push!(refused, "refusing to prune symlink leaf $p")
+            continue
+        end
+        reason = _output_lock_prune_block(p)
+        if reason !== nothing
+            push!(refused, reason)
+            continue
+        end
+        born_st = stat(p)
+        release = try
+            output_dir_lock!(p)
+        catch e
+            e isa ArgumentError || rethrow()
+            push!(refused, e.msg)
+            continue
+        end
+        removed = false
+        try
+            self = joinpath(p, _OUTPUT_LOCK_NAME)
+            reason = _output_lock_prune_block(p; skip = self)
+            if reason !== nothing
+                push!(refused, reason)
+                continue
+            end
+            stage = mktempdir(dirname(p); prefix = ".prune-")
+            aside = joinpath(stage, basename(p))
+            try
+                mv(p, aside)
+                rm(stage; recursive = true, force = true)
+            catch err
+                if !ispath(p) && isdir(aside)
+                    mv(aside, p)
+                end
+                if isdir(stage) && isempty(readdir(stage))
+                    rm(stage)
+                end
+                rethrow(err)
+            end
+            removed = true
+            n += 1
+        finally
+            release()
+            if !removed && isdir(p) && !islink(p)
+                st = stat(p)
+                if st.device == born_st.device && st.inode == born_st.inode
+                    _restore_dir_mtime(p, born_st.mtime)
+                end
+            end
+        end
     end
+    isempty(refused) || throw(ArgumentError(join(unique(refused), "\n")))
     return n
 end
 
@@ -80,12 +130,23 @@ end
 
 function _prune_id_ok(name::AbstractString, id::Union{Nothing, String})::Bool
     id === nothing && return true
-    return occursin(id, String(name))
+    job = _leaf_job_id(name)
+    job === nothing && return false
+    return job == id
 end
 
 function _prune_age_ok(path::AbstractString, older_days::Union{Nothing, Integer})::Bool
     older_days === nothing && return true
     return (time() - mtime(path)) >= Float64(older_days) * 86400
+end
+
+"""Put the directory mtime back to `stamp` seconds since the epoch."""
+function _restore_dir_mtime(path::AbstractString, stamp::Real)
+    sec = Clong(floor(Int, Float64(stamp)))
+    buf = Clong[sec, sec]
+    ccall(:utime, Cint, (Cstring, Ptr{Clong}), path, buf) == 0 ||
+        throw(ArgumentError("prune: could not restore mtime $path"))
+    return nothing
 end
 
 """
@@ -105,6 +166,7 @@ function prune_kit_leaves(
     )::NamedTuple
     remote_path = _checked_remote_dest(remote_path)
     _refuse_depot_target(remote_path)
+    id = id === nothing ? nothing : _parse_kit_job_id(String(id))
     if confirm
         cancelled = with_kit_progress_suspended() do
             print_err("  This will DELETE .distssh (and legacy .distsshkit) go/drive/setup/runs leaves.\n")
@@ -176,12 +238,15 @@ function _prune_remote_shell(
     pq = _remote_shell_path_word(remote_path)
     # `$pq` is its own word, same as delete. Do not paste it into double quotes.
     older = older_days === nothing ? "" : string(Int(older_days))
+    # Quote the given text. `prune_kit_leaves` parses a job id first.
+    # ShellCheck feeds this builder values that are not job ids.
     idn = id === nothing ? "" : String(id)
     idq = posix_quote(idn)
     older_q = posix_quote(older)
     return """
     # DISTSSH_INTERNAL_PRUNE_LEAVES
     $(_remote_run_toml_owned_check_sh())
+    $(_output_lock_hold_shell_helpers())
     root=$pq
     older=$older_q
     id=$idq
@@ -203,30 +268,67 @@ function _prune_remote_shell(
         exit 1
       fi
     fi
-    _dsk_consider() {
+    _distssh_consider() {
       _child=\$1
       # The victims file is line-oriented. A newline in a go/ or runs/ leaf
-      # is not covered by the .distsshkit walk. The collect loop is a
-      # pipeline subshell, so record the refusal and return.
+      # is not covered by the .distsshkit walk. The walk runs in this shell,
+      # so the flag is visible after the loop.
       if printf "%s" "\$_child" | awk "NR>1 { e = 1 } END { exit e ? 0 : 1 }"; then
-        printf x > "\$_dsk_nl"
+        _distssh_nlhit=1
         return 0
       fi
       base=\$(basename "\$_child")
       if [ -n "\$id" ]; then
-        case "\$base" in *"\$id"*) ;; *) return 0 ;; esac
+        _job=\$(printf '%s\\n' "\$base" | awk '
+          {
+            s = \$0
+            t = s
+            acc = 0
+            pos = 0
+            while (match(t, /_[0-9]{8}T[0-9]{6}Z/)) {
+              pos = acc + RSTART
+              acc = acc + RSTART
+              t = substr(t, RSTART + 1)
+            }
+            if (pos == 0) exit 0
+            rest = substr(s, pos + 17)
+            if (rest ~ /^-[0-9]+\$/) exit 0
+            if (rest ~ /^-[0-9]+_/) {
+              sub(/^-[0-9]+_/, "", rest)
+              printf "%s", rest
+              exit 0
+            }
+            if (substr(rest, 1, 1) == "_") {
+              printf "%s", substr(rest, 2)
+              exit 0
+            }
+            exit 0
+          }
+        ')
+        [ -n "\$_job" ] || return 0
+        [ "\$_job" = "\$id" ] || return 0
       fi
       if [ -n "\$older" ] && [ "\$older" != 0 ]; then
         # find -mtime +N is > N days; local prune is >= DAYS.
         [ -n "\$(find "\$_child" -maxdepth 0 -mtime +"\$((older - 1))" 2>/dev/null)" ] || return 0
       fi
-      printf '%s\\n' "\$_child" >> "\$_dsk_victims"
+      if _distssh_tree_blocks "\$_child"; then
+        printf '%s\\n' "\$_child" >> "\$_distssh_refused" || return 1
+        return 0
+      fi
+      printf '%s\\n' "\$_child" >> "\$_distssh_victims" || return 1
+      return 0
+    }
+    _distssh_record_fail() {
+      rm -f "\$_distssh_victims" "\$_distssh_refused" "\$_distssh_kits"
+      printf 'refusing to prune: could not record a leaf\\n' >&2
+      exit 1
     }
     # The walk below reads find output by line. A newline in a parent of
     # `.distsshkit` splits that path, and the prefix can be pruned.
     # `{}` is last so BSD find accepts it. The child reports a newline hit
     # on stdout, so a failed disk write cannot hide the hit.
-    if ! _dsk_nlhits=\$(find "\$root" \\( -type d -name .distssh -o -type d -name .distsshkit \\) -exec sh -c '
+    if ! _distssh_nlhits=\$(find "\$root" \\( -type d -name .distssh -o -type d -name .distsshkit \\) -exec sh -c '
       if printf "%s" "\$1" | awk "NR>1 { e = 1 } END { exit e ? 0 : 1 }"; then
         printf x
       fi
@@ -235,25 +337,37 @@ function _prune_remote_shell(
       printf 'refusing to prune: could not scan state directories\\n' >&2
       exit 1
     fi
-    if [ -n "\$_dsk_nlhits" ]; then
+    if [ -n "\$_distssh_nlhits" ]; then
       printf 'refusing to prune a path that contains a newline\\n' >&2
       exit 1
     fi
-    _dsk_victims=\$(mktemp) || {
+    _distssh_victims=\$(mktemp) || {
       printf 'refusing to prune: could not scan state directories\\n' >&2
       exit 1
     }
-    _dsk_nl=\$(mktemp) || {
-      rm -f "\$_dsk_victims"
+    _distssh_refused=\$(mktemp) || {
+      rm -f "\$_distssh_victims"
       printf 'refusing to prune: could not scan state directories\\n' >&2
       exit 1
     }
-    find "\$root" \\( -type d -name .distssh -o -type d -name .distsshkit \\) 2>/dev/null | while IFS= read -r kit; do
+    _distssh_kits=\$(mktemp) || {
+      rm -f "\$_distssh_victims" "\$_distssh_refused"
+      printf 'refusing to prune: could not scan state directories\\n' >&2
+      exit 1
+    }
+    if ! : > "\$_distssh_kits"; then
+      rm -f "\$_distssh_victims" "\$_distssh_refused" "\$_distssh_kits"
+      printf 'refusing to prune: could not scan state directories\\n' >&2
+      exit 1
+    fi
+    find "\$root" \\( -type d -name .distssh -o -type d -name .distsshkit \\) >> "\$_distssh_kits" 2>/dev/null || true
+    _distssh_nlhit=
+    while IFS= read -r kit; do
       go="\$kit/go"
       if [ -d "\$go" ]; then
         for child in "\$go"/*; do
           [ -d "\$child" ] || continue
-          _dsk_consider "\$child"
+          _distssh_consider "\$child" || _distssh_record_fail
         done
       fi
       runs="\$kit/runs"
@@ -262,7 +376,7 @@ function _prune_remote_shell(
           [ -d "\$kinddir" ] || continue
           for child in "\$kinddir"/*; do
             [ -d "\$child" ] || continue
-            _dsk_consider "\$child"
+            _distssh_consider "\$child" || _distssh_record_fail
           done
         done
       fi
@@ -270,35 +384,107 @@ function _prune_remote_shell(
         for kind in drive setup; do
           p="\$kit/\$kind"
           [ -d "\$p" ] || continue
-          _dsk_consider "\$p"
+          _distssh_consider "\$p" || _distssh_record_fail
         done
       fi
-    done
-    if [ -s "\$_dsk_nl" ]; then
-      rm -f "\$_dsk_victims" "\$_dsk_nl"
+    done < "\$_distssh_kits"
+    rm -f "\$_distssh_kits"
+    if [ -n "\$_distssh_nlhit" ]; then
+      rm -f "\$_distssh_victims" "\$_distssh_refused"
       printf 'refusing to prune a path that contains a newline\\n' >&2
       exit 1
     fi
-    rm -f "\$_dsk_nl"
-    # Local prune inspects every victim before rm. The collect loop is a
-    # pipeline subshell, so the list file is the hand-off. Do not rm the
-    # list while a loop still reads it.
-    _dsk_owned=1
+    # Local prune inspects every victim before rm. Do not rm the list
+    # while a loop still reads it.
+    _distssh_owned=1
     while IFS= read -r _child; do
-      _bad=\$(_dsk_first_unowned_stamp "\$_child")
+      _bad=\$(_distssh_first_unowned_stamp "\$_child")
       if [ -n "\$_bad" ]; then
         printf 'refusing to prune unowned run leaf %s\\n' "\$(dirname "\$_bad")" >&2
-        _dsk_owned=0
+        _distssh_owned=0
         break
       fi
-    done < "\$_dsk_victims"
-    if [ "\$_dsk_owned" != 1 ]; then
-      rm -f "\$_dsk_victims"
+    done < "\$_distssh_victims"
+    if [ "\$_distssh_owned" != 1 ]; then
+      rm -f "\$_distssh_victims" "\$_distssh_refused"
       exit 1
     fi
+    _distssh_restore_mtime() {
+      _path=\$1
+      _sec=\$2
+      [ -d "\$_path" ] || return 0
+      case "\$_sec" in
+        ''|*[!0-9]*) return 0 ;;
+      esac
+      touch -d "@\${_sec}" "\$_path" 2>/dev/null && return 0
+      _fmt=\$(date -r "\$_sec" +%Y%m%d%H%M.%S 2>/dev/null) || return 0
+      touch -t "\$_fmt" "\$_path" 2>/dev/null || true
+    }
+    _distssh_release_held() {
+      _leaf=\$1
+      _obs=\$2
+      _when=\$3
+      _lk="\$_leaf/.distssh.lock"
+      [ -n "\$_obs" ] && [ -f "\$_lk" ] && _distssh_unlink_if_same "\$_lk" "\$_obs"
+      _distssh_restore_mtime "\$_leaf" "\$_when"
+    }
+    _distssh_rm_fail=0
     while IFS= read -r _child; do
-      rm -rf "\$_child"
-    done < "\$_dsk_victims"
-    rm -f "\$_dsk_victims"
+      if [ -L "\$_child" ]; then
+        printf 'refusing to prune symlink leaf %s\\n' "\$_child" >&2
+        _distssh_rm_fail=1
+        continue
+      fi
+      [ -d "\$_child" ] || continue
+      if _distssh_tree_blocks "\$_child"; then
+        printf '%s\\n' "\$_child" >> "\$_distssh_refused" || _distssh_record_fail
+        continue
+      fi
+      _born=\$(stat -c '%Y' "\$_child" 2>/dev/null || stat -f '%m' "\$_child" 2>/dev/null || true)
+      if ! _distssh_hold_lock "\$_child" ""; then
+        printf '%s\\n' "\$_child" >> "\$_distssh_refused" || _distssh_record_fail
+        continue
+      fi
+      _self="\$_child/.distssh.lock"
+      _mine=\$(cat "\$_self" 2>/dev/null) || _mine=
+      if _distssh_tree_blocks "\$_child" "\$_self"; then
+        _distssh_release_held "\$_child" "\$_mine" "\$_born"
+        printf '%s\\n' "\$_child" >> "\$_distssh_refused" || _distssh_record_fail
+        continue
+      fi
+      _stage=\$(mktemp -d "\$(dirname "\$_child")/.prune-XXXXXX") || {
+        _distssh_rm_fail=1
+        _distssh_release_held "\$_child" "\$_mine" "\$_born"
+        continue
+      }
+      _aside="\$_stage/\$(basename "\$_child")"
+      if ! mv "\$_child" "\$_aside"; then
+        _distssh_rm_fail=1
+        rmdir "\$_stage"
+        _distssh_release_held "\$_child" "\$_mine" "\$_born"
+        continue
+      fi
+      if ! rm -rf "\$_stage"; then
+        _distssh_rm_fail=1
+        if [ ! -e "\$_child" ]; then
+          mv "\$_aside" "\$_child" || true
+        fi
+        rmdir "\$_stage" 2>/dev/null || true
+        _distssh_release_held "\$_child" "\$_mine" "\$_born"
+      fi
+    done < "\$_distssh_victims"
+    rm -f "\$_distssh_victims"
+    if [ -s "\$_distssh_refused" ]; then
+      while IFS= read -r _child; do
+        printf 'refusing to prune live lock %s\\n' "\$_child" >&2
+      done < "\$_distssh_refused"
+      rm -f "\$_distssh_refused"
+      exit 1
+    fi
+    rm -f "\$_distssh_refused"
+    if [ "\$_distssh_rm_fail" = 1 ]; then
+      printf 'refusing to prune: could not remove a leaf\\n' >&2
+      exit 1
+    fi
     """
 end

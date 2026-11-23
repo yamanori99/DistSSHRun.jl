@@ -341,7 +341,8 @@ function main()
         exit(0)
     end
 
-    if occursin("touch ", script)
+    # Prune restores a leaf mtime with touch. That is not the touch probe.
+    if occursin("touch ", script) && !occursin("DISTSSH_INTERNAL_PRUNE_LEAVES", script)
         m = match(r"touch\s+(\S+)", script)
         if m !== nothing
             cap = m.captures[1]
@@ -380,7 +381,8 @@ function main()
         exit(0)
     end
 
-    if occursin("rmdir ", script)
+    # Prune removes an empty staging directory with rmdir. That is not the rmdir probe.
+    if occursin("rmdir ", script) && !occursin("DISTSSH_INTERNAL_PRUNE_LEAVES", script)
         if isdir(tree) && isempty(readdir(tree))
             rm(tree)
         end

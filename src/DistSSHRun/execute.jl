@@ -1017,9 +1017,10 @@ service restarted while a job was running) re-check liveness later via
 throws: a failure here must not fail the spawn that already happened.
 
 The child removes the file in `go!` / `drive!` `finally` when it still names
-this pid (same rule as `.kit.lock`). [`wait`](@ref) does the same as backup
-when the caller still has a [`DetachedProcess`](@ref). SIGKILL / crash can leave
-the file; a reused pid can then look alive.
+this pid and, when present, this start key. That sidecar is not `.distssh.lock`:
+it has no host field and does not take the output-dir lock. [`wait`](@ref) does
+the same as backup when the caller still has a [`DetachedProcess`](@ref).
+SIGKILL / crash can leave the file; a reused pid can then look alive.
 """
 function _kit_sidecar_dirs(
         output_dir::Union{Nothing, AbstractString},

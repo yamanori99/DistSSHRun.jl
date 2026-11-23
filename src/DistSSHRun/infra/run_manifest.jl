@@ -36,10 +36,19 @@ function _mkdir_unique!(dir::AbstractString)::String
         catch e
             e isa Base.IOError || rethrow()
             e.code == Base.UV_EEXIST || rethrow()
-            base = String(dir) * "-" * string(time_ns())
+            base = _collision_run_leaf(dir)
         end
     end
     return made
+end
+
+"""Same leaf with `-<time_ns>` before a trailing job id, or at the end when there is none."""
+function _collision_run_leaf(dir::AbstractString)::String
+    suffix = "-" * string(time_ns())
+    raw = String(dir)
+    m = match(r"^(.*_[0-9]{8}T[0-9]{6}Z)(_[A-Za-z0-9._:@+-]+)$", raw)
+    m === nothing && return raw * suffix
+    return string(m.captures[1], suffix, m.captures[2])
 end
 
 """
@@ -98,27 +107,58 @@ function allocate_run_dir(
     throw(last)
 end
 
+const _RUN_DIR_LOCKS = Dict{String, NamedTuple{(:release, :depth), Tuple{Function, Int}}}()
+
+function _hold_run_dir_lock!(dir::AbstractString, job_id::Union{Nothing, AbstractString})
+    key = canonical_local_path(dir)
+    held = get(_RUN_DIR_LOCKS, key, nothing)
+    if held === nothing
+        rel = output_dir_lock!(key; id = job_id)
+        _RUN_DIR_LOCKS[key] = (; release = rel, depth = 1)
+    else
+        _RUN_DIR_LOCKS[key] = (; release = held.release, depth = held.depth + 1)
+    end
+    return nothing
+end
+
+function _drop_run_dir_lock!(dir::AbstractString)
+    key = canonical_local_path(dir)
+    held = get(_RUN_DIR_LOCKS, key, nothing)
+    held === nothing && return nothing
+    if held.depth <= 1
+        delete!(_RUN_DIR_LOCKS, key)
+        held.release()
+    else
+        _RUN_DIR_LOCKS[key] = (; release = held.release, depth = held.depth - 1)
+    end
+    return nothing
+end
+
 function _ensure_kit_run_dir!(
         kind::Symbol,
         script::AbstractString;
         project::AbstractString = pwd(),
         job_id::Union{Nothing, AbstractString} = nothing,
     )::String
-    existing = kit_run_dir()
-    if existing !== nothing
-        mkpath(existing)
-        return existing
-    end
     jid = job_id
     if jid === nothing
         jid = resolved_kit_job_id()
     end
+    existing = kit_run_dir()
+    if existing !== nothing
+        mkpath(existing)
+        _hold_run_dir_lock!(existing, jid)
+        return existing
+    end
     dir = allocate_run_dir(kind, script; project = project, job_id = jid)
     ENV[DISTSSH_RUN_DIR_ENV] = dir
+    _hold_run_dir_lock!(dir, jid)
     return dir
 end
 
 function _restore_kit_run_dir_env!(old)::Nothing
+    current = kit_run_dir()
+    current === nothing || _drop_run_dir_lock!(current)
     if old === nothing || (old isa AbstractString && isempty(strip(String(old))))
         delete!(ENV, DISTSSH_RUN_DIR_ENV)
     else
