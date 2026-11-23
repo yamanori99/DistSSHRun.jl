@@ -367,8 +367,8 @@ function _output_lock_hold_shell_helpers()::String
             rm -f "\$_tok"
             return 1
           fi
-          _i1=\$(ls -id "\$_path" 2>/dev/null | awk '{print \$1}')
-          _i2=\$(ls -id "\$_tok" 2>/dev/null | awk '{print \$1}')
+          _i1=\$(stat -c '%i' "\$_path" 2>/dev/null || stat -f '%i' "\$_path" 2>/dev/null)
+          _i2=\$(stat -c '%i' "\$_tok" 2>/dev/null || stat -f '%i' "\$_tok" 2>/dev/null)
           rm -f "\$_tok"
           [ -n "\$_i1" ] && [ "\$_i1" = "\$_i2" ] || return 1
           rm -f "\$_path"
