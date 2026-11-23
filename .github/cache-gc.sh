@@ -44,7 +44,10 @@ if [[ -z "$ids_txt" ]]; then
   echo "cache-gc: nothing to delete"
   exit 0
 fi
-mapfile -t ids <<< "$ids_txt"
+ids=()
+while IFS= read -r line; do
+  [[ -n "${line}" ]] && ids+=("${line}")
+done <<<"$ids_txt"
 
 echo "cache-gc: deleting ${#ids[@]} old cache(s)"
 fail=0

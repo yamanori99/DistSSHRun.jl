@@ -8,7 +8,10 @@ cd "${ROOT}"
 BASE="${BASE:?BASE must name the pull request base commit}"
 
 git fetch --no-tags origin "${BASE}"
-mapfile -t files < <(git diff --name-only "${BASE}"...HEAD -- 'test/**/*.jl' 'lib/*/test/**/*.jl' | grep -v '/e2e.jl$' || true)
+files=()
+while IFS= read -r line; do
+  [[ -n "${line}" ]] && files+=("${line}")
+done < <(git diff --name-only "${BASE}"...HEAD -- 'test/**/*.jl' 'lib/*/test/**/*.jl' | grep -v '/e2e.jl$' || true)
 if [ "${#files[@]}" -eq 0 ]; then
   echo "no added or changed test files (e2e.jl is not run here)" >&2
   exit 1
