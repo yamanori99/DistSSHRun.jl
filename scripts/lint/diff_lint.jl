@@ -2289,11 +2289,18 @@ function walk_split_token!(node, src, path, added, consts, rule, hits)
     return
 end
 
+function split_token_ratchet_path(path::AbstractString)
+    p = replace(String(path), '\\' => '/')
+    startswith(p, "scripts/lint/fixtures/") && return false
+    return split_token_path(p)
+end
+
 function collect_split_token(root, files, src_for_path; whole::Bool)
     hits = Tuple{String, Int, String}[]
-    paths = whole ? filter(split_token_path, tracked_jl(root)) : collect(keys(files))
+    pick = whole ? split_token_ratchet_path : split_token_path
+    paths = whole ? filter(split_token_ratchet_path, tracked_jl(root)) : collect(keys(files))
     for path in paths
-        split_token_path(path) || continue
+        pick(path) || continue
         skipped_path(path) && continue
         endswith(path, ".jl") || continue
         whole || (isempty(added_lines(get(files, path, Hunk[]))) && continue)
