@@ -829,7 +829,9 @@ end
 
 function _throw_if_obsolete_source_env!()
     for old in OBSOLETE_ENV_REJECTION_NAMES
+        # lint-allow: env-table -- DISTSSH_SOURCE_ prefix pattern, not a single env var name
         startswith(old, "DISTSSH_SOURCE_") || continue
+        # lint-allow: env-table -- obsolete SOURCE_→INTERNAL_ mapping literals in rename helper
         new = replace(old, "DISTSSH_SOURCE_" => "DISTSSH_INTERNAL_SOURCE_")
         haskey(ENV, old) && DistSSHBase.throw_renamed_env!(old, new)
     end

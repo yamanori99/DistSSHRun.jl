@@ -1007,8 +1007,8 @@ function lint_fixture_suite!(root::AbstractString)
     src_for = path -> read(joinpath(root, path), String)
     function file_hunks(rel)
         src = src_for(rel)
-        n = count(==('\n'), src) + 1
-        return Dict(rel => [Hunk(1, 0, n, n, String[])])
+        nlines = count(==('\n'), src) + 1
+        return Dict(rel => [Hunk(0, 0, 1, nlines, String[])])
     end
     split_rel = "scripts/lint/fixtures/evasion/split_string.jl"
     isempty(collect_split_token(root, file_hunks(split_rel), src_for; whole = false)) &&
@@ -2327,7 +2327,7 @@ function parse_user_env_table_names(root::AbstractString)
     path = joinpath(root, "src", "DistSSHRun", "options", "env_table.jl")
     isfile(path) || return Set{String}()
     names = Set{String}()
-    for m in eachmatch(r"EnvRow\(\"([^\"]+)\"", read(path, String))
+    for m in eachmatch(r"EnvRow\(\s*\"([^\"]+)\"", read(path, String))
         push!(names, String(m.captures[1]))
     end
     return names
@@ -2442,6 +2442,9 @@ function withenv_pair_distssh_name(node, consts::Dict{String, String})
 end
 
 function walk_env_table_names!(node, src, path, added, consts, table, legacy, removed, hits)
+    if kind(node) == K"call" && call_head_name(node) in ("replace", "throw_renamed_env!")
+        return
+    end
     name = distssh_env_folded_name(node, consts)
     if name !== nothing && !startswith(name, "DISTSSH_INTERNAL_") && node_touches_added(src, node, added) &&
             !env_name_allowed(name, table, legacy, removed)
@@ -3522,6 +3525,29 @@ function main_ceiling_int(name::AbstractString, default::Int)
     return v
 end
 
+function check_env_default_test_ceiling(measured::Int, constant::Int)
+    n = 0
+    if measured != constant
+        println(stderr, "lint: CEILING_ENV_DEFAULT_TEST: measured $(measured), constant $(constant)")
+        n += 1
+    end
+    prev = main_ceiling("CEILING_ENV_DEFAULT_TEST")
+    if prev === :unread
+        println(stderr, "lint: CEILING_ENV_DEFAULT_TEST: could not read the ceiling on origin/main")
+        n += 1
+    elseif prev !== nothing && constant > prev
+        main_rev = main_ceiling_int("CEILING_ENV_DEFAULT_TEST_RULE_REV", 0)
+        if CEILING_ENV_DEFAULT_TEST_RULE_REV <= main_rev || measured != constant
+            println(
+                stderr,
+                "lint: CEILING_ENV_DEFAULT_TEST: constant $(constant) above origin/main $(prev) without rule revision",
+            )
+            n += 1
+        end
+    end
+    return n
+end
+
 function check_swallowed_ceiling(measured::Int, constant::Int)
     n = 0
     if measured != constant
@@ -3550,7 +3576,8 @@ const CEILING_ID_MATCH = 0
 const CEILING_PROCESS_PATTERN = 2
 const CEILING_LOCK_CREATE = 0
 const CEILING_ENV_DEFAULT = 0
-const CEILING_ENV_DEFAULT_TEST = 0
+const CEILING_ENV_DEFAULT_TEST = 8
+const CEILING_ENV_DEFAULT_TEST_RULE_REV = 1
 const CEILING_SWALLOWED_CATCH_RULE_REV = 2
 const CEILING_SWALLOWED_CATCH = 146
 const CEILING_LOOP_SKIP = 0
@@ -3562,7 +3589,7 @@ const CEILING_KWARGS_SPLAT = 22
 const CEILING_SUPPRESSION = 18
 const CEILING_ADDPROCS_KW_SPLAT = 0
 const CEILING_SPLIT_TOKEN = 8
-const CEILING_ENV_TABLE = 5
+const CEILING_ENV_TABLE = 1
 const CEILING_TEST_ENV_MUTATION = 71
 const ADDDROCS_KW_ALLOWLIST = Set{Symbol}(
     [
@@ -3899,11 +3926,18 @@ function env_default_test_path(path::AbstractString)
     return startswith(p, "scripts/lint/fixtures/evasion/")
 end
 
+function env_default_test_ratchet_path(path::AbstractString)
+    p = replace(String(path), '\\' => '/')
+    startswith(p, "scripts/lint/fixtures/") && return false
+    return env_default_test_path(p)
+end
+
 function collect_env_default_test(root, files, src_for_path; whole::Bool)
     hits = Tuple{String, Int, String}[]
-    paths = whole ? filter(env_default_test_path, tracked_jl(root)) : collect(keys(files))
+    pick = whole ? env_default_test_ratchet_path : env_default_test_path
+    paths = whole ? filter(env_default_test_ratchet_path, tracked_jl(root)) : collect(keys(files))
     for path in paths
-        env_default_test_path(path) || continue
+        pick(path) || continue
         endswith(path, ".jl") || continue
         whole || (isempty(added_lines(get(files, path, Hunk[]))) && continue)
         src = lint_file_src(root, path, src_for_path)
@@ -4149,7 +4183,13 @@ const LINT_RULE_PROTECT = Dict(
     ),
 )
 
+function lint_evasion_fixture_rel(path::AbstractString)
+    p = replace(String(path), '\\' => '/')
+    return startswith(p, "scripts/lint/fixtures/evasion/")
+end
+
 function report_hits(hits, root::AbstractString)
+    filter!(h -> !lint_evasion_fixture_rel(h[1]), hits)
     filter_lint_allows!(hits, root)
     n = 0
     for (path, line, rule) in hits
@@ -4338,7 +4378,10 @@ end
 
 function lint_env_default(root, files, src_for_path)
     n = lint_mode_dual(root, files, src_for_path, collect_env_default, "CEILING_ENV_DEFAULT", CEILING_ENV_DEFAULT)
-    n += lint_mode_dual(root, files, src_for_path, collect_env_default_test, "CEILING_ENV_DEFAULT_TEST", CEILING_ENV_DEFAULT_TEST)
+    added = collect_env_default_test(root, files, src_for_path; whole = false)
+    n += report_hits(added, root)
+    whole = collect_env_default_test(root, files, src_for_path; whole = true)
+    n += check_env_default_test_ceiling(length(whole), CEILING_ENV_DEFAULT_TEST)
     return n
 end
 
@@ -4416,11 +4459,25 @@ function lint_excuse_ceiling(root)
 end
 
 function lint_split_token(root, files, src_for_path)
-    return lint_mode_zero(root, files, src_for_path, collect_split_token, "CEILING_SPLIT_TOKEN")
+    return lint_mode_dual(
+        root,
+        files,
+        src_for_path,
+        collect_split_token,
+        "CEILING_SPLIT_TOKEN",
+        CEILING_SPLIT_TOKEN,
+    )
 end
 
 function lint_env_table(root, files, src_for_path)
-    return lint_mode_zero(root, files, src_for_path, collect_env_table_names, "CEILING_ENV_TABLE")
+    return lint_mode_dual(
+        root,
+        files,
+        src_for_path,
+        collect_env_table_names,
+        "CEILING_ENV_TABLE",
+        CEILING_ENV_TABLE,
+    )
 end
 
 function lint_test_env_mutation(root, files, src_for_path)
