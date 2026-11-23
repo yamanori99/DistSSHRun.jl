@@ -13,29 +13,34 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 
 That is `test/runtests.jl` (unit + integration), sequential `@testset`s,
 `test/Project.toml`. Aqua is a separate CI job, not `Pkg.test()`.
-Unset `DISTSSH_TEST_GROUP` runs both groups (default for `Pkg.test()` and
-PkgEval). `DISTSSH_TEST_GROUP=unit` or `integration` runs one group only
-(Ubuntu 1.13 CI merge gate).
-Unset group, every `_runtest_include` path in `runtests.jl` runs; `[i/N]` uses
-that selection count (`N` shrinks with `DISTSSH_TEST_GROUP` or short-skip).
+Unset `DISTSSH_TEST_GROUP` runs unit + integration (default for `Pkg.test()`
+and PkgEval). Pseudo-TTY (`script`) suites are `test/tty/` and need
+`DISTSSH_TEST_GROUP=tty` (CI `tty` jobs) or `all`.
+`DISTSSH_TEST_GROUP=unit`, `integration`, or `tty` runs one group
+(Ubuntu 1.13 CI merge gate). `[i/N]` uses that selection count
+(`N` shrinks with `DISTSSH_TEST_GROUP` or short-skip).
 `DISTSSHRUN_TEST_SHORT=1` (`true`, `yes`, and `on`
 too) skips the heavy files. `JULIA_PKGEVAL=true`
 does the same so a PkgEval run stays inside the 45 minute limit. That short
-list includes `integration/setup/progress_tty.jl` and
-`integration/drive/progress_tty.jl` (pseudo-TTY via `script`) so Registry
-install and PkgEval skip those files; ordinary checkout `Pkg.test` still
-runs them.
+list includes `tty/setup/progress_tty.jl` and `tty/drive/progress_tty.jl`
+so `GROUP=all` under Registry / PkgEval still skips them.
 `Pkg.test()` on this checkout is not a registry install and is not the PkgEval sandbox. Job smokes pass
 `-y`; real `ssh` / `git` spawn runs only when that binary is on `PATH`;
 real SSH clusters stay in `e2e.jl`. Reproduce that sandbox:
 [PkgEval](#pkgeval).
 
+```bash
+DISTSSH_TEST_GROUP=tty julia --project=. -e 'using Pkg; Pkg.test()'
+```
+
 The same file list runs in worker processes with ParallelTestRunner.jl. It is
-opt-in for local runs; CI unit and integration jobs use it. `Pkg.test()` and
+opt-in for local runs; CI unit, integration, and tty jobs use it. `Pkg.test()` and
 the main-push coverage job still run `runtests.jl`:
 
 ```bash
-julia --project=test test/parallel.jl                       # all files
+julia --project=test test/parallel.jl                       # unit + integration
+DISTSSH_TEST_GROUP=tty julia --project=test test/parallel.jl
+DISTSSH_TEST_GROUP=all julia --project=test test/parallel.jl
 julia --project=test test/parallel.jl --jobs=1
 julia --project=test test/parallel.jl unit/DistSSHRun/drive  # names starting with this
 julia --project=test test/parallel.jl --list
@@ -62,12 +67,13 @@ Inventory: [SSH E2E](#ssh-e2e) below.
 
 ```text
 test/
-  runtests.jl     # Pkg.test() — unit + integration
+  runtests.jl     # Pkg.test() — unit + integration (tty needs GROUP=tty)
   e2e.jl          # real OpenSSH; not Pkg.test()
   support.jl      # loads support/
   support/        # subprocess, staging, E2E helpers
   unit/           # in-process (no child julia, no addprocs)
   integration/    # child julia and/or local addprocs
+  tty/            # pseudo-TTY via script(1); not default Pkg.test()
   fixtures/       # small scripts copied into temp hosts
   Project.toml
 ```
@@ -329,7 +335,7 @@ Do not search-replace a host name into a token (that produced
 
 ## Writing tests
 
-1. Add under `unit/` (src mirror) or `integration/<area>/`.
+1. Add under `unit/` (src mirror), `integration/<area>/`, or `tty/<area>/`.
 2. Top-level `include` in `runtests.jl` (JETLS follows that). Do not
    register `e2e.jl` there (`Pkg.test` must not SSH). `e2e.jl` is its own
    JETLS entry in `.github/jetls-check.sh`.
@@ -338,12 +344,12 @@ Do not search-replace a host name into a token (that produced
 5. Pin verbosity with `with_kit_verbosity` if you assert kit detail
    lines. `Pkg.test` defaults to `:progress`. `cli_confirm` and consent
    warnings must show in `:quiet`, `:progress`, and `:verbose`.
-6. `integration/setup/progress_tty.jl` and
-   `integration/drive/progress_tty.jl`: `script` typescripts stack each
-   `\r` spinner redraw when `\r` is turned into `\n` (CI log look). That
-   is not the live TTY. The files document it and check a `\r` / CSI-K
-   screen peak of at most one spinner bar. Drive TTY coverage lives in the
-   latter; remote TTY cases stay in `e2e.jl`.
+6. `tty/setup/progress_tty.jl` and `tty/drive/progress_tty.jl`: `script`
+   typescripts stack each `\r` spinner redraw when `\r` is turned into
+   `\n` (CI log look). That is not the live TTY. The files document it and
+   check a `\r` / CSI-K screen peak of at most one spinner bar. Drive TTY
+   coverage lives in the latter; remote TTY cases stay in `e2e.jl`. Run
+   with `DISTSSH_TEST_GROUP=tty` (not default `Pkg.test()`).
 
 Helpers (via `support.jl`): `_child_julia_env`, `_run_kit_drive` /
 `_run_kit_setup` / `_run_kit_go` / `_run_kit_hostinfo`, `_mktemp_host` /

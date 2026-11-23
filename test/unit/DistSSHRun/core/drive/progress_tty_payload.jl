@@ -33,4 +33,23 @@ using Test
 
     # Kit warn on a spinner bar is still the glue case `_assert` rejects.
     @test _tty_payload_line(glued_kit) && _tty_bar_line(glued_kit)
+
+    # `@test` count is fixed: extra redraw / payload lines must not add cases.
+    bar = "  ⠋  workers         ━━━━━━━╺━━━━━━━━━━━━  3/7  0:00"
+    short = kit_warn * "\n" * smoke * "\n"
+    many = join(fill(bar, 40), "\r") * "\n" * kit_warn * "\n" * smoke * "\n" *
+        join(fill(bar, 40), "\r") * "\n"
+    ts_short = @testset "assert count short" begin
+        _assert_tty_progress_payload(short)
+    end
+    ts_many = @testset "assert count many redraws" begin
+        _assert_tty_progress_payload(many)
+    end
+    @test ts_short.n_passed == 3
+    @test ts_many.n_passed == ts_short.n_passed
+    ts_hosts = @testset "assert count hosts" begin
+        fail = "  ✗ host1: boom\n  ✗ host2: boom\n" * smoke * "\n"
+        _assert_tty_progress_payload(fail; hosts = ["host1", "host2"])
+    end
+    @test ts_hosts.n_passed == 4
 end

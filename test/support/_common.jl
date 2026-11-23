@@ -113,11 +113,17 @@ if !isdefined(@__MODULE__, :_test_root)
     # `_distsshrun_short_skip`.
     function _distssh_test_group_enabled(sym::Symbol)::Bool
         raw = strip(get(ENV, "DISTSSH_TEST_GROUP", ""))
-        isempty(raw) && return true
+        # Default `Pkg.test()` is unit + integration. Pseudo-TTY (`script`)
+        # suites live under `tty/` and need `DISTSSH_TEST_GROUP=tty` (or `all`).
+        isempty(raw) && return sym !== :tty
         g = lowercase(raw)
         g == "unit" && return sym === :unit
         g == "integration" && return sym === :integration
-        error("test: invalid DISTSSH_TEST_GROUP=$(repr(raw)); want unit, integration, or unset")
+        g == "tty" && return sym === :tty
+        g == "all" && return true
+        error(
+            "test: invalid DISTSSH_TEST_GROUP=$(repr(raw)); want unit, integration, tty, all, or unset",
+        )
     end
 
     # PkgEval's assertion build kills this suite around 45 minutes.
@@ -177,10 +183,10 @@ if !isdefined(@__MODULE__, :_test_root)
             "unit/DistSSHRun/core/setup/send_list.jl", # large send-list oracle
             "integration/cli/help.jl", # CLI help golden output
             "integration/setup/exit.jl", # setup exit-code matrix
-            # Pseudo-TTY (`script`) suites: ordinary checkout CI keeps them.
-            # PkgEval and Registry install set JULIA_PKGEVAL=true and skip them.
-            "integration/setup/progress_tty.jl", # pseudo-TTY script suite (short CI)
-            "integration/drive/progress_tty.jl", # pseudo-TTY drive progress
+            # Pseudo-TTY suites are `DISTSSH_TEST_GROUP=tty` (not default Pkg.test).
+            # Keep them on the short-skip list for `GROUP=all` under PkgEval.
+            "tty/setup/progress_tty.jl", # pseudo-TTY script suite
+            "tty/drive/progress_tty.jl", # pseudo-TTY drive progress
             "integration/drive/reuse_main_isolated.jl", # isolated Main reuse drive path
             "integration/drive/execute.jl", # long-running execute integration
             "integration/drive/interrupt_grace.jl", # interrupt grace timing

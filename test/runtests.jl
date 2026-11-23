@@ -1,5 +1,6 @@
 #!/usr/bin/env julia
 # DistSSHRun Pkg.test() entry: unit + integration (Aqua is CI-only).
+# Pseudo-TTY (`script`) suites are `test/tty/` (`DISTSSH_TEST_GROUP=tty`).
 # Does not include test/e2e.jl (real SSH; DISTSSH_SSH_E2E=1 / up.sh --e2e).
 # From a standalone kit checkout (this directory as the active project):
 #   julia --project=. -e 'using Pkg; Pkg.test()'
@@ -7,7 +8,7 @@
 #
 # Top-level `include`s (inside `@testset`s, not functions) so JETLS follows them.
 # Each file already has a `@testset`; do not wrap another around `include`.
-# New unit/integration files must be added here. Maintainer checks:
+# New unit/integration/tty files must be added here. Maintainer checks:
 #   CONTRIBUTING.md ("Before opening a PR")
 #   ./.github/jetls-check.sh
 
@@ -166,9 +167,6 @@ end
             if !_distsshrun_short_skip("integration/setup/exit.jl")
                 _runtest_include("integration/setup/exit.jl", joinpath(@__DIR__, "integration", "setup", "exit.jl"))
             end
-            if !_distsshrun_short_skip("integration/setup/progress_tty.jl")
-                _runtest_include("integration/setup/progress_tty.jl", joinpath(@__DIR__, "integration", "setup", "progress_tty.jl"))
-            end
             _runtest_include("integration/go/cli.jl", joinpath(@__DIR__, "integration", "go", "cli.jl"))
             _runtest_include("integration/go/overlap.jl", joinpath(@__DIR__, "integration", "go", "overlap.jl"))
             _runtest_include("integration/drive/local.jl", joinpath(@__DIR__, "integration", "drive", "local.jl"))
@@ -180,9 +178,6 @@ end
                 )
             end
             _runtest_include("integration/cli/project.jl", joinpath(@__DIR__, "integration", "cli", "project.jl"))
-            if !_distsshrun_short_skip("integration/drive/progress_tty.jl")
-                _runtest_include("integration/drive/progress_tty.jl", joinpath(@__DIR__, "integration", "drive", "progress_tty.jl"))
-            end
             if !_distsshrun_short_skip("integration/drive/execute.jl")
                 _runtest_include("integration/drive/execute.jl", joinpath(@__DIR__, "integration", "drive", "execute.jl"))
             end
@@ -212,5 +207,16 @@ end
             end
         end
     end # integration group
+
+    if _distssh_test_group_enabled(:tty)
+        @testset "tty" verbose = true begin
+            if !_distsshrun_short_skip("tty/setup/progress_tty.jl")
+                _runtest_include("tty/setup/progress_tty.jl", joinpath(@__DIR__, "tty", "setup", "progress_tty.jl"))
+            end
+            if !_distsshrun_short_skip("tty/drive/progress_tty.jl")
+                _runtest_include("tty/drive/progress_tty.jl", joinpath(@__DIR__, "tty", "drive", "progress_tty.jl"))
+            end
+        end
+    end # tty group
     _runtest_assert_planned_executed!(_RUNTEST_PLANNED, _RUNTEST_EXECUTED)
 end

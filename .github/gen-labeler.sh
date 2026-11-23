@@ -26,7 +26,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${ROOT}/.github/labeler.yml"
 
-product_test_trees=(unit integration)
+product_test_trees=(unit integration tty)
 
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
@@ -110,6 +110,7 @@ EOF
           - "demos/**"
           - "test/unit/**"
           - "test/integration/**"
+          - "test/tty/**"
           - ".gitattributes"
           - ".gitignore"
           - ".git-blame-ignore-revs"

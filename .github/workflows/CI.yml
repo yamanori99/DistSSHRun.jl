@@ -340,6 +340,29 @@ jobs:
           cache-scratchspaces: false
       - uses: ./.github/actions/pkg-parallel-test
 
+
+  test-tty:
+    name: DistSSHRun (1.13, ubuntu-latest, x64, tty)
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      DISTSSH_TEST_GROUP: tty
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: ./.github/actions/julia-depot-cache
+        with:
+          cache-scratchspaces: false
+      - uses: ./.github/actions/pkg-parallel-test
+
   test-coverage:
     name: DistSSHRun (1.13, ubuntu-latest, x64, coverage)
     needs: [detect, runic, jetls, aqua]
@@ -396,6 +419,29 @@ jobs:
     env:
       DISTSSH_TEST_GROUP: integration
     runs-on: xcode-27
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: ./.github/actions/julia-depot-cache
+        with:
+          cache-scratchspaces: false
+      - uses: ./.github/actions/pkg-parallel-test
+
+
+  test-macos-tty:
+    name: DistSSHRun (1.13, xcode-27, aarch64, tty)
+    needs: [detect, runic, jetls, aqua, base-test-macos, up-test-macos, ship-test-macos, heartbeat-test-macos]
+    if: ${{ needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && !cancelled() && !failure() }}
+    runs-on: xcode-27
+    env:
+      DISTSSH_TEST_GROUP: tty
     timeout-minutes: 45
     permissions:
       contents: read
@@ -1112,6 +1158,27 @@ jobs:
           cache-scratchspaces: false
       - uses: ./.github/actions/pkg-parallel-test
 
+
+  test-1-14-pre-tty:
+    name: DistSSHRun (1.14-pre, ubuntu-latest, x64, tty)
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    env:
+      DISTSSH_TEST_GROUP: tty
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "~1.14.0-0"
+      - uses: ./.github/actions/julia-depot-cache
+        with:
+          cache-scratchspaces: false
+      - uses: ./.github/actions/pkg-parallel-test
+
   test-1-14-pre-macos-unit:
     name: DistSSHRun (1.14-pre, xcode-27, aarch64, unit)
     needs: [detect, runic, jetls, aqua]
@@ -1138,6 +1205,27 @@ jobs:
     if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' }}
     env:
       DISTSSH_TEST_GROUP: integration
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "~1.14.0-0"
+      - uses: ./.github/actions/julia-depot-cache
+        with:
+          cache-scratchspaces: false
+      - uses: ./.github/actions/pkg-parallel-test
+
+
+  test-1-14-pre-macos-tty:
+    name: DistSSHRun (1.14-pre, xcode-27, aarch64, tty)
+    needs: [detect, runic, jetls, aqua]
+    if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' }}
+    env:
+      DISTSSH_TEST_GROUP: tty
     runs-on: xcode-27
     timeout-minutes: 45
     steps:
@@ -1662,14 +1750,18 @@ jobs:
       - jetls-1-14-pre
       - test-unit
       - test-integration
+      - test-tty
       - test-coverage
       - test-macos-unit
       - test-macos-integration
+      - test-macos-tty
       - test-wsl
       - test-1-14-pre-unit
       - test-1-14-pre-integration
+      - test-1-14-pre-tty
       - test-1-14-pre-macos-unit
       - test-1-14-pre-macos-integration
+      - test-1-14-pre-macos-tty
       - test-nightly
       - registry-install
       - pkgeval
@@ -1816,14 +1908,18 @@ jobs:
           RESULT_jetls_1_14_pre: ${{ needs.jetls-1-14-pre.result }}
           RESULT_test_unit: ${{ needs.test-unit.result }}
           RESULT_test_integration: ${{ needs.test-integration.result }}
+          RESULT_test_tty: ${{ needs.test-tty.result }}
           RESULT_test_coverage: ${{ needs.test-coverage.result }}
           RESULT_test_macos_unit: ${{ needs.test-macos-unit.result }}
           RESULT_test_macos_integration: ${{ needs.test-macos-integration.result }}
+          RESULT_test_macos_tty: ${{ needs.test-macos-tty.result }}
           RESULT_test_wsl: ${{ needs.test-wsl.result }}
           RESULT_test_1_14_pre_unit: ${{ needs.test-1-14-pre-unit.result }}
           RESULT_test_1_14_pre_integration: ${{ needs.test-1-14-pre-integration.result }}
+          RESULT_test_1_14_pre_tty: ${{ needs.test-1-14-pre-tty.result }}
           RESULT_test_1_14_pre_macos_unit: ${{ needs.test-1-14-pre-macos-unit.result }}
           RESULT_test_1_14_pre_macos_integration: ${{ needs.test-1-14-pre-macos-integration.result }}
+          RESULT_test_1_14_pre_macos_tty: ${{ needs.test-1-14-pre-macos-tty.result }}
           RESULT_test_nightly: ${{ needs.test-nightly.result }}
           RESULT_registry_install: ${{ needs.registry-install.result }}
           RESULT_pkgeval: ${{ needs.pkgeval.result }}
@@ -1859,9 +1955,11 @@ jobs:
       - aqua
       - test-unit
       - test-integration
+      - test-tty
       - test-coverage
       - test-macos-unit
       - test-macos-integration
+      - test-macos-tty
       - test-wsl
       - ship-test-ubuntu
       - ship-test-macos
@@ -1906,9 +2004,11 @@ jobs:
             aqua:${{ needs.aqua.result }}
             test-unit:${{ needs.test-unit.result }}
             test-integration:${{ needs.test-integration.result }}
+            test-tty:${{ needs.test-tty.result }}
             test-coverage:${{ needs.test-coverage.result }}
             test-macos-unit:${{ needs.test-macos-unit.result }}
             test-macos-integration:${{ needs.test-macos-integration.result }}
+            test-macos-tty:${{ needs.test-macos-tty.result }}
             test-wsl:${{ needs.test-wsl.result }}
             ship-test-ubuntu:${{ needs.ship-test-ubuntu.result }}
             ship-test-macos:${{ needs.ship-test-macos.result }}
