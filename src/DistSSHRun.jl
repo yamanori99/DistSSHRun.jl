@@ -147,10 +147,10 @@ import .DistSSHBase.CLI:
     ProgressState,
     cli_confirm,
     cli_println,
-    progress_done!,
-    progress_latest,
     print_header,
     print_warn,
+    progress_done!,
+    progress_latest,
     writeln_field
 import .DistSSHBase: cancel!, join_explained_message, manifest_path
 public join_explained_message, manifest_path
