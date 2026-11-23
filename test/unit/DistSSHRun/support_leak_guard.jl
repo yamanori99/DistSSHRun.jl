@@ -60,14 +60,18 @@ end
     buried = ProcessRow(1, 1, "", "julia --startup-file=no foo--worker")
     longer = ProcessRow(1, 1, "", "julia --startup-file=no --worker-extra")
     incremental = ProcessRow(1, 1, "", "julia --output-incremental -O1")
+    incremental_yes = ProcessRow(1, 1, "", "julia --output-incremental=yes")
+    incremental_no = ProcessRow(1, 1, "", "julia --output-incremental=no")
     output_o = ProcessRow(1, 1, "", "julia --output-o /tmp/out.o")
     output_o_prefix = ProcessRow(1, 1, "", "julia --output-o-extra")
     glued = ProcessRow(1, 1, "", "julia x--output-incremental")
-    alive_parent = ProcessRow(1, 2, "", "julia --output-incremental")
+    alive_parent = ProcessRow(1, 2, "", "julia --output-incremental=yes")
     @test !_leak_guard_known_precompile_orphan(worker)
     @test !_leak_guard_known_precompile_orphan(buried)
     @test !_leak_guard_known_precompile_orphan(longer)
     @test _leak_guard_known_precompile_orphan(incremental)
+    @test _leak_guard_known_precompile_orphan(incremental_yes)
+    @test !_leak_guard_known_precompile_orphan(incremental_no)
     @test _leak_guard_known_precompile_orphan(output_o)
     @test !_leak_guard_known_precompile_orphan(output_o_prefix)
     @test !_leak_guard_known_precompile_orphan(glued)
@@ -96,7 +100,7 @@ end
     _test_skip_unless_unix() || return
     tag = "leak-precompile-$(getpid())-$(rand(UInt32))"
     try
-        rows = _spawn_tagged_orphan(tag, "--output-incremental")
+        rows = _spawn_tagged_orphan(tag, "--output-incremental=yes")
         @test any(row -> row.ppid == 1, rows)
         _assert_no_leaked_processes(tag; grace = 0.3, label = "precompile orphan")
         still = processes_with_env("DISTSSH_TEST_LEAK_TAG", tag)

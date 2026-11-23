@@ -20,6 +20,7 @@ if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
     function _leak_guard_known_precompile_orphan(row::ProcessRow)::Bool
         row.ppid == 1 || return false
         return _leak_guard_argv_has_token(row.command, "--output-incremental") ||
+            _leak_guard_argv_has_token(row.command, "--output-incremental=yes") ||
             _leak_guard_argv_has_token(row.command, "--output-o")
     end
 
