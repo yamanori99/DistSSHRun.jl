@@ -30,6 +30,7 @@ using Test
     @test :print_plan ∉ ns
     @test :parse_plan_args ∉ ns && :show_plan_usage ∉ ns
     @test not_exported(:parse_pool_args) && not_exported(:show_pool_usage)
+    @test not_exported(:resolve_output_dir!)
     @test :stored_path in ns && :file_sha256 in ns && :cache_file in ns
     @test not_exported(:check_input_manifest)
     @test not_exported(:run_identity)

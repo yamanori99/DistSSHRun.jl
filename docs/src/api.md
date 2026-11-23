@@ -292,6 +292,7 @@ Filter = function (x)
         :wait, :shell_status, :run_identity, :identity_mismatches, :LoadedCodeMismatchError,
         :ConfirmPathMismatch, :normalize_remote_confirm_path,
         :NO_COMMAND_HINT_LINES, :RUN_SUBCOMMAND_EXPECTATION,
+        :process_start_key, :CLI,
     )
     n = try
         nameof(x)
