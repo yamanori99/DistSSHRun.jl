@@ -315,10 +315,14 @@ RUN_SUBCOMMAND_EXPECTATION
 ```
 
 `shell_status` is public on DistSSHBase and is not exported.
+`process_start_key` and `DistSSHBase.CLI` are the 0.2.0 console and start-key
+contract for Queue and Kit.
 
 ```@docs
 DistSSHBase.HostResult
 DistSSHBase.shell_status
+DistSSHBase.process_start_key
+DistSSHBase.CLI
 ```
 
 ## Identity
