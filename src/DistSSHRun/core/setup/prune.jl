@@ -64,6 +64,7 @@ function prune_kit_leaf_dirs!(
             push!(refused, reason)
             continue
         end
+        born = mtime(p)
         release = try
             output_dir_lock!(p)
         catch e
@@ -71,6 +72,7 @@ function prune_kit_leaf_dirs!(
             push!(refused, e.msg)
             continue
         end
+        removed = false
         try
             self = joinpath(p, _OUTPUT_LOCK_NAME)
             reason = _output_lock_prune_block(p; skip = self)
@@ -78,10 +80,21 @@ function prune_kit_leaf_dirs!(
                 push!(refused, reason)
                 continue
             end
-            rm(p; recursive = true, force = true)
+            aside = _prune_aside_path(p)
+            mv(p, aside)
+            try
+                rm(aside; recursive = true, force = true)
+            catch err
+                ispath(p) || mv(aside, p)
+                rethrow(err)
+            end
+            removed = true
             n += 1
         finally
             release()
+            if !removed && isdir(p)
+                _restore_dir_mtime(p, born)
+            end
         end
     end
     isempty(refused) || throw(ArgumentError(join(unique(refused), "\n")))
@@ -116,6 +129,20 @@ end
 function _prune_age_ok(path::AbstractString, older_days::Union{Nothing, Integer})::Bool
     older_days === nothing && return true
     return (time() - mtime(path)) >= Float64(older_days) * 86400
+end
+
+"""Put the directory mtime back to `stamp` seconds since the epoch."""
+function _restore_dir_mtime(path::AbstractString, stamp::Real)
+    sec = Clong(floor(Int, Float64(stamp)))
+    buf = Clong[sec, sec]
+    ccall(:utime, Cint, (Cstring, Ptr{Clong}), path, buf) == 0 ||
+        throw(ArgumentError("prune: could not restore mtime $path"))
+    return nothing
+end
+
+"""Sibling name used so removal does not delete the lock while the leaf path still exists."""
+function _prune_aside_path(path::AbstractString)::String
+    return joinpath(dirname(path), string(".prune-", getpid(), "-", time_ns()))
 end
 
 """
@@ -248,12 +275,32 @@ function _prune_remote_shell(
       fi
       base=\$(basename "\$_child")
       if [ -n "\$id" ]; then
-        case "\$base" in
-          *_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z)
-            return 0
-            ;;
-        esac
-        _job=\$(printf '%s\\n' "\$base" | sed -n 's/.*_[0-9]\\{8\\}T[0-9]\\{6\\}Z\\(-[0-9][0-9]*\\)\\{0,1\\}_//p')
+        _job=\$(printf '%s\\n' "\$base" | awk '
+          {
+            s = \$0
+            t = s
+            acc = 0
+            pos = 0
+            while (match(t, /_[0-9]{8}T[0-9]{6}Z/)) {
+              pos = acc + RSTART
+              acc = acc + RSTART
+              t = substr(t, RSTART + 1)
+            }
+            if (pos == 0) exit 0
+            rest = substr(s, pos + 17)
+            if (rest ~ /^-[0-9]+\$/) exit 0
+            if (rest ~ /^-[0-9]+_/) {
+              sub(/^-[0-9]+_/, "", rest)
+              printf "%s", rest
+              exit 0
+            }
+            if (substr(rest, 1, 1) == "_") {
+              printf "%s", substr(rest, 2)
+              exit 0
+            }
+            exit 0
+          }
+        ')
         [ -n "\$_job" ] || return 0
         [ "\$_job" = "\$id" ] || return 0
       fi
@@ -358,7 +405,27 @@ function _prune_remote_shell(
       rm -f "\$_distssh_victims" "\$_distssh_refused"
       exit 1
     fi
+    _distssh_restore_mtime() {
+      _path=\$1
+      _sec=\$2
+      [ -d "\$_path" ] || return 0
+      case "\$_sec" in
+        ''|*[!0-9]*) return 0 ;;
+      esac
+      touch -d "@\${_sec}" "\$_path" 2>/dev/null && return 0
+      _fmt=\$(date -r "\$_sec" +%Y%m%d%H%M.%S 2>/dev/null) || return 0
+      touch -t "\$_fmt" "\$_path" 2>/dev/null || true
+    }
+    _distssh_release_held() {
+      _leaf=\$1
+      _obs=\$2
+      _when=\$3
+      _lk="\$_leaf/.distssh.lock"
+      [ -n "\$_obs" ] && [ -f "\$_lk" ] && _distssh_unlink_if_same "\$_lk" "\$_obs"
+      _distssh_restore_mtime "\$_leaf" "\$_when"
+    }
     _distssh_rm_fail=0
+    _distssh_seq=0
     while IFS= read -r _child; do
       if [ -L "\$_child" ]; then
         printf 'refusing to prune symlink leaf %s\\n' "\$_child" >&2
@@ -370,6 +437,7 @@ function _prune_remote_shell(
         printf '%s\\n' "\$_child" >> "\$_distssh_refused" || _distssh_record_fail
         continue
       fi
+      _born=\$(stat -c '%Y' "\$_child" 2>/dev/null || stat -f '%m' "\$_child" 2>/dev/null || true)
       if ! _distssh_hold_lock "\$_child" ""; then
         printf '%s\\n' "\$_child" >> "\$_distssh_refused" || _distssh_record_fail
         continue
@@ -377,13 +445,23 @@ function _prune_remote_shell(
       _self="\$_child/.distssh.lock"
       _mine=\$(cat "\$_self" 2>/dev/null) || _mine=
       if _distssh_tree_blocks "\$_child" "\$_self"; then
-        [ -n "\$_mine" ] && _distssh_unlink_if_same "\$_self" "\$_mine"
+        _distssh_release_held "\$_child" "\$_mine" "\$_born"
         printf '%s\\n' "\$_child" >> "\$_distssh_refused" || _distssh_record_fail
         continue
       fi
-      if ! rm -rf "\$_child"; then
+      _distssh_seq=\$((_distssh_seq + 1))
+      _aside="\$(dirname "\$_child")/.prune-\$\$-\${_distssh_seq}"
+      if ! mv "\$_child" "\$_aside"; then
         _distssh_rm_fail=1
-        [ -n "\$_mine" ] && _distssh_unlink_if_same "\$_self" "\$_mine"
+        _distssh_release_held "\$_child" "\$_mine" "\$_born"
+        continue
+      fi
+      if ! rm -rf "\$_aside"; then
+        _distssh_rm_fail=1
+        if [ ! -e "\$_child" ]; then
+          mv "\$_aside" "\$_child" || true
+        fi
+        _distssh_release_held "\$_child" "\$_mine" "\$_born"
       fi
     done < "\$_distssh_victims"
     rm -f "\$_distssh_victims"

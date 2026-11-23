@@ -1092,6 +1092,7 @@ end
             @test islink(linked)
             @test isdir(outside)
             @test !isfile(joinpath(outside, ".distssh.lock"))
+            rm(linked)
             release = DistSSHRun.output_dir_lock!(miss)
             err = IOBuffer()
             proc2 = run(
@@ -1126,6 +1127,22 @@ end
             @test proc_u.exitcode == 0
             @test isdir(untagged)
             @test isfile(joinpath(untagged, "keep.txt"))
+            suffix_only = joinpath(
+                root, ".distssh", "go", "job_20200101T000000Z_report_20260803T134428Z-99",
+            )
+            mkpath(suffix_only)
+            proc_s = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root; id = "report_20260803T134428Z-99"))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc_s.exitcode == 0
+            @test isdir(suffix_only)
             drive = joinpath(root, ".distssh", "drive")
             mkpath(drive)
             write(joinpath(drive, "keep.txt"), "x")

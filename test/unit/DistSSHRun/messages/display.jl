@@ -683,6 +683,15 @@ using Test
                 release2()
                 @test !isfile(lock_path)
                 release()
+                release_a = DistSSHRun.output_dir_lock!(tmp)
+                release_b = DistSSHRun.output_dir_lock!(tmp)
+                release_b()
+                release_c = DistSSHRun.output_dir_lock!(tmp)
+                @test isfile(lock_path)
+                release_a()
+                @test isfile(lock_path)
+                release_c()
+                @test !isfile(lock_path)
             end
             _with_tempdir() do tmp
                 pid_only = joinpath(tmp, ".distssh.lock")
@@ -728,6 +737,19 @@ using Test
                 @test DistSSHRun._parse_output_lock(read(bad, String)) === nothing
                 @test_throws ArgumentError DistSSHRun.output_dir_lock!(tmp)
                 @test isfile(bad)
+            end
+            _with_tempdir() do tmp
+                bad = joinpath(tmp, ".distssh.lock")
+                host = DistSSHRun._output_lock_host()
+                write(bad, "writer=$(DistSSHRun._output_lock_writer())\nhost=$(host)\npid=1\nstart=aa\nid=bad id\n")
+                @test DistSSHRun._parse_output_lock(read(bad, String)) === nothing
+                @test_throws ArgumentError DistSSHRun.output_dir_lock!(tmp)
+                @test isfile(bad)
+            end
+            _with_tempdir() do tmp
+                @test_throws ArgumentError DistSSHRun.output_dir_lock!(tmp; id = "   ")
+                @test_throws ArgumentError DistSSHRun.output_lock_hold_shell("slot", "   ")
+                @test !ispath(joinpath(tmp, ".distssh.lock"))
             end
             _with_tempdir() do tmp
                 fifo = joinpath(tmp, ".distssh.lock")
@@ -911,6 +933,32 @@ using Test
                 rec = DistSSHRun._parse_output_lock(read(joinpath(tmp, ".distssh.lock"), String))
                 @test rec !== nothing
                 @test rec.pid != 999999999
+            end
+            _with_tempdir() do tmp
+                helpers = DistSSHRun._output_lock_hold_shell_helpers()
+                dir_q = DistSSHRun.posix_quote(tmp)
+                host = strip(read(`hostname`, String))
+                current = DistSSHRun._output_lock_writer()
+                old = replace(current, r"\d+(\D*)$" => s"9\1")
+                @test old != current
+                raw = replace(
+                    DistSSHRun._output_lock_text(host, 999999999, "deadbeef", ""),
+                    current => old,
+                    count = 1,
+                )
+                write(joinpath(tmp, ".distssh.lock"), raw)
+                takeover = run(
+                    pipeline(
+                        `bash -c $(helpers * "_distssh_hold_lock $dir_q '' && _distssh_hold_lock $dir_q ''")`;
+                        stderr = devnull,
+                    );
+                    wait = false,
+                )
+                wait(takeover)
+                @test takeover.exitcode == 0
+                rec = DistSSHRun._parse_output_lock(read(joinpath(tmp, ".distssh.lock"), String))
+                @test rec !== nothing
+                @test occursin("writer=$current", read(joinpath(tmp, ".distssh.lock"), String))
             end
         end
 

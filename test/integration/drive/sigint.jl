@@ -85,9 +85,9 @@ end
         sleep(2)
         kill(proc, Base.SIGINT)
         seen = timedwait(90.0; pollint = 0.05) do
-            occursin("Cleaning up workers", String(acc))
+            occursin("Cleaning up workers", String(copy(acc)))
         end
-        if process_running(proc) && occursin("Cleaning up workers", String(acc))
+        if seen === :ok && process_running(proc)
             kill(proc, Base.SIGINT)
         end
         stopped = timedwait(() -> !process_running(proc), 30.0; pollint = 0.05)

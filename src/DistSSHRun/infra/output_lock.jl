@@ -72,6 +72,10 @@ function _parse_output_lock(text::AbstractString)
     for key in ("host", "pid", "start", "id")
         occursin('=', fields[key]) && return nothing
     end
+    idv = fields["id"]
+    if !isempty(idv) && !occursin(r"^[A-Za-z0-9._:@+-]+$", idv)
+        return nothing
+    end
     pid = tryparse(Int, fields["pid"])
     (pid === nothing || pid <= 0) && return nothing
     DistSSHBase.record_writer_minor_match(
@@ -130,8 +134,8 @@ end
 Exclusive `.distssh.lock` in `output_dir`. The record stores writer, host, pid,
 start key, and an optional job id. A live same-host owner or a foreign host
 throws. A dead same-host owner, or the same pid with a different start key,
-is replaced. The release removes the file only when host, pid, and start key
-still match.
+is replaced. The release removes the file only when it is still the acquired
+inode and host, pid, and start key still match.
 """
 function output_dir_lock!(
         output_dir::AbstractString;
@@ -144,28 +148,36 @@ function output_dir_lock!(
     start = _output_lock_start_hex(mypid)
     start === nothing &&
         throw(ArgumentError("output lock: process start key is unreadable"))
-    id_s = if id === nothing || isempty(strip(String(id)))
+    id_s = if id === nothing || String(id) == ""
         ""
     else
         _parse_kit_job_id(String(id))
     end
     body = _output_lock_text(host, mypid, start, id_s)
-    release = () -> begin
-        try
-            isfile(lock_path) || return nothing
-            raw = read(lock_path, String)
-            rec = _parse_output_lock(raw)
-            rec === nothing && return nothing
-            (rec.host == host && rec.pid == mypid && rec.start == start) || return nothing
-            _unlink_output_lock_if_record!(lock_path, raw)
-        catch e
-            e isa InterruptException && rethrow()
-            @debug "output lock: release skipped" exception = (e, catch_backtrace())
+    function _release_acquired(dev, ino)
+        return () -> begin
+            try
+                isfile(lock_path) || return nothing
+                st = stat(lock_path)
+                (st.device == dev && st.inode == ino) || return nothing
+                raw = read(lock_path, String)
+                rec = _parse_output_lock(raw)
+                rec === nothing && return nothing
+                (rec.host == host && rec.pid == mypid && rec.start == start) || return nothing
+                _unlink_output_lock_if_record!(lock_path, raw)
+            catch e
+                e isa InterruptException && rethrow()
+                @debug "output lock: release skipped" exception = (e, catch_backtrace())
+            end
+            return nothing
         end
-        return nothing
+    end
+    function _acquired()
+        st = stat(lock_path)
+        return _release_acquired(st.device, st.inode)
     end
     for _ in 1:_OUTPUT_LOCK_TRIES
-        _excl_write_lock(lock_path, body) && return release
+        _excl_write_lock(lock_path, body) && return _acquired()
         if ispath(lock_path) && !isfile(lock_path)
             throw(ArgumentError("output lock: malformed lock $(lock_path)"))
         end
@@ -180,7 +192,7 @@ function output_dir_lock!(
             throw(ArgumentError("output lock: malformed lock $(lock_path)"))
         end
         if rec.host == host && rec.pid == mypid && rec.start == start
-            return release
+            return _acquired()
         end
         if _output_lock_blocks(rec, host)
             throw(
@@ -206,13 +218,8 @@ function _leaf_job_id(name::AbstractString)::Union{Nothing, String}
     job = m.captures[1]
     job === nothing && return nothing
     job = String(job)
-    isempty(job) && return nothing
-    try
-        return _parse_kit_job_id(job)
-    catch e
-        e isa ArgumentError && return nothing
-        rethrow()
-    end
+    occursin(r"^[A-Za-z0-9._:@+-]+$", job) || return nothing
+    return job
 end
 
 """Reason string when `dir` must not be pruned, else `nothing`."""
@@ -286,49 +293,50 @@ function _output_lock_shell_helpers()::String
       _ns=\$(grep -c '^start=' "\$_f" 2>/dev/null || true)
       _ni=\$(grep -c '^id=' "\$_f" 2>/dev/null || true)
       [ "\$_nw" = 1 ] && [ "\$_nh" = 1 ] && [ "\$_np" = 1 ] && [ "\$_ns" = 1 ] && [ "\$_ni" = 1 ] || return 1
-      _writer=\$(sed -n 's/^writer=//p' "\$_f")
-      _host=\$(sed -n 's/^host=//p' "\$_f")
-      _pid=\$(sed -n 's/^pid=//p' "\$_f")
-      _start=\$(sed -n 's/^start=//p' "\$_f")
-      _idv=\$(sed -n 's/^id=//p' "\$_f")
-      [ -n "\$_writer" ] && [ -n "\$_host" ] && [ -n "\$_pid" ] && [ -n "\$_start" ] || return 1
-      case "\$_pid" in
+      _rec_writer=\$(sed -n 's/^writer=//p' "\$_f")
+      _rec_host=\$(sed -n 's/^host=//p' "\$_f")
+      _rec_pid=\$(sed -n 's/^pid=//p' "\$_f")
+      _rec_start=\$(sed -n 's/^start=//p' "\$_f")
+      _rec_idv=\$(sed -n 's/^id=//p' "\$_f")
+      [ -n "\$_rec_writer" ] && [ -n "\$_rec_host" ] && [ -n "\$_rec_pid" ] && [ -n "\$_rec_start" ] || return 1
+      case "\$_rec_pid" in
         ''|*[!0-9]*|0*) return 1 ;;
       esac
-      case "\$_host" in
+      case "\$_rec_host" in
         *"="*) return 1 ;;
       esac
-      case "\$_start" in
+      case "\$_rec_start" in
         *[!0-9a-f]*) return 1 ;;
       esac
-      case "\$_idv" in
-        *"="*) return 1 ;;
+      case "\$_rec_idv" in
+        "") ;;
+        *[!A-Za-z0-9._:@+-]*) return 1 ;;
       esac
-      [ \$((\${#_start} % 2)) -eq 0 ] || return 1
+      [ \$((\${#_rec_start} % 2)) -eq 0 ] || return 1
       return 0
     }
     _distssh_one_blocks() {
       _f=\$1
       [ -f "\$_f" ] || return 1
       _distssh_lock_complete "\$_f" || return 0
-      _writer=\$(sed -n 's/^writer=//p' "\$_f")
-      _host=\$(sed -n 's/^host=//p' "\$_f")
-      _pid=\$(sed -n 's/^pid=//p' "\$_f")
-      _start=\$(sed -n 's/^start=//p' "\$_f")
-      case "\$_writer" in
+      _rec_writer=\$(sed -n 's/^writer=//p' "\$_f")
+      _rec_host=\$(sed -n 's/^host=//p' "\$_f")
+      _rec_pid=\$(sed -n 's/^pid=//p' "\$_f")
+      _rec_start=\$(sed -n 's/^start=//p' "\$_f")
+      case "\$_rec_writer" in
         "DistSSHRun $(maj).$(minr)"|"DistSSHRun $(maj).$(minr)."*) ;;
         *) return 0 ;;
       esac
-      _me=\$(hostname)
-      [ "\$_host" = "\$_me" ] || return 0
+      _rec_here=\$(hostname)
+      [ "\$_rec_host" = "\$_rec_here" ] || return 0
       _alive=0
-      if kill -0 "\$_pid" 2>/dev/null; then _alive=1; fi
-      if [ -d "/proc/\$_pid" ]; then _alive=1; fi
-      if /bin/ps -p "\$_pid" >/dev/null 2>&1; then _alive=1; fi
+      if kill -0 "\$_rec_pid" 2>/dev/null; then _alive=1; fi
+      if [ -d "/proc/\$_rec_pid" ]; then _alive=1; fi
+      if /bin/ps -p "\$_rec_pid" >/dev/null 2>&1; then _alive=1; fi
       [ "\$_alive" = 1 ] || return 1
-      _probe_hex=\$(_distssh_start_hex "\$_pid") || return 0
+      _probe_hex=\$(_distssh_start_hex "\$_rec_pid") || return 0
       [ -n "\$_probe_hex" ] || return 0
-      [ "\$_probe_hex" = "\$_start" ] && return 0
+      [ "\$_probe_hex" = "\$_rec_start" ] && return 0
       return 1
     }
     _distssh_tree_blocks() {
@@ -435,6 +443,6 @@ end
 
 """Statement that writes `.distssh.lock` in a remote directory word. `id` may be empty."""
 function output_lock_hold_shell(dir_word::AbstractString, id::AbstractString = "")::String
-    id_s = isempty(strip(String(id))) ? "" : _parse_kit_job_id(String(id))
+    id_s = String(id) == "" ? "" : _parse_kit_job_id(String(id))
     return "_distssh_hold_lock $(dir_word) $(posix_quote(id_s))"
 end

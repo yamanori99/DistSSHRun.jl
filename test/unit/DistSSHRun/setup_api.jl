@@ -235,6 +235,28 @@ using Test
         end
 
         _with_tempdir() do proj
+            parent = joinpath(proj, ".distssh", "go")
+            leaf = joinpath(parent, "job_20200101T000000Z_old")
+            mkpath(leaf)
+            write(joinpath(leaf, "keep.txt"), "x")
+            DistSSHRun._restore_dir_mtime(leaf, time() - 10 * 86400)
+            born = mtime(leaf)
+            chmod(parent, 0o555)
+            err = try
+                DistSSHRun.prune_kit_leaf_dirs!(proj)
+                nothing
+            catch e
+                e
+            finally
+                chmod(parent, 0o755)
+            end
+            @test err isa Base.IOError
+            @test isdir(leaf)
+            @test isfile(joinpath(leaf, "keep.txt"))
+            @test abs(mtime(leaf) - born) < 2
+        end
+
+        _with_tempdir() do proj
             untagged = joinpath(
                 proj, ".distssh", "go", "job_20200101T000000Z_report_20260803T134428Z",
             )
@@ -246,6 +268,10 @@ using Test
             @test DistSSHRun._leaf_job_id(basename(tagged)) == "exp1"
             @test DistSSHRun._leaf_job_id("job_20200101T000000Z-99_exp1") == "exp1"
             @test DistSSHRun._leaf_job_id("job_20200101T000000Z-99") === nothing
+            @test DistSSHRun._leaf_job_id("job_20200101T000000Z_ exp1") === nothing
+            @test DistSSHRun._leaf_job_id(
+                "job_20200101T000000Z_report_20260803T134428Z-99",
+            ) === nothing
             n_untagged = DistSSHRun.prune_kit_leaf_dirs!(proj; id = "report_20260803T134428Z")
             @test n_untagged == 0
             @test isdir(untagged)
