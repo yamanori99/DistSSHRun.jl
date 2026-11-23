@@ -12,6 +12,7 @@ Do this work in the current agent. Do not require a subagent. On the cloud VM, d
 
 - Stop and ask before you add a fallback, a skip, an alias, or an exception.
 - When you fix a pattern, search for the same pattern elsewhere and report what you find.
+- Before you change code for a lint, test, or CI finding, read what the rule protects (this file, the contributing guide, the rule's source and comments). In your report, name the docs you read and the rule's intent. Never reshape code only to make a finding disappear. If a diff lint hit is a false positive, put `# lint-allow: <rule-id> -- <reason>` on that line or the line above; a PR with an honest allow is finished—do not split, rename, reformat, move, or reword to dodge the rule.
 - The pull request title names the change. The body follows the pull request template. When Testing is present, a shape mismatch prints only a `note:` and does not fail the gate. A title heading, checklist, missing Summary, file list, or excuse wording without evidence fails the body check.
 - In Testing or Risk, a failure you call known, pre-existing, unrelated, flaky, or left to CI needs, in the same paragraph, an Actions run URL on `origin/main` that shows it. The body check fails without that URL and without naming the default branch in the same paragraph.
 
