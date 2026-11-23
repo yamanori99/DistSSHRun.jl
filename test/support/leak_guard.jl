@@ -17,8 +17,22 @@ if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
         return any(part -> part == token, split(cmd))
     end
 
+    function _leak_guard_julia_parent(pid::Int)::Bool
+        pid == getpid() && return true
+        proc = "/proc/$pid/cmdline"
+        isfile(proc) || return false
+        raw = read(proc)
+        return occursin("julia", lowercase(String(raw)))
+    end
+
+    function _leak_guard_orphan_reparented(row::ProcessRow)::Bool
+        row.ppid == getpid() && return false
+        _leak_guard_julia_parent(row.ppid) && return false
+        return true
+    end
+
     function _leak_guard_known_precompile_orphan(row::ProcessRow)::Bool
-        row.ppid == 1 || return false
+        _leak_guard_orphan_reparented(row) || return false
         return _leak_guard_argv_has_token(row.command, "--output-incremental") ||
             _leak_guard_argv_has_token(row.command, "--output-incremental=yes") ||
             _leak_guard_argv_has_token(row.command, "--output-o")

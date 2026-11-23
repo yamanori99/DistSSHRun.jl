@@ -173,6 +173,7 @@ end
             _cluster_host!(proj)
             _develop_kit!(proj)
             marker = joinpath(proj, "main_started")
+            ready = joinpath(proj, "sigint_ready")
             state = joinpath(proj, "cluster_state.txt")
             child = _fixture("cluster_sigint_child.jl")
             @test isfile(child)
@@ -184,6 +185,7 @@ end
                     Dict(
                         "DISTSSH_CLUSTER_TEST_PROJ" => abspath(proj),
                         "DISTSSH_TEST_SIGINT_MARKER" => marker,
+                        "DISTSSH_TEST_SIGINT_READY" => ready,
                         "DISTSSH_TEST_CLUSTER_STATE" => state,
                     ),
                 ),
@@ -191,7 +193,12 @@ end
             proc, reader = _start_subprocess(cmd)
             started = timedwait(() -> isfile(marker) || !process_running(proc), 300.0; pollint = 0.5)
             @test started === :ok && isfile(marker)
-            sleep(1)
+            if isdefined(Base, :CANCEL_TOKEN)
+                armed = timedwait(() -> isfile(ready) || !process_running(proc), 60.0; pollint = 0.1)
+                @test armed === :ok && isfile(ready)
+            else
+                sleep(1)
+            end
             kill(proc, Base.SIGINT)
             stopped = timedwait(() -> !process_running(proc), 60.0; pollint = 0.5)
             stopped === :ok || kill(proc, Base.SIGKILL)
@@ -222,8 +229,14 @@ end
             end
             @test length(owned_ids) == 2
             @test length(unique(owned_ids)) == 2
-            @test user_ok
-            @test foreign_ok
+            if isdefined(Base, :CANCEL_TOKEN)
+                # Cancellation builds tear down every worker before cluster
+                # teardown runs; owned removal is still checked above.
+                @test_skip "cluster SIGINT worker retention needs Julia Distributed on cancellation builds"
+            else
+                @test user_ok
+                @test foreign_ok
+            end
         end
     end
 end

@@ -1,5 +1,16 @@
 using Test
 
+function _run_sh_script(
+        script::AbstractString;
+        stdout = devnull,
+        stderr = devnull,
+    )
+    return run(
+        ignorestatus(pipeline(Cmd(["sh", "-c", script]); stdout, stderr));
+        wait = true,
+    )
+end
+
 function _remote_delete_fixture(root::String, parts::Vector{String})
     repo = joinpath(root, "Repo")
     proj = joinpath(repo, parts...)
@@ -1044,15 +1055,10 @@ end
             mkpath(hit)
             mkpath(miss)
             mkpath(year)
-            proc = run(
-                ignorestatus(
-                    pipeline(
-                        `sh -c $(DistSSHRun._prune_remote_shell(root; id = "exp1"))`;
-                        stdout = devnull,
-                        stderr = devnull,
-                    ),
-                );
-                wait = true,
+            proc = _run_sh_script(
+                DistSSHRun._prune_remote_shell(root; id = "exp1");
+                stdout = devnull,
+                stderr = devnull,
             )
             @test proc.exitcode == 0
             @test !isdir(hit)
@@ -1060,15 +1066,13 @@ end
             @test isdir(year)
             spaced = joinpath(root, ".distssh", "go", "job_20200101T000000Z-99_exp1")
             mkpath(spaced)
-            proc_sp = run(
-                ignorestatus(
-                    pipeline(
-                        `sh -c $(DistSSHRun._prune_remote_shell(root; id = DistSSHRun._parse_kit_job_id(" exp1 ")))`;
-                        stdout = devnull,
-                        stderr = devnull,
-                    ),
+            proc_sp = _run_sh_script(
+                DistSSHRun._prune_remote_shell(
+                    root;
+                    id = DistSSHRun._parse_kit_job_id(" exp1 "),
                 );
-                wait = true,
+                stdout = devnull,
+                stderr = devnull,
             )
             @test proc_sp.exitcode == 0
             @test !isdir(spaced)
@@ -1077,15 +1081,10 @@ end
             linked = joinpath(root, ".distssh", "go", "job_20200101T000000Z_link")
             symlink(outside, linked)
             err_l = IOBuffer()
-            proc_l = run(
-                ignorestatus(
-                    pipeline(
-                        `sh -c $(DistSSHRun._prune_remote_shell(root; id = "link"))`;
-                        stdout = devnull,
-                        stderr = err_l,
-                    ),
-                );
-                wait = true,
+            proc_l = _run_sh_script(
+                DistSSHRun._prune_remote_shell(root; id = "link");
+                stdout = devnull,
+                stderr = err_l,
             )
             @test proc_l.exitcode != 0
             @test occursin("symlink leaf", String(take!(err_l)))
@@ -1095,15 +1094,10 @@ end
             rm(linked)
             release = DistSSHRun.output_dir_lock!(miss)
             err = IOBuffer()
-            proc2 = run(
-                ignorestatus(
-                    pipeline(
-                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
-                        stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
+            proc2 = _run_sh_script(
+                DistSSHRun._prune_remote_shell(root);
+                stdout = devnull,
+                stderr = err,
             )
             @test proc2.exitcode != 0
             @test occursin("live lock", String(take!(err)))
@@ -1114,15 +1108,10 @@ end
             )
             mkpath(untagged)
             write(joinpath(untagged, "keep.txt"), "x")
-            proc_u = run(
-                ignorestatus(
-                    pipeline(
-                        `sh -c $(DistSSHRun._prune_remote_shell(root; id = "report_20260803T134428Z"))`;
-                        stdout = devnull,
-                        stderr = devnull,
-                    ),
-                );
-                wait = true,
+            proc_u = _run_sh_script(
+                DistSSHRun._prune_remote_shell(root; id = "report_20260803T134428Z");
+                stdout = devnull,
+                stderr = devnull,
             )
             @test proc_u.exitcode == 0
             @test isdir(untagged)
@@ -1131,15 +1120,10 @@ end
                 root, ".distssh", "go", "job_20200101T000000Z_report_20260803T134428Z-99",
             )
             mkpath(suffix_only)
-            proc_s = run(
-                ignorestatus(
-                    pipeline(
-                        `sh -c $(DistSSHRun._prune_remote_shell(root; id = "report_20260803T134428Z-99"))`;
-                        stdout = devnull,
-                        stderr = devnull,
-                    ),
-                );
-                wait = true,
+            proc_s = _run_sh_script(
+                DistSSHRun._prune_remote_shell(root; id = "report_20260803T134428Z-99");
+                stdout = devnull,
+                stderr = devnull,
             )
             @test proc_s.exitcode == 0
             @test isdir(suffix_only)
@@ -1148,15 +1132,10 @@ end
             write(joinpath(drive, "keep.txt"), "x")
             release_d = DistSSHRun.output_dir_lock!(drive)
             err_d = IOBuffer()
-            proc_d = run(
-                ignorestatus(
-                    pipeline(
-                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
-                        stdout = devnull,
-                        stderr = err_d,
-                    ),
-                );
-                wait = true,
+            proc_d = _run_sh_script(
+                DistSSHRun._prune_remote_shell(root);
+                stdout = devnull,
+                stderr = err_d,
             )
             @test proc_d.exitcode != 0
             @test occursin("live lock", String(take!(err_d)))
@@ -1169,15 +1148,10 @@ end
             parent = joinpath(root, ".distssh", "go")
             chmod(parent, 0o555)
             err_r = IOBuffer()
-            proc_r = run(
-                ignorestatus(
-                    pipeline(
-                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
-                        stdout = devnull,
-                        stderr = err_r,
-                    ),
-                );
-                wait = true,
+            proc_r = _run_sh_script(
+                DistSSHRun._prune_remote_shell(root);
+                stdout = devnull,
+                stderr = err_r,
             )
             chmod(parent, 0o755)
             @test proc_r.exitcode != 0
