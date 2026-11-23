@@ -96,17 +96,19 @@ runs:
           ${{ steps.prep.outputs.restore-key }}
     - name: Ensure Julia depot exists
       shell: bash
+      env:
+        DEPOT: ${{ steps.prep.outputs.depot }}
       run: |
         set -euo pipefail
-        depot="${{ steps.prep.outputs.depot }}"
-        mkdir -p "${depot}"
+        mkdir -p "${DEPOT}"
     - name: Update cached registries
       if: steps.prep.outputs.cache-registries == 'true'
       shell: bash
+      env:
+        DEPOT: ${{ steps.prep.outputs.depot }}
       run: |
         set -euo pipefail
-        depot="${{ steps.prep.outputs.depot }}"
-        registries="${depot}/registries"
+        registries="${DEPOT}/registries"
         if [[ -d "${registries}" ]] && [[ -n "$(ls -A "${registries}" 2>/dev/null || true)" ]]; then
           julia -e 'import Pkg; isdefined(Pkg, :Registry) && Pkg.Registry.update();'
         fi
