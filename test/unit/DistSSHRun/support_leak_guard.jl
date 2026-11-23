@@ -30,7 +30,8 @@ function _spawn_tagged_orphan(tag::AbstractString, token::AbstractString)
     while time() < deadline
         rows = processes_with_env("DISTSSH_TEST_LEAK_TAG", tag)
         hit = any(rows) do row
-            row.ppid == 1 && any(part -> part == token, split(row.command))
+            _leak_guard_orphan_reparented(row) &&
+                any(part -> part == token, split(row.command))
         end
         hit && return rows
         sleep(0.1)
@@ -65,12 +66,14 @@ end
     output_o = ProcessRow(1, 1, "", "julia --output-o /tmp/out.o")
     output_o_prefix = ProcessRow(1, 1, "", "julia --output-o-extra")
     glued = ProcessRow(1, 1, "", "julia x--output-incremental")
-    alive_parent = ProcessRow(1, 2, "", "julia --output-incremental=yes")
+    alive_parent = ProcessRow(1, getpid(), "", "julia --output-incremental=yes")
+    subreaper = ProcessRow(1, 99_999, "", "julia --output-incremental=yes")
     @test !_leak_guard_known_precompile_orphan(worker)
     @test !_leak_guard_known_precompile_orphan(buried)
     @test !_leak_guard_known_precompile_orphan(longer)
     @test _leak_guard_known_precompile_orphan(incremental)
     @test _leak_guard_known_precompile_orphan(incremental_yes)
+    @test _leak_guard_known_precompile_orphan(subreaper)
     @test !_leak_guard_known_precompile_orphan(incremental_no)
     @test _leak_guard_known_precompile_orphan(output_o)
     @test !_leak_guard_known_precompile_orphan(output_o_prefix)
@@ -83,14 +86,14 @@ end
     tag = "leak-orphan-$(getpid())-$(rand(UInt32))"
     try
         rows = _spawn_tagged_orphan(tag, "--worker")
-        @test any(row -> row.ppid == 1, rows)
+        @test any(_leak_guard_orphan_reparented, rows)
         probe = @testset _LeakGuardProbe "tagged worker fails the guard" begin
             _assert_no_leaked_processes(tag; grace = 0.3, label = "worker orphan")
         end
         @test any(res -> res isa Test.Fail, probe.results)
         @test !any(res -> res isa Test.Pass, probe.results)
         still = processes_with_env("DISTSSH_TEST_LEAK_TAG", tag)
-        @test any(row -> row.ppid == 1, still)
+        @test any(_leak_guard_orphan_reparented, still)
     finally
         _stop_tagged_orphan(tag)
     end
@@ -101,10 +104,10 @@ end
     tag = "leak-precompile-$(getpid())-$(rand(UInt32))"
     try
         rows = _spawn_tagged_orphan(tag, "--output-incremental=yes")
-        @test any(row -> row.ppid == 1, rows)
+        @test any(_leak_guard_orphan_reparented, rows)
         _assert_no_leaked_processes(tag; grace = 0.3, label = "precompile orphan")
         still = processes_with_env("DISTSSH_TEST_LEAK_TAG", tag)
-        @test any(row -> row.ppid == 1, still)
+        @test any(_leak_guard_orphan_reparented, still)
     finally
         _stop_tagged_orphan(tag)
     end
