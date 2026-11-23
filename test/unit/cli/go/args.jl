@@ -124,12 +124,14 @@ using Test
         @test occursin("DSSH-E001", err.msg)
         @test occursin("--allow-mismatch was removed", err.msg)
         @test occursin("--unsafe-skip-env-digests", err.msg)
-        withenv("JULIA_DISTRIBUTED_EXE" => "/env/julia") do
-            let r = parse_go_args(["--head-slots", "1", "job.jl"])
-                @test r.julia == "/env/julia"
-            end
-            let r = parse_go_args(["--julia", "auto", "job.jl"])
-                @test r.julia === nothing
+        let julia_exe = "/env/julia"
+            withenv(Dict("JULIA_DISTRIBUTED_EXE" => julia_exe)...) do
+                let r = parse_go_args(["--head-slots", "1", "job.jl"])
+                    @test r.julia == julia_exe
+                end
+                let r = parse_go_args(["--julia", "auto", "job.jl"])
+                    @test r.julia === nothing
+                end
             end
         end
     end
@@ -243,9 +245,11 @@ using Test
             @test r.cli_session.yes
             DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags())
         end
-        withenv("DISTSSH_HOSTS" => "2*env-a,1*env-b") do
-            let r = parse_go_args(["job.jl"])
-                @test r.hosts == ["2*env-a", "1*env-b"]
+        let hosts = "2*env-a,1*env-b"
+            withenv(Dict("DISTSSH_HOSTS" => hosts)...) do
+                let r = parse_go_args(["job.jl"])
+                    @test r.hosts == ["2*env-a", "1*env-b"]
+                end
             end
         end
         @test_throws ArgumentError parse_go_args(

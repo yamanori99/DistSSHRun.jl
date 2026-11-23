@@ -487,7 +487,10 @@ function _group_body(snap::Dict{String, String})::Dict{String, Any}
         "cpu" => snap["cpu"],
         "machine" => snap["machine"],
         "kernel" => snap["kernel"],
-        "nthreads" => something(tryparse(Int, snap["nthreads"]), 0),
+        "nthreads" => begin
+            parsed = tryparse(Int, snap["nthreads"])
+            parsed === nothing ? 0 : parsed
+        end,
         "blas" => snap["blas"],
         "blas_threads" => _blas_threads_value(snap["blas_threads"]),
         "hostname" => snap["hostname"],
@@ -912,7 +915,10 @@ function _parent_sections(snap::Dict{String, String})::Tuple{Dict{String, Any}, 
         "cpu" => snap["cpu"],
         "machine" => snap["machine"],
         "kernel" => snap["kernel"],
-        "nthreads" => something(tryparse(Int, snap["nthreads"]), 0),
+        "nthreads" => begin
+            parsed = tryparse(Int, snap["nthreads"])
+            parsed === nothing ? 0 : parsed
+        end,
         "blas" => snap["blas"],
         "blas_threads" => _blas_threads_value(snap["blas_threads"]),
         "hostname" => snap["hostname"],
@@ -1056,7 +1062,7 @@ function _write_provenance_sidecar(
         end
         mv(tmp, dest; force = true)
     catch
-        # best-effort only
+        # non-fatal
     end
     return nothing
 end

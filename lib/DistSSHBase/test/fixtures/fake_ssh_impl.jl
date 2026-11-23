@@ -440,13 +440,13 @@ function main()
                 n === nothing || (older = n)
             end
         end
-        id = nothing
+        prune_pat = nothing
         m_id = match(r"\nid=([^\n]+)", script)
         if m_id !== nothing
             cap = m_id.captures[1]
             if cap isa AbstractString
                 s = strip(cap, ['\'', '"'])
-                isempty(s) || (id = s)
+                isempty(s) || (prune_pat = s)
             end
         end
         if isdir(tree)
@@ -456,16 +456,19 @@ function main()
                 end
                 go = joinpath(dir, "go")
                 if isdir(go)
-                    for child in readdir(go; join = true)
-                        isdir(child) || continue
-                        (id === nothing || occursin(id, basename(child))) || continue
-                        if older !== nothing && (time() - mtime(child)) < older * 86400
+                    for slot_path in readdir(go; join = true)
+                        isdir(slot_path) || continue
+                        if prune_pat !== nothing
+                            base = basename(slot_path)
+                            contains(base, prune_pat) || continue
+                        end
+                        if older !== nothing && (time() - mtime(slot_path)) < older * 86400
                             continue
                         end
-                        rm(child; recursive = true, force = true)
+                        rm(slot_path; recursive = true, force = true)
                     end
                 end
-                if id === nothing
+                if prune_pat === nothing
                     for kind in ("drive", "setup")
                         p = joinpath(dir, kind)
                         isdir(p) || continue

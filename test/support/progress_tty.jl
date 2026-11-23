@@ -274,9 +274,9 @@ if !isdefined(@__MODULE__, :_tty_strip_ansi)
     end
 
     # Run under `script(1)` with a writable stdin pipe (not detached: detach
-    # closes stdin). Poll the typescript until `expect` appears, then write
+    # closes stdin). Poll the typescript while `expect` is absent, then write
     # `reply`. Input is never supplied before the prompt is observed.
-    # With `reply_marker`, stdin stays open until that substring appears in
+    # With `reply_marker`, stdin stays open while that substring is absent from
     # the typescript (slow children, e.g. `drive`) so EOF does not win the race.
     function _tty_expect_script(
             script_path::AbstractString;
@@ -293,14 +293,14 @@ if !isdefined(@__MODULE__, :_tty_strip_ansi)
         rm(dest; force = true)
         cmd = if Sys.isapple()
             # Apple/BSD `script` (shell_cmds): default `flushtime = 30`, so the
-            # typescript stays empty until that interval or exit. Expect polls
+            # typescript stays empty through that interval or exit. Expect polls
             # the file before writing stdin; a 30s hang bound then times out
             # with an empty log. `-t 0` flushes after each character I/O
             # (`script.1`; `tvec - start >= flushtime` in `script.c`). Do not
             # rely on `-F` here: older Apple `script` only documented `-t`.
             `script -q -t 0 $dest /bin/sh $script_path`
         else
-            # util-linux `script` buffers the typescript until exit unless `-f`.
+            # util-linux `script` buffers the typescript through exit unless `-f`.
             # Expect polls that file before writing stdin, so a missing flush
             # deadlocks: empty log, child blocked on `read`, 300s hang.
             `script -q -f -c $script_path $dest`

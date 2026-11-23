@@ -245,7 +245,7 @@ if !isdefined(@__MODULE__, :setup_main)
             cli_println()
 
             # Mutating / multi-host SSH ops: fail fast before confirmations.
-            # `--delete` and `--prune` stay off SSH until `--confirm-path` matches.
+            # `--delete` and `--prune` stay off SSH before `--confirm-path` matches.
             if mode === :git_clone || mode === :ship_tree || mode === :remote_root ||
                     mode === :instantiate || mode === :runtest
                 if !preflight_setup_ssh(opts.hosts)

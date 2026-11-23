@@ -289,20 +289,24 @@ using Test
                 @test r.cli_session.yes == true
                 DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags())
             end
-            withenv("DISTSSH_HOSTS" => "3*env-host, 1*env-b") do
-                let r = parse_drive_args(["--head-workers", "2", "s.jl"])
-                    @test r.head_workers == 2
-                    @test ("env-host", 3) in r.hosts
-                    @test ("env-b", 1) in r.hosts
+            let hosts = "3*env-host, 1*env-b"
+                withenv(Dict("DISTSSH_HOSTS" => hosts)...) do
+                    let r = parse_drive_args(["--head-workers", "2", "s.jl"])
+                        @test r.head_workers == 2
+                        @test ("env-host", 3) in r.hosts
+                        @test ("env-b", 1) in r.hosts
+                    end
                 end
             end
             let r = parse_drive_args(String[])
                 @test r.script_path === nothing
             end
         end
-        withenv("JULIA_DISTRIBUTED_EXE" => "/opt/custom/julia") do
-            let r = parse_drive_args(["--head-workers", "1", "s.jl"])
-                @test r.julia == "/opt/custom/julia"
+        let julia_exe = "/opt/custom/julia"
+            withenv(Dict("JULIA_DISTRIBUTED_EXE" => julia_exe)...) do
+                let r = parse_drive_args(["--head-workers", "1", "s.jl"])
+                    @test r.julia == julia_exe
+                end
             end
         end
     end

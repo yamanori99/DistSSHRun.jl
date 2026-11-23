@@ -58,7 +58,7 @@ if !isdefined(@__MODULE__, :_run_kit_setup)
     end
 
     # Same children as `_run_kit_setup`, `_subprocess_width()` at a time.
-    # Temp hosts stay until every process in `calls` has exited.
+    # Temp hosts stay up while any process in `calls` is still running.
     function _run_kit_setups(calls::AbstractVector)
         prepared = map(calls) do call
             _kit_setup_cmd(; call...)
@@ -111,8 +111,8 @@ if !isdefined(@__MODULE__, :_run_kit_setup)
     # `_apply_quiet_setup_session!` / `report=false` instead of discarding stdout.
     #
     # `probe_suspend=true` feeds stdin through a pipe after `PROGRESS_SUSPEND`
-    # is already up (confirm `readline` is pending) and returns that count as a
-    # third value (#374).
+    # is already up (confirm `readline` is blocked) and returns that count as a
+    # third value.
     function _capture_stdio(f::Function; probe_suspend::Bool = false)
         seen = Ref(0)
         return mktemp() do _stdin_path, stdin_io

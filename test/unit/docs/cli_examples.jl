@@ -9,7 +9,7 @@ const _DOC_WALK_ROOTS = [
     joinpath("testenv", "apple-container-ssh"),
 ]
 
-# Instructional leftovers from pre-0.2.0 placement / doctor CLI (issue #486).
+# Instructional leftovers from pre-0.2.0 placement / doctor CLI.
 const _FORBIDDEN_DOC_RE = [
     Regex("setup check") => "doctor --deploy",
     Regex("parent:[0-9]") => "--head-workers or N*host",

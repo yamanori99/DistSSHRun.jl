@@ -1077,7 +1077,7 @@ function _write_kit_pid_file(
                 end
             end
         catch
-            # best-effort only
+            # non-fatal
         end
     end
     return nothing
@@ -1710,7 +1710,7 @@ function _remove_kit_pid_file(
                 rm(path; force = true)
             end
         catch
-            # best-effort only
+            # non-fatal
         end
     end
     return nothing
@@ -1757,7 +1757,7 @@ function _write_kit_result_file(
             end
             mv(tmp, dest; force = true)
         catch
-            # best-effort only
+            # non-fatal
         end
     end
     return nothing
