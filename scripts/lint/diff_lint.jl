@@ -2330,7 +2330,7 @@ function parse_legacy_env_old_names(root::AbstractString)
 end
 
 function parse_obsolete_env_reject_names(root::AbstractString)
-  names = Set{String}()
+    names = Set{String}()
     for rel in ("src/DistSSHRun/drive/pipeline.jl", "src/DistSSHRun/provenance.jl")
         path = joinpath(root, rel)
         isfile(path) || continue
