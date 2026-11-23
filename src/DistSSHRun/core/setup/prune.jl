@@ -233,10 +233,10 @@ function _prune_remote_shell(
     _distssh_consider() {
       _child=\$1
       # The victims file is line-oriented. A newline in a go/ or runs/ leaf
-      # is not covered by the .distsshkit walk. The collect loop is a
-      # pipeline subshell, so record the refusal and return.
+      # is not covered by the .distsshkit walk. The walk runs in this shell,
+      # so the flag is visible after the loop.
       if printf "%s" "\$_child" | awk "NR>1 { e = 1 } END { exit e ? 0 : 1 }"; then
-        printf x > "\$_distssh_nl"
+        _distssh_nlhit=1
         return 0
       fi
       base=\$(basename "\$_child")
@@ -255,10 +255,16 @@ function _prune_remote_shell(
         [ -n "\$(find "\$_child" -maxdepth 0 -mtime +"\$((older - 1))" 2>/dev/null)" ] || return 0
       fi
       if _distssh_tree_blocks "\$_child"; then
-        printf '%s\\n' "\$_child" >> "\$_distssh_refused" || printf x > "\$_distssh_io"
+        printf '%s\\n' "\$_child" >> "\$_distssh_refused" || return 1
         return 0
       fi
-      printf '%s\\n' "\$_child" >> "\$_distssh_victims" || printf x > "\$_distssh_io"
+      printf '%s\\n' "\$_child" >> "\$_distssh_victims" || return 1
+      return 0
+    }
+    _distssh_record_fail() {
+      rm -f "\$_distssh_victims" "\$_distssh_refused" "\$_distssh_kits"
+      printf 'refusing to prune: could not record a leaf\\n' >&2
+      exit 1
     }
     # The walk below reads find output by line. A newline in a parent of
     # `.distsshkit` splits that path, and the prefix can be pruned.
@@ -286,22 +292,24 @@ function _prune_remote_shell(
       printf 'refusing to prune: could not scan state directories\\n' >&2
       exit 1
     }
-    _distssh_nl=\$(mktemp) || {
+    _distssh_kits=\$(mktemp) || {
       rm -f "\$_distssh_victims" "\$_distssh_refused"
       printf 'refusing to prune: could not scan state directories\\n' >&2
       exit 1
     }
-    _distssh_io=\$(mktemp) || {
-      rm -f "\$_distssh_victims" "\$_distssh_refused" "\$_distssh_nl"
+    if ! : > "\$_distssh_kits"; then
+      rm -f "\$_distssh_victims" "\$_distssh_refused" "\$_distssh_kits"
       printf 'refusing to prune: could not scan state directories\\n' >&2
       exit 1
-    }
-    find "\$root" \\( -type d -name .distssh -o -type d -name .distsshkit \\) 2>/dev/null | while IFS= read -r kit; do
+    fi
+    find "\$root" \\( -type d -name .distssh -o -type d -name .distsshkit \\) >> "\$_distssh_kits" 2>/dev/null || true
+    _distssh_nlhit=
+    while IFS= read -r kit; do
       go="\$kit/go"
       if [ -d "\$go" ]; then
         for child in "\$go"/*; do
           [ -d "\$child" ] || continue
-          _distssh_consider "\$child"
+          _distssh_consider "\$child" || _distssh_record_fail
         done
       fi
       runs="\$kit/runs"
@@ -310,7 +318,7 @@ function _prune_remote_shell(
           [ -d "\$kinddir" ] || continue
           for child in "\$kinddir"/*; do
             [ -d "\$child" ] || continue
-            _distssh_consider "\$child"
+            _distssh_consider "\$child" || _distssh_record_fail
           done
         done
       fi
@@ -318,24 +326,18 @@ function _prune_remote_shell(
         for kind in drive setup; do
           p="\$kit/\$kind"
           [ -d "\$p" ] || continue
-          _distssh_consider "\$p"
+          _distssh_consider "\$p" || _distssh_record_fail
         done
       fi
-    done
-    if [ -s "\$_distssh_nl" ]; then
-      rm -f "\$_distssh_victims" "\$_distssh_refused" "\$_distssh_nl" "\$_distssh_io"
+    done < "\$_distssh_kits"
+    rm -f "\$_distssh_kits"
+    if [ -n "\$_distssh_nlhit" ]; then
+      rm -f "\$_distssh_victims" "\$_distssh_refused"
       printf 'refusing to prune a path that contains a newline\\n' >&2
       exit 1
     fi
-    if [ -s "\$_distssh_io" ]; then
-      rm -f "\$_distssh_victims" "\$_distssh_refused" "\$_distssh_nl" "\$_distssh_io"
-      printf 'refusing to prune: could not record a leaf\\n' >&2
-      exit 1
-    fi
-    rm -f "\$_distssh_nl" "\$_distssh_io"
-    # Local prune inspects every victim before rm. The collect loop is a
-    # pipeline subshell, so the list file is the hand-off. Do not rm the
-    # list while a loop still reads it.
+    # Local prune inspects every victim before rm. Do not rm the list
+    # while a loop still reads it.
     _distssh_owned=1
     while IFS= read -r _child; do
       _bad=\$(_distssh_first_unowned_stamp "\$_child")

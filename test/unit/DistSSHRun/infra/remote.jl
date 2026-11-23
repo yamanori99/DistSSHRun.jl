@@ -902,6 +902,51 @@ end
         end
     end
 
+    @testset "prune shell exits before rm when a leaf list write fails" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, ".distssh", "go", "job_ok")
+            mkpath(leaf)
+            write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            bin = joinpath(d, "bin")
+            mkpath(bin)
+            write(
+                joinpath(bin, "mktemp"),
+                """
+                #!/bin/sh
+                nfile="\$TMPDIR/distssh-mktemp-n"
+                n=0
+                [ -f "\$nfile" ] && n=\$(cat "\$nfile")
+                n=\$((n + 1))
+                printf '%s\\n' "\$n" > "\$nfile"
+                f=\$(/usr/bin/mktemp)
+                if [ "\$n" = 1 ]; then
+                  chmod 444 "\$f"
+                fi
+                printf '%s\\n' "\$f"
+                """,
+            )
+            chmod(joinpath(bin, "mktemp"), 0o755)
+            err = IOBuffer()
+            proc = withenv("PATH" => bin * ":" * ENV["PATH"], "TMPDIR" => d) do
+                run(
+                    ignorestatus(
+                        pipeline(
+                            `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                            stdout = devnull,
+                            stderr = err,
+                        ),
+                    );
+                    wait = true,
+                )
+            end
+            @test proc.exitcode != 0
+            @test occursin("could not record a leaf", String(take!(err)))
+            @test isdir(leaf)
+            @test isfile(joinpath(leaf, "run.toml"))
+        end
+    end
+
     @testset "delete shell scans nested deploy runs not the git root" begin
         mktempdir() do d
             gitroot = joinpath(d, "Repo")
