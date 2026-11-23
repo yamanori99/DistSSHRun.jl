@@ -13,12 +13,14 @@ if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
         return string(_LEAK_GUARD_RUN_ID[], ":", rel)
     end
 
-    function _leak_guard_known_worker_orphan(row::ProcessRow)::Bool
+    function _leak_guard_argv_has_token(cmd::AbstractString, token::AbstractString)::Bool
+        return any(part -> part == token, split(cmd))
+    end
+
+    function _leak_guard_known_precompile_orphan(row::ProcessRow)::Bool
         row.ppid == 1 || return false
-        cmd = row.command
-        return occursin("--worker", cmd) ||
-            occursin("--output-incremental", cmd) ||
-            occursin("--output-o ", cmd)
+        return _leak_guard_argv_has_token(row.command, "--output-incremental") ||
+            _leak_guard_argv_has_token(row.command, "--output-o")
     end
 
     function _format_leak_rows(rows::AbstractVector{ProcessRow})::String
@@ -71,7 +73,7 @@ if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
         key = _DISTSSH_TEST_LEAK_TAG
         list = () -> processes_with_env(key, String(tag))
         rows = wait_gone(list; timeout = grace)
-        rows = filter(row -> !_leak_guard_known_worker_orphan(row), rows)
+        rows = filter(row -> !_leak_guard_known_precompile_orphan(row), rows)
         if !isempty(rows)
             head = isempty(label) ? "leaked processes" : "leaked processes ($label)"
             println(stderr, "──── $head (tag=$(repr(tag))) ────")

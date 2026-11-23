@@ -364,7 +364,9 @@ Helpers (via `support.jl`): `_child_julia_env`, `_run_kit_drive` /
   finishes, a changed `ENV` entry, `LOAD_PATH`, `JULIA_LOAD_PATH`, or active
   project fails that file with the name and the before and after values.
   `DistSSHBase.processes_with_env` must find no matching process. Leftovers
-  are printed; the harness does not restore or reap.
+  are printed; the harness does not restore or reap. A tagged `--worker`
+  orphan fails that check. Incremental precompile children
+  (`--output-incremental`, `--output-o`) with ppid 1 are excluded.
 - Invariant testsets are named `@testset "invariant: <name>"`. Names live in
   `scripts/check.sh` (`INVARIANT_NAMES`). Add a name there when the tests exist.
   A second Ctrl-C during `drive` cleanup SIGKILLs this run's local
