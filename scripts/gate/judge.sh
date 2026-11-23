@@ -40,6 +40,22 @@ judge() {
   esac
 }
 
+judge_macos_1_14_pre() {
+  local id="$1"
+  case "${event}" in
+    schedule|workflow_dispatch)
+      if [[ "${precheck}" == true ]]; then
+        judge "${id}" ""
+      else
+        judge "${id}" "${docs_scripts_off}"
+      fi
+      ;;
+    *)
+      judge "${id}" "${macos_1_14_pre_off}"
+      ;;
+  esac
+}
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=judge_matrix.sh
 source "${ROOT}/scripts/gate/judge_matrix.sh"
@@ -62,6 +78,7 @@ wsl_off="WSL jobs do not run on pull_request"
 fix_title_off="title is not fix: or fix("
 pkgeval_off="PkgEval does not run on pull_request"
 nightly_off="nightly job does not run on pull_request"
+macos_1_14_pre_off="macOS 1.14-pre Pkg.test runs on schedule and workflow_dispatch only"
 
 heavy_off="detect heavy=${heavy}"
 docs_scripts_off="heavy=${heavy} scripts=${scripts}"
@@ -104,8 +121,8 @@ if [[ "${heavy}" == true ]]; then
   judge registry-install ""
   judge test-1-14-pre-unit ""
   judge test-1-14-pre-integration ""
-  judge test-1-14-pre-macos-unit ""
-  judge test-1-14-pre-macos-integration ""
+  judge_macos_1_14_pre test-1-14-pre-macos-unit
+  judge_macos_1_14_pre test-1-14-pre-macos-integration
   if [[ "${coverage}" == true ]]; then
     judge test-coverage ""
   else
@@ -127,18 +144,20 @@ elif [[ "${precheck}" == true ]]; then
   judge jetls ""
   judge aqua ""
   for id in test-unit test-integration test-macos-unit test-macos-integration \
-    registry-install test-1-14-pre-unit test-1-14-pre-integration test-1-14-pre-macos-unit \
-    test-1-14-pre-macos-integration test-coverage pkgeval; do
+    registry-install test-1-14-pre-unit test-1-14-pre-integration test-coverage pkgeval; do
     judge "${id}" "${heavy_off}"
   done
+  judge_macos_1_14_pre test-1-14-pre-macos-unit
+  judge_macos_1_14_pre test-1-14-pre-macos-integration
   judge test-wsl "${heavy_off}"
   judge test-nightly "${heavy_off}"
 else
   for id in jetls aqua test-unit test-integration test-macos-unit test-macos-integration \
-    registry-install test-1-14-pre-unit test-1-14-pre-integration test-1-14-pre-macos-unit \
-    test-1-14-pre-macos-integration test-coverage pkgeval; do
+    registry-install test-1-14-pre-unit test-1-14-pre-integration test-coverage pkgeval; do
     judge "${id}" "${heavy_off}"
   done
+  judge_macos_1_14_pre test-1-14-pre-macos-unit
+  judge_macos_1_14_pre test-1-14-pre-macos-integration
   judge test-wsl "${heavy_off}"
   judge test-nightly "${heavy_off}"
 fi
