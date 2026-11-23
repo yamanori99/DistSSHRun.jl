@@ -2409,22 +2409,24 @@ function library_src_path(path::AbstractString)::Bool
     return occursin(r"^lib/[^/]+/src/", p)
 end
 
-const EXIT_SRC_ALLOWLIST = Set{String}([
-    "src/cli/_checkout.jl",
-    "src/cli/doctor.jl",
-    "src/cli/drive.jl",
-    "src/cli/go.jl",
-    "src/cli/hostinfo.jl",
-    "src/cli/pool.jl",
-    "src/cli/setup.jl",
-    "src/cli/up.jl",
-    "src/DistSSHRun/core/drive/cancel_frame.jl",
-    "src/DistSSHRun/core/drive/run.jl",
-    "src/DistSSHRun/infra/go_handshake.jl",
-    "src/DistSSHRun/infra/namespace_sync.jl",
-    "src/DistSSHRun/infra/ship.jl",
-    "lib/DistSSHHeartbeat/src/worker.jl",
-])
+const EXIT_SRC_ALLOWLIST = Set{String}(
+    [
+        "src/cli/_checkout.jl",
+        "src/cli/doctor.jl",
+        "src/cli/drive.jl",
+        "src/cli/go.jl",
+        "src/cli/hostinfo.jl",
+        "src/cli/pool.jl",
+        "src/cli/setup.jl",
+        "src/cli/up.jl",
+        "src/DistSSHRun/core/drive/cancel_frame.jl",
+        "src/DistSSHRun/core/drive/run.jl",
+        "src/DistSSHRun/infra/go_handshake.jl",
+        "src/DistSSHRun/infra/namespace_sync.jl",
+        "src/DistSSHRun/infra/ship.jl",
+        "lib/DistSSHHeartbeat/src/worker.jl",
+    ]
+)
 
 function macro_head_name(node)
     kind(node) == K"macrocall" || return nothing
@@ -2480,14 +2482,16 @@ function rhs_bakes_runtime(node)
     return walk(node)
 end
 
-const INIT_WORKLOAD_FORBIDDEN_CALLS = Set{String}([
-    "run",
-    "addprocs",
-    "connect",
-    "listen",
-    "atexit",
-    "Timer",
-])
+const INIT_WORKLOAD_FORBIDDEN_CALLS = Set{String}(
+    [
+        "run",
+        "addprocs",
+        "connect",
+        "listen",
+        "atexit",
+        "Timer",
+    ]
+)
 
 function init_workload_forbidden_node(node)
     if kind(node) == K"macrocall"
@@ -2503,13 +2507,13 @@ function init_workload_forbidden_node(node)
 end
 
 function collect_src_walk(
-    root,
-    files,
-    src_for_path;
-    whole::Bool,
-    rule::AbstractString,
-    walk_fn,
-)
+        root,
+        files,
+        src_for_path;
+        whole::Bool,
+        rule::AbstractString,
+        walk_fn,
+    )
     hits = Tuple{String, Int, String}[]
     paths = whole ? filter(library_src_path, tracked_jl(root)) : collect(keys(files))
     for path in paths
@@ -2582,7 +2586,7 @@ function descend_library_ctx(node, ctx::LibraryWalkCtx)
 end
 
 function module_level_parent(parent)
-    kind(parent) in (K"toplevel", K"module")
+    return kind(parent) in (K"toplevel", K"module")
 end
 
 function walk_ban_global!(node, parent, src, path, added, rule, hits, ctx::LibraryWalkCtx = LibraryWalkCtx(0, false, 0))
@@ -3195,22 +3199,24 @@ const CEILING_ENV_WRITE = 38
 const CEILING_KWARGS_SPLAT = 22
 const CEILING_SUPPRESSION = 18
 const CEILING_ADDPROCS_KW_SPLAT = 2
-const ADDDROCS_KW_ALLOWLIST = Set{Symbol}([
-    :cmdline_cookie,
-    :dir,
-    :enable_threaded_blas,
-    :env,
-    :exeflags,
-    :exename,
-    :lazy,
-    :max_parallel,
-    :multiplex,
-    :shell,
-    :ssh,
-    :sshflags,
-    :topology,
-    :tunnel,
-])
+const ADDDROCS_KW_ALLOWLIST = Set{Symbol}(
+    [
+        :cmdline_cookie,
+        :dir,
+        :enable_threaded_blas,
+        :env,
+        :exeflags,
+        :exename,
+        :lazy,
+        :max_parallel,
+        :multiplex,
+        :shell,
+        :ssh,
+        :sshflags,
+        :topology,
+        :tunnel,
+    ]
+)
 
 function tracked_jl(root::AbstractString)
     return filter(p -> endswith(p, ".jl") && !skipped_path(p), readlines(`git -C $root ls-files '*.jl'`))
@@ -3501,8 +3507,8 @@ function swallowed_catch_hit(src::AbstractString, node)::Bool
     !isempty(lines) && all(l -> isempty(l) || startswith(l, "#"), lines) && return true
     !isempty(lines) && all(
         l ->
-            isempty(l) || startswith(l, "#") || occursin(r"^@(warn|error|info|debug)\b", l) ||
-                occursin(r"^println\s*\(\s*stderr", l),
+        isempty(l) || startswith(l, "#") || occursin(r"^@(warn|error|info|debug)\b", l) ||
+            occursin(r"^println\s*\(\s*stderr", l),
         lines,
     ) && return true
     return catch_body_log_only(node)
