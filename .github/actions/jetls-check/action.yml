@@ -73,6 +73,17 @@ runs:
         fi
         # Match aviatesk/JETLS.jl check@release: no `--threads=auto` (segfaults
         # on Julia 1.13 in signature_analysis_worker; exit 139).
+        _log="$(mktemp)"
+        cleanup_log() { rm -f "${_log}"; }
+        trap cleanup_log EXIT
+        set +e
         # shellcheck disable=SC2086
-        jetls check --quiet --root=. --exit-severity=hint --show-severity=hint --progress=none $JETLS_FILES
+        jetls check --quiet --root=. --exit-severity=hint --show-severity=hint --progress=none $JETLS_FILES >"${_log}" 2>&1
+        _status=$?
+        set -e
+        cat "${_log}"
+        "${GITHUB_WORKSPACE}/.github/jetls-log-gate.sh" "${_log}"
+        if ((_status != 0)); then
+          exit "${_status}"
+        fi
         echo "jetls-startup: check end"

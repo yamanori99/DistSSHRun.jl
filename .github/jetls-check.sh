@@ -162,7 +162,8 @@ fi
 
 # Match .github/actions/jetls-check and aviatesk/JETLS.jl check@release: no
 # `--threads=auto` (segfaults on Julia 1.13 in signature_analysis_worker).
-# A failed instantiate still exits 0 after script analysis. That is not this check.
+# A failed instantiate or precompile can still exit 0 after script analysis.
+# jetls-log-gate.sh and the instantiate block below fail closed on those lines.
 section "jetls-check"
 _log="$(mktemp)"
 cleanup_log() { rm -f "${_log}"; }
@@ -207,4 +208,5 @@ if grep -q 'Failed to instantiate package environment' "${_log}"; then
     } >&2
     exit 1
 fi
+"${root}/.github/jetls-log-gate.sh" "${_log}"
 exit "${_status}"
