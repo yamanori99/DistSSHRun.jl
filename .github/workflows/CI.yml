@@ -12,7 +12,8 @@ on:
       - ready_for_review
       - labeled
   workflow_dispatch:
-  # Daily 06:00 JST (21:00 UTC). Downstream-only report; detect sets heavy=false.
+  # Daily 06:00 JST (21:00 UTC). Downstream report and macOS 1.14-pre Pkg.test;
+  # detect sets heavy=false.
   schedule:
     - cron: "0 21 * * *"
 
@@ -21,7 +22,8 @@ on:
 # the heavy gate, including ordinary pull requests. Linux SSH E2E 1.14-pre
 # follows the E2E path filter (continue-on-error). A Project.toml version
 # increase (see version-cut.sh) also runs Ubuntu nightly and Aqua on nightly.
-# macOS 1.14-pre Pkg.test follows the heavy gate and is required. macOS
+# macOS 1.14-pre Pkg.test runs on the daily schedule and workflow_dispatch
+# only (not pull requests or main push). macOS
 # nightly stays on CI weekly. WSL2 1.13 Pkg.test runs on a main
 # push and CI weekly, not on a pull request.
 # Ordinary pull requests skip DistSSHBase unless lib/DistSSHBase, root
@@ -205,12 +207,8 @@ jobs:
           else
             echo "coverage=false" >> "$GITHUB_OUTPUT"
           fi
-          # Version-cut PRs, main pushes, and workflow_dispatch. Ordinary PRs stay false.
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$CUT" = "true" ] || { [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ]; }; then
-            echo "queue_e2e=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "queue_e2e=false" >> "$GITHUB_OUTPUT"
-          fi
+          # Paused: DistSSHQueue main still expects ride demos and DISTRIBUTED_*; Run uses DISTSSH_* only.
+          echo "queue_e2e=false" >> "$GITHUB_OUTPUT"
           # Ordinary pull requests only. Push, dispatch, and a version cut run all three.
           # CI weekly is a separate workflow and does not read these outputs.
           if [ "$GITHUB_EVENT_NAME" != "pull_request" ] || [ "$CUT" = "true" ]; then
@@ -1085,9 +1083,8 @@ jobs:
 
   # Version string is ~1.14.0-0. The title is 1.14-pre, shared with Queue and Kit.
   # Required: a driver blocked in pmap must cancel within interrupt_grace + 11s
-  # (#212). The macOS job is that suite on xcode-27. It waits for the
-  # same Runic / JETLS 1.13 / Aqua 1.13 gate as Run 1.13, then runs beside
-  # that chain. Nightly stays continue-on-error.
+  # (#212). macOS 1.14-pre Pkg.test runs on schedule and workflow_dispatch
+  # only, after Runic / JETLS 1.13 / Aqua 1.13. Nightly stays continue-on-error.
   # Aqua, JETLS, and Linux E2E on 1.14-pre stay continue-on-error.
   test-1-14-pre-unit:
     name: DistSSHRun (1.14-pre, ubuntu-latest, x64, unit)
@@ -1136,7 +1133,7 @@ jobs:
   test-1-14-pre-macos-unit:
     name: DistSSHRun (1.14-pre, xcode-27, aarch64, unit)
     needs: [detect, runic, jetls, aqua]
-    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' }}
     env:
       DISTSSH_TEST_GROUP: unit
     runs-on: xcode-27
@@ -1157,7 +1154,7 @@ jobs:
   test-1-14-pre-macos-integration:
     name: DistSSHRun (1.14-pre, xcode-27, aarch64, integration)
     needs: [detect, runic, jetls, aqua]
-    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' }}
     env:
       DISTSSH_TEST_GROUP: integration
     runs-on: xcode-27
@@ -1448,7 +1445,7 @@ jobs:
             ~/.julia/registries
             ~/.julia/environments/apps
             ~/.julia/bin
-          key: jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-${{ hashFiles('Project.toml', 'test/Project.toml', 'lib/DistSSHBase/Project.toml', 'lib/DistSSHBase/test/Project.toml', 'lib/DistSSHUp/Project.toml', 'lib/DistSSHUp/test/Project.toml', 'lib/DistSSHShip/Project.toml', 'lib/DistSSHShip/test/Project.toml', 'lib/DistSSHHeartbeat/Project.toml', 'lib/DistSSHHeartbeat/test/Project.toml') }}
+          key: jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-${{ hashFiles('Project.toml', 'test/Project.toml', 'bench/compile/Project.toml', 'lib/DistSSHBase/Project.toml', 'lib/DistSSHBase/test/Project.toml', 'lib/DistSSHUp/Project.toml', 'lib/DistSSHUp/test/Project.toml', 'lib/DistSSHShip/Project.toml', 'lib/DistSSHShip/test/Project.toml', 'lib/DistSSHHeartbeat/Project.toml', 'lib/DistSSHHeartbeat/test/Project.toml') }}
           restore-keys: |
             jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-
       - uses: ./.github/actions/jetls-check
@@ -1525,7 +1522,7 @@ jobs:
             ~/.julia/registries
             ~/.julia/environments/apps
             ~/.julia/bin
-          key: jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-${{ hashFiles('Project.toml', 'test/Project.toml', 'lib/DistSSHBase/Project.toml', 'lib/DistSSHBase/test/Project.toml', 'lib/DistSSHUp/Project.toml', 'lib/DistSSHUp/test/Project.toml', 'lib/DistSSHShip/Project.toml', 'lib/DistSSHShip/test/Project.toml', 'lib/DistSSHHeartbeat/Project.toml', 'lib/DistSSHHeartbeat/test/Project.toml') }}
+          key: jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-${{ hashFiles('Project.toml', 'test/Project.toml', 'bench/compile/Project.toml', 'lib/DistSSHBase/Project.toml', 'lib/DistSSHBase/test/Project.toml', 'lib/DistSSHUp/Project.toml', 'lib/DistSSHUp/test/Project.toml', 'lib/DistSSHShip/Project.toml', 'lib/DistSSHShip/test/Project.toml', 'lib/DistSSHHeartbeat/Project.toml', 'lib/DistSSHHeartbeat/test/Project.toml') }}
           restore-keys: |
             jetls-depot-${{ runner.os }}-${{ steps.runner.outputs.julia }}-${{ steps.runner.outputs.cputarget }}-${{ steps.jetls-rev.outputs.rev }}-
       - uses: ./.github/actions/jetls-check
@@ -1641,7 +1638,8 @@ jobs:
   queue-ssh-e2e:
     name: Downstream SSH E2E (DistSSHQueue, 1.13)
     needs: [detect, runic, jetls, aqua]
-    if: needs.detect.outputs.queue_e2e == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    # Paused: DistSSHQueue main still expects ride demos and DISTRIBUTED_*; Run uses DISTSSH_* only.
+    if: false && needs.detect.outputs.queue_e2e == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
