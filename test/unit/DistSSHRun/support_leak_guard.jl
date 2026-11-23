@@ -40,13 +40,7 @@ end
 
 function _stop_tagged_orphan(tag::AbstractString)
     rows = processes_with_env("DISTSSH_TEST_LEAK_TAG", tag)
-    for row in rows
-        try
-            kill(row.pid, Base.SIGKILL)
-        catch e
-            e isa InterruptException && rethrow()
-        end
-    end
+    DistSSHRun.DistSSHBase.reap!(rows)
     wait_gone(() -> processes_with_env("DISTSSH_TEST_LEAK_TAG", tag); timeout = 5.0)
     return nothing
 end
