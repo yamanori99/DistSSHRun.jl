@@ -928,7 +928,7 @@ function lint_skips(root, files, src_for_path)
         walk(tree)
     end
     if !isempty(root)
-        n += report_hits(collect_loop_skip(root, files, src_for_path; whole = false))
+        n += report_hits(collect_loop_skip(root, files, src_for_path; whole = false), root)
         n += check_ceiling(
             "CEILING_LOOP_SKIP",
             length(collect_loop_skip(root, files, src_for_path; whole = true)),
@@ -1001,7 +1001,36 @@ function lint_new_comments(root, files)
     return n
 end
 
+function lint_fixture_suite!(root::AbstractString)
+    src_for = path -> read(joinpath(root, path), String)
+    function file_hunks(rel)
+        src = src_for(rel)
+        n = count(==('\n'), src) + 1
+        return Dict(rel => [Hunk(1, 0, n, n, String[])])
+    end
+    split_rel = "scripts/lint/fixtures/evasion/split_string.jl"
+    isempty(collect_split_token(root, file_hunks(split_rel), src_for; whole = false)) &&
+        die("self-test: fixture split-token evasion")
+    clean_rel = "scripts/lint/fixtures/clean/prose_string.jl"
+    !isempty(collect_split_token(root, file_hunks(clean_rel), src_for; whole = false)) &&
+        die("self-test: fixture split-token clean")
+    proc_rel = "scripts/lint/fixtures/evasion/pkill_cmd.jl"
+    isempty(collect_process_pattern(root, file_hunks(proc_rel), src_for; whole = false)) &&
+        die("self-test: fixture process-pattern evasion")
+    doc_rel = "scripts/lint/fixtures/clean/doc_pkill.jl"
+    !isempty(collect_process_pattern(root, file_hunks(doc_rel), src_for; whole = false)) &&
+        die("self-test: fixture process-pattern clean")
+    withenv_bad = "scripts/lint/fixtures/evasion/withenv_test_invalid.jl"
+    isempty(collect_env_default_test(root, file_hunks(withenv_bad), src_for; whole = false)) &&
+        die("self-test: fixture env-default-test evasion")
+    mut_rel = "scripts/lint/fixtures/test_mutation/env_write.jl"
+    isempty(collect_test_env_mutation(root, file_hunks(mut_rel), src_for; whole = false)) &&
+        die("self-test: fixture test-env-mutation evasion")
+    return
+end
+
 function self_test()
+    register_lint_rules!(collect(GATE_LINT_NAMES))
     issue_lookup[] = false
     try
         return self_test_body()
@@ -1410,7 +1439,7 @@ function self_test_body_main()
     for line in judge_lines
         startswith(line, "ok  ") || die("self-test: judge_self_test unexpected line $(line)")
     end
-    length(GATE_LINT_NAMES) == 30 || die("self-test: GATE_LINT_NAMES $(length(GATE_LINT_NAMES))")
+    length(GATE_LINT_NAMES) == 31 || die("self-test: GATE_LINT_NAMES $(length(GATE_LINT_NAMES))")
     "all" in GATE_LINT_NAMES && die("self-test: all is not a per-mode name")
     lint_sh = read(joinpath(@__DIR__, "..", "gate", "lint.sh"), String)
     occursin("run.sh\" all", lint_sh) || die("self-test: lint.sh must run all in one process")
@@ -1586,6 +1615,7 @@ function self_test_body_main()
         die("self-test: weak-assertion negative")
     count_swallowed_catch_legacy(repo_root()) <= 138 ||
         die("self-test: swallowed legacy above main")
+    lint_fixture_suite!(repo_root())
     println("self-test: passed")
     return 0
 end
@@ -2206,10 +2236,17 @@ end
 
 function string_literal_value(node)
     kind(node) == K"string" || return nothing
-    txt = sourcetext(node)
-    startswith(txt, "\"") && endswith(txt, "\"") || return nothing
-    inner = txt[2:(end - 1)]
-    return occursin('\0', inner) ? nothing : inner
+    if numchildren(node) >= 1 && kind(node[1]) == K"String"
+        v = sourcetext(node[1])
+        return occursin('\0', v) ? nothing : v
+    end
+    ex = try
+        Meta.parse(sourcetext(node); lang = :julia)
+    catch
+        return nothing
+    end
+    ex isa String || return nothing
+    return occursin('\0', ex) ? nothing : ex
 end
 
 function string_literal_value_src(node, src::AbstractString)
@@ -2298,15 +2335,62 @@ function parse_legacy_env_old_names(root::AbstractString)
 end
 
 function parse_removed_env_reject_table(root::AbstractString)
+    path = joinpath(root, "src", "DistSSHRun", "options", "obsolete_env.jl")
+    isfile(path) || return Set{String}()
     names = Set{String}()
-    for rel in ("src/DistSSHRun/drive/pipeline.jl", "src/DistSSHRun/provenance.jl")
-        path = joinpath(root, rel)
-        isfile(path) || continue
-        for m in eachmatch(r"\"(DISTSSH_[A-Z0-9_]+)\"", read(path, String))
-            push!(names, String(m.captures[1]))
-        end
+    for m in eachmatch(r"\"(DISTSSH_[A-Z0-9_]+|GB_PER_WORKER)\"", read(path, String))
+        push!(names, String(m.captures[1]))
     end
     return names
+end
+
+const REMOVED_ENV_NAME_RE = r"^(DISTSSH_[A-Z0-9_]+|GB_PER_WORKER)$"
+
+function changelog_removed_fragment_names(root::AbstractString)
+    names = String[]
+    for path in readlines(Cmd(`git -C $root ls-files changelog.d`; ignorestatus = true))
+        append!(names, markdown_removed_names(read(joinpath(root, path), String)))
+    end
+    return unique(names)
+end
+
+function removed_env_fragment_names(root::AbstractString)
+    return Set(n for n in changelog_removed_fragment_names(root) if occursin(REMOVED_ENV_NAME_RE, n))
+end
+
+function lint_obsolete_env_reject_table_sync(root::AbstractString)
+    table = parse_removed_env_reject_table(root)
+    isempty(table) && return 1
+    fragment = removed_env_fragment_names(root)
+    n = 0
+    for name in table
+        name in fragment || begin
+            println(stderr, "lint: obsolete env table name $(name) missing from changelog Removed: line")
+            n += 1
+        end
+    end
+    for name in fragment
+        name in table || begin
+            println(stderr, "lint: changelog Removed env name $(name) missing from obsolete env table")
+            n += 1
+        end
+    end
+    bad = String[]
+    for path in readlines(Cmd(`git -C $root ls-files src`; ignorestatus = true))
+        path == "src/DistSSHRun/options/obsolete_env.jl" && continue
+        text = read(joinpath(root, path), String)
+        for (i, line) in enumerate(split(text, '\n'; keepempty = true))
+            for name in table
+                occursin(Regex("\\b" * replace(name, "_" => "_") * "\\b"), line) || continue
+                removed_name_src_ok(line, name) || push!(bad, "$(path):$(i):$(name)")
+            end
+        end
+    end
+    for hit in unique(bad)
+        println(stderr, "lint: removed env name mention outside rejection table: $(hit)")
+        n += 1
+    end
+    return n
 end
 
 function env_name_allowed(
@@ -2328,11 +2412,45 @@ function env_name_allowed(
     return false
 end
 
+function env_sink_distssh_name(node, consts::Dict{String, String})
+    if kind(node) == K"ref" && numchildren(node) >= 2 && sourcetext(node[1]) == "ENV"
+        return distssh_env_folded_name(node[2], consts)
+    end
+    kind(node) == K"call" || return nothing
+    head = call_head_name(node)
+    head in ("get", "get!", "haskey", "delete!", "pop!") || return nothing
+    numchildren(node) < 3 && return nothing
+    sourcetext(node[2]) == "ENV" || return nothing
+    return distssh_env_folded_name(node[3], consts)
+end
+
+function withenv_pair_distssh_name(node, consts::Dict{String, String})
+    pair = env_pair_string_literals(node)
+    pair === nothing && return nothing
+    key, _ = pair
+    occursin(DISTSSH_ENV_NAME_RE, key) || return nothing
+    return key
+end
+
 function walk_env_table_names!(node, src, path, added, consts, table, legacy, removed, hits)
     name = distssh_env_folded_name(node, consts)
     if name !== nothing && !startswith(name, "DISTSSH_INTERNAL_") && node_touches_added(src, node, added) &&
             !env_name_allowed(name, table, legacy, removed)
         push!(hits, (path, line_of(src, Int(first(byte_range(node)))), "env-table"))
+    end
+    sink = env_sink_distssh_name(node, consts)
+    if sink !== nothing && !startswith(sink, "DISTSSH_INTERNAL_") && node_touches_added(src, node, added) &&
+            !env_name_allowed(sink, table, legacy, removed)
+        push!(hits, (path, line_of(src, Int(first(byte_range(node)))), "env-table"))
+    end
+    if kind(node) == K"call" && call_head_name(node) == "withenv"
+        for i in 2:numchildren(node)
+            wn = withenv_pair_distssh_name(node[i], consts)
+            if wn !== nothing && node_touches_added(src, node, added) &&
+                    !env_name_allowed(wn, table, legacy, removed)
+                push!(hits, (path, line_of(src, Int(first(byte_range(node)))), "env-table"))
+            end
+        end
     end
     kind(node) == K"doc" && return
     if kind(node) == K"macrocall" && macro_head_name(node) in ("@doc", "doc")
@@ -2621,6 +2739,8 @@ function call_head_name(node)
 end
 
 include(joinpath(@__DIR__, "fold.jl"))
+include(joinpath(@__DIR__, "shell_cmd.jl"))
+include(joinpath(@__DIR__, "lint_allow.jl"))
 
 function call_is_meta_dir_macro(node)
     kind(node) != K"macrocall" && return false
@@ -2906,6 +3026,59 @@ end
 
 function collect_env_write(root, files, src_for_path; whole::Bool)
     return collect_src_walk(root, files, src_for_path; whole, rule = "env-write", walk_fn = walk_env_write!)
+end
+
+function test_env_mutation_hit_node(node, withenv_depth::Int)
+    withenv_depth > 0 && return false
+    is_env_write_node(node) && return true
+    kind(node) == K"call" || return false
+    call_head_name(node) == "merge!" || return false
+    numchildren(node) >= 2 && sourcetext(node[2]) == "ENV"
+end
+
+function walk_test_env_mutation!(node, src, path, added, withenv_depth, hits)
+    if kind(node) == K"call" && call_head_name(node) == "withenv"
+        n = numchildren(node)
+        n < 2 && return
+        body = node[n]
+        inner = withenv_depth
+        kind(body) == K"do" && (inner += 1)
+        for i in 1:n
+            d = i == n ? inner : withenv_depth
+            walk_test_env_mutation!(node[i], src, path, added, d, hits)
+        end
+        return
+    end
+    if test_env_mutation_hit_node(node, withenv_depth) && node_touches_added(src, node, added)
+        push!(hits, (path, line_of(src, Int(first(byte_range(node)))), "test-env-mutation"))
+    end
+    for i in 1:numchildren(node)
+        walk_test_env_mutation!(node[i], src, path, added, withenv_depth, hits)
+    end
+    return
+end
+
+function test_env_mutation_path(path::AbstractString)
+    p = replace(String(path), '\\' => '/')
+    test_path(p) && return true
+    return startswith(p, "scripts/lint/fixtures/test_mutation/")
+end
+
+function collect_test_env_mutation(root, files, src_for_path; whole::Bool)
+    hits = Tuple{String, Int, String}[]
+    paths = whole ? filter(test_env_mutation_path, tracked_jl(root)) : collect(keys(files))
+    for path in paths
+        test_env_mutation_path(path) || continue
+        skipped_path(path) && continue
+        endswith(path, ".jl") || continue
+        whole || (isempty(added_lines(get(files, path, Hunk[]))) && continue)
+        src = lint_file_src(root, path, src_for_path)
+        src === nothing && continue
+        added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
+        whole || (isempty(added) && continue)
+        walk_test_env_mutation!(parse_tree(src), src, path, added, 0, hits)
+    end
+    return unique(hits)
 end
 
 function function_has_kwargs_splat(node)
@@ -3327,7 +3500,7 @@ end
 
 function lint_mode_zero(root, files, src_for_path, collect_fn, ceiling_name)
     added = collect_fn(root, files, src_for_path; whole = false)
-    n = report_hits(added)
+    n = report_hits(added, root)
     whole = collect_fn(root, files, src_for_path; whole = true)
     n += check_ceiling(ceiling_name, length(whole), 0)
     return n
@@ -3365,7 +3538,7 @@ end
 
 const BANNED_NEW = ("best-effort", "until", "lockstep", "pending", "known failure", "pre-existing")
 const CEILING_ID_MATCH = 0
-const CEILING_PROCESS_PATTERN = 37
+const CEILING_PROCESS_PATTERN = 7
 const CEILING_LOCK_CREATE = 0
 const CEILING_ENV_DEFAULT = 0
 const CEILING_ENV_DEFAULT_TEST = 0
@@ -3507,12 +3680,6 @@ function collect_id_match(root, files, src_for_path; whole::Bool)
     return unique(hits)
 end
 
-function process_builder_name(node)
-    n = defined_function_name(node)
-    n === nothing && return false
-    return n == "_pkill_pattern!"
-end
-
 function string_is_function_docstring(node, parent)
     kind(node) in (K"string", K"String") || return false
     kind(parent) == K"block" || return false
@@ -3521,29 +3688,18 @@ function string_is_function_docstring(node, parent)
     return true
 end
 
-function walk_process!(node, parent, src, path, added, in_builder, in_doc, hits)
+function walk_process_pattern!(node, parent, src, path, added, consts, in_doc, hits)
     in_doc = in_doc || kind(node) == K"doc" || string_is_function_docstring(node, parent)
-    if process_builder_name(node)
-        for i in 1:numchildren(node)
-            walk_process!(node[i], node, src, path, added, true, in_doc, hits)
-        end
+    if kind(node) == K"macrocall" && macro_head_name(node) in ("@doc", "doc")
         return
     end
-    st = sourcetext(node)
-    skip = in_doc || string_is_function_docstring(node, parent)
-    if !in_builder && !skip && kind(node) in (K"vect", K"ref", K"string", K"String")
-        if occursin(r"(?i)(?<![A-Za-z0-9_])(pkill|pgrep)(?![A-Za-z0-9_])", st) && node_touches_added(src, node, added)
-            a = line_of(src, Int(first(byte_range(node))))
-            push!(hits, (path, a, "process-pattern"))
-        end
-    end
-    if !skip && kind(node) in (K"string", K"String") && occursin(r"\[[a-zA-Z]\]", st) &&
+    if !in_doc && kind(node) != K"Identifier" && kind(node) != K"Comment" &&
+            process_pattern_builder_hit(node, consts) &&
             node_touches_added(src, node, added)
-        a = line_of(src, Int(first(byte_range(node))))
-        push!(hits, (path, a, "process-pattern"))
+        push!(hits, (path, line_of(src, Int(first(byte_range(node)))), "process-pattern"))
     end
     for i in 1:numchildren(node)
-        walk_process!(node[i], node, src, path, added, in_builder, in_doc, hits)
+        walk_process_pattern!(node[i], node, src, path, added, consts, in_doc, hits)
     end
     return
 end
@@ -3555,13 +3711,17 @@ function collect_process_pattern(root, files, src_for_path; whole::Bool)
         skipped_path(path) && continue
         endswith(path, ".jl") || continue
         p = replace(path, '\\' => '/')
-        startswith(p, "src/") || occursin(r"^lib/[^/]+/src/", p) || continue
+        startswith(p, "src/") || occursin(r"^lib/[^/]+/src/", p) ||
+            startswith(p, "scripts/lint/fixtures/") || continue
         whole || (isempty(added_lines(get(files, path, Hunk[]))) && continue)
         src = lint_file_src(root, path, src_for_path)
         src === nothing && continue
         added_set = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
         whole || (isempty(added_set) && continue)
-        walk_process!(parse_tree(src), parse_tree(src), src, path, added_set, false, false, hits)
+        tree = parse_tree(src)
+        consts = Dict{String, String}()
+        fold_module_consts!(tree, consts)
+        walk_process_pattern!(tree, tree, src, path, added_set, consts, false, hits)
     end
     return unique(hits)
 end
@@ -3724,11 +3884,17 @@ function walk_env_default_test!(node, src, path, added, hits)
     return
 end
 
+function env_default_test_path(path::AbstractString)
+    p = replace(String(path), '\\' => '/')
+    test_path(p) && return true
+    return startswith(p, "scripts/lint/fixtures/evasion/")
+end
+
 function collect_env_default_test(root, files, src_for_path; whole::Bool)
     hits = Tuple{String, Int, String}[]
-    paths = whole ? filter(test_path, tracked_jl(root)) : collect(keys(files))
+    paths = whole ? filter(env_default_test_path, tracked_jl(root)) : collect(keys(files))
     for path in paths
-        test_path(path) || continue
+        env_default_test_path(path) || continue
         endswith(path, ".jl") || continue
         whole || (isempty(added_lines(get(files, path, Hunk[]))) && continue)
         src = lint_file_src(root, path, src_for_path)
@@ -3951,36 +4117,42 @@ function check_ceiling(name::AbstractString, measured::Int, constant::Int)
     return n
 end
 
-function report_hits(hits)
-    reasons = Dict(
-        "id-match" => "substring or slice compare on an id-like name",
-        "process-pattern" => "pkill or pgrep pattern",
-        "lock-create" => "isfile then write on a lock or pid path",
-        "env-default" => "fallback for a missing env value",
-        "swallowed-catch" => "catch body drops the error",
-        "skip-reasons" => "continue without a reason",
-        "pr-refs" => "pull request or lockstep reference",
-        "ban-cd" => "cd() changes process working directory in library code",
-        "ban-global" => "global statement or mutable module-level binding",
-        "ban-const-bake" => "const initializer bakes runtime state into precompile",
-        "ban-init-sidefx" => "forbidden side effect in __init__ or precompile workload",
-        "ban-assert" => "@assert may be disabled at run time",
-        "invokelatest" => "invokelatest or invoke_in_world call",
-        "env-write" => "mutation of process ENV",
-        "kwargs-splat" => "function accepts kwargs... (unknown keywords pass silently)",
-        "ban-exit" => "exit() outside CLI entry-point allowlist",
-        "dead-version-gate" => "VERSION compare is constant on julia compat",
-        "addprocs-kwargs" => "addprocs keyword not in Distributed allowlist",
-        "addprocs-kwargs-splat" => "unverifiable kwargs splat passed to addprocs",
-        "weak-assertion" => "vague or tautological test assertion",
-        "split-token" => "split an identifier across string concatenation to evade greps",
-        "env-table" => "DISTSSH_* name string is not listed in the user env table",
-    )
+const LINT_RULE_PROTECT = Dict(
+    "split-token" => (
+        "greps stay honest when env or API names are built from folded string pieces",
+        "use one literal name or list it in the env table",
+    ),
+    "process-pattern" => (
+        "shell command builders use pid-scoped patterns, not broad pkill",
+        "scope pkill/pgrep/killall to a job tag or document setup cleanup",
+    ),
+    "env-table" => (
+        "every DISTSSH_* string in src is documented or rejected",
+        "add an EnvRow or obsolete rejection entry",
+    ),
+    "test-env-mutation" => (
+        "tests restore process env via withenv",
+        "wrap the test body in withenv or leave env unchanged",
+    ),
+    "env-default" => (
+        "missing env must not silently fall back in library code",
+        "require a value or throw when unset",
+    ),
+)
+
+function report_hits(hits, root::AbstractString)
+    filter_lint_allows!(hits, root)
     n = 0
     for (path, line, rule) in hits
-        why = get(reasons, rule, "")
-        msg = isempty(why) ? rule : "$(rule): $(why)"
+        info = get(LINT_RULE_PROTECT, rule, ("", ""))
+        protect, fix = info
+        msg = isempty(protect) ? rule : "$(rule): protects $(protect)"
         println(stderr, "lint: $(path):$(line): $(msg)")
+        !isempty(fix) && println(stderr, "lint: $(path):$(line): fix: $(fix)")
+        println(
+            stderr,
+            "lint: $(path):$(line): If this is a false positive, add `# lint-allow: $(rule) -- <why>`. Do not split, rename, reformat, move or reword code to avoid this rule.",
+        )
         n += 1
     end
     return n
@@ -3988,7 +4160,7 @@ end
 
 function lint_mode_dual(root, files, src_for_path, collect_fn, ceiling_name, ceiling)
     added = collect_fn(root, files, src_for_path; whole = false)
-    n = report_hits(added)
+    n = report_hits(added, root)
     whole = collect_fn(root, files, src_for_path; whole = true)
     n += check_ceiling(ceiling_name, length(whole), ceiling)
     return n
@@ -4035,6 +4207,8 @@ function removed_name_src_ok(line::AbstractString, tok::AbstractString)::Bool
     occursin("LEGACY_ENV_RENAMES", line) && return true
     occursin("is no longer used", line) && return true
     occursin("was renamed to", line) && return true
+    occursin("OBSOLETE_ENV_REJECTION_NAMES", line) && return true
+    occursin(r"name in \(", line) && occursin(tok, line) && return true
     occursin(Regex("\\Q\"$(tok)\"\\s*=>"), line) && return true
     occursin(Regex("=>\\s*\"\\Q$(tok)\""), line) && return true
     return false
@@ -4057,7 +4231,7 @@ function grep_token_removed(root, tok, dirs)
 end
 
 function lint_removed_names(root::AbstractString, extra_root::AbstractString = "")
-    n = 0
+    n = lint_obsolete_env_reject_table_sync(root)
     diff = read(`git -C $root diff -U0 --no-color origin/main...HEAD -- changelog.d`, String)
     files = parse_diff(diff)
     names = String[]
@@ -4160,7 +4334,7 @@ end
 
 function lint_swallowed_catch(root, files, src_for_path)
     added = collect_swallowed_catch(root, files, src_for_path; whole = false)
-    n = report_hits(added)
+    n = report_hits(added, root)
     whole = collect_swallowed_catch(root, files, src_for_path; whole = true)
     n += check_swallowed_ceiling(length(whole), CEILING_SWALLOWED_CATCH)
     return n
@@ -4212,7 +4386,7 @@ end
 
 function lint_addprocs_kwargs(root, files, src_for_path)
     bad_add, splat_add = collect_addprocs_bad_kw(root, files, src_for_path; whole = false)
-    n = report_hits(bad_add) + report_hits(splat_add)
+    n = report_hits(bad_add, root) + report_hits(splat_add, root)
     bad_whole, splat_whole = collect_addprocs_bad_kw(root, files, src_for_path; whole = true)
     n += check_ceiling("CEILING_ADDPROCS_KW_BAD", length(bad_whole), 0)
     n += check_ceiling("CEILING_ADDPROCS_KW_SPLAT", length(splat_whole), CEILING_ADDPROCS_KW_SPLAT)
@@ -4220,7 +4394,7 @@ function lint_addprocs_kwargs(root, files, src_for_path)
 end
 
 function lint_weak_assertion(root, files, src_for_path)
-    return report_hits(collect_weak_assertion(root, files, src_for_path; whole = false))
+    return report_hits(collect_weak_assertion(root, files, src_for_path; whole = false), root)
 end
 
 function lint_pr_refs(root, files, src_for_path)
@@ -4237,6 +4411,17 @@ end
 
 function lint_env_table(root, files, src_for_path)
     return lint_mode_zero(root, files, src_for_path, collect_env_table_names, "CEILING_ENV_TABLE")
+end
+
+function lint_test_env_mutation(root, files, src_for_path)
+    return lint_mode_dual(
+        root,
+        files,
+        src_for_path,
+        collect_test_env_mutation,
+        "CEILING_TEST_ENV_MUTATION",
+        CEILING_TEST_ENV_MUTATION,
+    )
 end
 
 const GATE_LINT_NAMES = (
@@ -4270,6 +4455,7 @@ const GATE_LINT_NAMES = (
     "weak-assertion",
     "split-token",
     "env-table",
+    "test-env-mutation",
 )
 
 function lint_diff_mode(mode, root, files, src_for)
@@ -4301,10 +4487,12 @@ function lint_diff_mode(mode, root, files, src_for)
     mode == "weak-assertion" && return lint_weak_assertion(root, files, src_for)
     mode == "split-token" && return lint_split_token(root, files, src_for)
     mode == "env-table" && return lint_env_table(root, files, src_for)
+    mode == "test-env-mutation" && return lint_test_env_mutation(root, files, src_for)
     return die("unknown mode $(mode)")
 end
 
 function lint_all(root)
+    register_lint_rules!(collect(GATE_LINT_NAMES))
     files = parse_diff(git_diff(root))
     src_for = path -> begin
         p = joinpath(root, path)
@@ -4323,6 +4511,8 @@ function lint_all(root)
             lint_diff_mode(mode, root, files, src_for)
         end
     end
+    n += lint_unknown_or_bad_allows(root)
+    lint_allow_summary_new(root, files)
     n == 0 || exit(1)
     return 0
 end

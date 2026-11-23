@@ -61,7 +61,7 @@ SKIP_JOBS=(
   ship-test-ubuntu ship-test-macos ship-test-wsl
   heartbeat-test-ubuntu heartbeat-test-macos heartbeat-test-wsl
   up-ssh-e2e base-ssh-e2e ship-ssh-e2e heartbeat-ssh-e2e ssh-e2e ssh-e2e-1-14-pre queue-ssh-e2e
-  aqua-1-14-pre aqua-nightly jetls-1-14-pre
+  aqua-1-14-pre aqua-nightly jetls-1-14-pre lint-change-guard
 )
 
 export_judge_skipped() {

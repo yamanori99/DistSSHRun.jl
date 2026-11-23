@@ -1,0 +1,1 @@
+s = "DISTSSH_" * "BAR"

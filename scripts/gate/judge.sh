@@ -105,6 +105,11 @@ if [[ "${scripts}" == true ]]; then
 else
   judge diff_lint_self_test "${docs_scripts_off}"
 fi
+if [[ "${event}" == pull_request ]]; then
+  judge lint_change_guard ""
+else
+  judge lint_change_guard "not a pull request"
+fi
 if [[ "${fix_title}" == true ]]; then
   judge fix_tests_on_base ""
 else

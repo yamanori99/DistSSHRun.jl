@@ -828,12 +828,9 @@ function _source_from_user(source::AbstractDict)::Dict{String, Any}
 end
 
 function _throw_if_obsolete_source_env!()
-    for (old, new) in (
-            "DISTSSH_SOURCE_COMMIT" => "DISTSSH_INTERNAL_SOURCE_COMMIT",
-            "DISTSSH_SOURCE_DIRTY" => "DISTSSH_INTERNAL_SOURCE_DIRTY",
-            "DISTSSH_SOURCE_CAPTURED" => "DISTSSH_INTERNAL_SOURCE_CAPTURED",
-            "DISTSSH_SOURCE_UNTRACKED" => "DISTSSH_INTERNAL_SOURCE_UNTRACKED",
-        )
+    for old in OBSOLETE_ENV_REJECTION_NAMES
+        startswith(old, "DISTSSH_SOURCE_") || continue
+        new = replace(old, "DISTSSH_SOURCE_" => "DISTSSH_INTERNAL_SOURCE_")
         haskey(ENV, old) && DistSSHBase.throw_renamed_env!(old, new)
     end
     return nothing

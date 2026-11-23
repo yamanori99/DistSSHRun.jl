@@ -1,0 +1,11 @@
+# Single rejection table for removed DISTSSH_* env names (lint removed-names).
+
+const OBSOLETE_ENV_REJECTION_NAMES = (
+    "GB_PER_WORKER",
+    "DISTSSH_SIZE_PROBE",
+    "DISTSSH_INTERNAL_SIZE_PROBE",
+    "DISTSSH_SOURCE_COMMIT",
+    "DISTSSH_SOURCE_DIRTY",
+    "DISTSSH_SOURCE_CAPTURED",
+    "DISTSSH_SOURCE_UNTRACKED",
+)

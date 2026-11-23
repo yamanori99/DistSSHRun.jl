@@ -1,7 +1,8 @@
 # pipeline! — sync → drive → collect.
 
 function _reject_obsolete_pipeline_size_env(env::ProcessEnv)
-    for name in ("GB_PER_WORKER", "DISTSSH_SIZE_PROBE", "DISTSSH_INTERNAL_SIZE_PROBE")
+    for name in OBSOLETE_ENV_REJECTION_NAMES
+        name in ("GB_PER_WORKER", "DISTSSH_SIZE_PROBE", "DISTSSH_INTERNAL_SIZE_PROBE") || continue
         haskey(env, name) || continue
         throw(
             ArgumentError(
