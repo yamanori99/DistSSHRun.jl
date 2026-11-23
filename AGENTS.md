@@ -30,6 +30,10 @@ Read the skill before the task it names. Do not copy a skill into this file. A s
 - Remote delete and prune (`setup delete`, `setup prune`) remove only a path the user confirmed. Pass a confirm path (`--confirm-path`) only when the user typed that exact path. You may show the path the command printed and ask the user to type it. Never copy a path from an error message into a retry.
 - A yes flag or variable (`-y`, `--yes`, `DISTSSH_YES`) never authorizes these subcommands. Do not pass one. Without a confirm path, the command refuses it.
 
+## Cloud Agent VM
+
+The cloud startup script runs the repository tool-install script when Julia 1.13 is on `PATH`. That script is idempotent: it puts the same pinned Runic, JETLS, actionlint, zizmor, and pinact versions on `PATH` that CI uses (via symlinks under `/usr/local/bin` on Linux). Workflow-lint binaries live in a user-local directory; they are not installed from the push gate. If a workflow-lint binary is missing, the gate prints a non-failing `note:` and the Actions lint workflow still runs on the server. Do not change `HOME` or `JULIA_DEPOT_PATH` for the session.
+
 ## Environment
 
 - Do not change the home directory or the Julia depot for the session (`HOME`, `JULIA_DEPOT_PATH`).
