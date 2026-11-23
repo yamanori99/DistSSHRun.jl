@@ -266,7 +266,8 @@ function _output_lock_shell_helpers()::String
       if [ -r "/proc/\${_pid}/stat" ]; then
         _cur=\$(awk '$awk' "/proc/\${_pid}/stat") || return 1
       else
-        _cur=\$(ps -o lstart= -p "\$_pid" 2>/dev/null) || return 1
+        if [ -x /bin/ps ]; then _ps=/bin/ps; else _ps=ps; fi
+        _cur=\$(\$_ps -o lstart= -p "\$_pid" 2>/dev/null) || return 1
         _cur=\$(printf '%s' "\$_cur" | sed 's/^[[:space:]]*//;s/[[:space:]]*\$//')
       fi
       [ -n "\$_cur" ] || return 1

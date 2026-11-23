@@ -51,8 +51,10 @@ function kit_process_start_key(pid::Integer)::Union{Nothing, String}
     if isfile(string("/proc/", Int(pid), "/stat"))
         return _linux_proc_start_key(pid)
     end
+    # A child can run with `PATH` emptied (TTY progress). `ps` is still /bin/ps.
+    ps = isfile("/bin/ps") ? "/bin/ps" : "ps"
     try
-        s = strip(read(`ps -o lstart= -p $(Int(pid))`, String))
+        s = strip(read(`$ps -o lstart= -p $(Int(pid))`, String))
         return isempty(s) ? nothing : s
     catch
         return nothing
