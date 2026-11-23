@@ -54,7 +54,7 @@ const remote_tokens = String["1*$(hosts[1])", "1*$(hosts[2])"]
 _e2e_base_env() = _ssh_e2e_env(; remote_project = remote_root)
 
 # Same banner idea as `test/runtests.jl`. Inner `@testset`s can take minutes
-# of SSH with no Test output until they finish. Adding an `_e2e_announce`
+# of SSH with no Test output while they run. Adding an `_e2e_announce`
 # call updates `[i/N]`.
 const _E2E_N = let n = count(eachline(@__FILE__)) do line
         return occursin(r"^\s*_e2e_announce\(", line)

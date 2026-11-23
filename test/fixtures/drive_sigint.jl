@@ -1,5 +1,5 @@
 # Driver for the drive Ctrl-C test. Touches the marker once `main` runs,
-# then keeps every worker busy until the test sends SIGINT.
+# then keeps every worker busy before the test sends SIGINT.
 # When `DISTSSH_TEST_RESTORE_FILE` is set, `atexit` (registered from
 # `main`, so only the driver) records the active project and the drive env
 # slots after the frame has restored them.

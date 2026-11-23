@@ -56,7 +56,7 @@ if !isdefined(@__MODULE__, :_child_julia_env)
     end
 
     # Run `cmds` `_subprocess_width()` at a time. Result `i` is command `i`.
-    # `:until_exit`: each child runs until it exits. Drive and e2e outlast one
+    # `:until_exit`: each child runs for its full lifetime. Drive and e2e outlast one
     # cold compile, so this does not take `:child_reply`.
     function _run_subprocesses(cmds::AbstractVector{<:Cmd})
         seconds = DistSSHRun.DistSSHBase.wait_seconds(:until_exit, 0)

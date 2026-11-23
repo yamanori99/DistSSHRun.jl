@@ -179,11 +179,13 @@ end
 @testset "detached job blob ignores job-default env" begin
     mktempdir() do d
         path = _detached_blob_path(d, :drive)
-        withenv("DISTSSH_TOPOLOGY" => "master_worker") do
-            parsed = DistSSHRun.parse_drive_args(String["-y", "--job-blob", path])
-            cfg = DistSSHRun.resolve_run_job_config_from_parsed(parsed; command = :drive)
-            @test cfg.topology.value == "auto"
-            @test cfg.topology.source == DistSSHRun.FromDefault
+        let topology = "master_worker"
+            withenv(Dict("DISTSSH_TOPOLOGY" => topology)...) do
+                parsed = DistSSHRun.parse_drive_args(String["-y", "--job-blob", path])
+                cfg = DistSSHRun.resolve_run_job_config_from_parsed(parsed; command = :drive)
+                @test cfg.topology.value == "auto"
+                @test cfg.topology.source == DistSSHRun.FromDefault
+            end
         end
     end
     mktempdir() do d

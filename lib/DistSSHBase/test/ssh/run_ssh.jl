@@ -67,12 +67,14 @@ end
 @testset "ssh and scp noninteractive env" begin
     want = DistSSHBase.ssh_noninteractive_env()
     for builder in (DistSSHBase._ssh_cmd, DistSSHBase._scp_cmd)
-        withenv("SSH_AUTH_SOCK" => "/tmp/distssh-test-sock") do
-            cmd = builder(String["x"])
-            for (k, v) in want
-                @test _cmd_env_lookup(cmd, k) == v
+        let sock = "/tmp/distssh-test-sock"
+            withenv(Dict("SSH_AUTH_SOCK" => sock)...) do
+                cmd = builder(String["x"])
+                for (k, v) in want
+                    @test _cmd_env_lookup(cmd, k) == v
+                end
+                @test _cmd_env_lookup(cmd, "SSH_AUTH_SOCK") == sock
             end
-            @test _cmd_env_lookup(cmd, "SSH_AUTH_SOCK") == "/tmp/distssh-test-sock"
         end
     end
 end

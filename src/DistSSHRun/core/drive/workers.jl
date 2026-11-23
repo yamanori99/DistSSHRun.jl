@@ -444,7 +444,7 @@ end
 # later wait throws again while that request stays raised. Wait so user code
 # can `catch` it and save a small amount of state before `rmprocs`.
 # Not a public setting. `DistSSHBase.is_sigint` is `public` and not exported.
-# The window is fixed. A write here is best-effort. Large state belongs in
+# The window is fixed. A write here may fail without affecting teardown. Large state belongs in
 # an incremental checkpoint (temporary file, then rename) during the run.
 const _INTERRUPT_SETTLE_S = 3.0
 

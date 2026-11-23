@@ -140,7 +140,9 @@ function _ssh_hostpart_for_placement(dest::AbstractString)::String
     colon === nothing && return hostpart
     findnext(':', hostpart, colon + 1) !== nothing && return hostpart
     port_str = hostpart[(colon + 1):end]
-    tryparse(Int, port_str) === nothing && return hostpart
+    if tryparse(Int, port_str) === nothing
+        return hostpart
+    end
     return hostpart[1:(colon - 1)]
 end
 

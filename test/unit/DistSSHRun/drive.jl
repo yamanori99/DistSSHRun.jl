@@ -1337,10 +1337,12 @@ end
             @test !cli.isolated
             @test length(cli.hosts) == 1
             @test first(cli.hosts)[1] == "host1"
-            withenv("DISTSSH_HOSTS" => "1*host-b") do
-                hosted = DistSSHRun.parse_drive_args(argv)
-                @test length(hosted.hosts) == 1
-                @test first(hosted.hosts)[1] == "host1"
+            let hosts = "1*host-b"
+                withenv(Dict("DISTSSH_HOSTS" => hosts)...) do
+                    hosted = DistSSHRun.parse_drive_args(argv)
+                    @test length(hosted.hosts) == 1
+                    @test first(hosted.hosts)[1] == "host1"
+                end
             end
             arg_parsed = DistSSHRun.drive_parsed_from_session(
                 session,

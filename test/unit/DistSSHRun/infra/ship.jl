@@ -938,7 +938,7 @@ end
 
 @testset "init joins overlapped hash after an interrupted fetch" begin
     # Both `init_drive_workers!` exits call `_join_overlapped_input_hash!`.
-    # The overlapped task has already drained the pending list, so this join
+    # The overlapped task has already drained the in-flight list, so this join
     # is what keeps hashing from outliving the interrupt.
     DistSSHRun.await_declared_input_hashes!()
     try

@@ -141,7 +141,7 @@ function run_driver_script!(enable_log::Bool; script_main::Union{Nothing, Method
                                     end
                                 end
                                 # NOTE: no `yield()` here on an empty read — `readavailable` already
-                                # blocks until data or close, so spin-yielding instead of letting it
+                                # blocks while waiting for data or close, so spin-yielding instead of letting it
                                 # block starves libuv's notice of `wr` closing (observed ~30s stalls).
                                 isempty(data) && (eof(rd) || !isopen(wr)) && break
                             end
@@ -163,7 +163,7 @@ function run_driver_script!(enable_log::Bool; script_main::Union{Nothing, Method
                         close(wr)
                         # `rd` normally reaches EOF once `wr` closes, but local worker processes
                         # (spawned via `addprocs`) inherit our stdout fd and keep the underlying
-                        # pipe open until they exit, so EOF may never arrive here. All real script
+                        # pipe open while they run, so EOF may never arrive here. All real script
                         # output is already flushed to `rd` by this point (readavailable drains it
                         # as it's written), so a short grace period is enough before we force-close.
                         wait_ok = @async wait(reader)

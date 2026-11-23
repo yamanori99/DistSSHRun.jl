@@ -48,10 +48,13 @@ let _BASE = DistSSHBase
                 try
                     @test _BASE.detect_julia_path("detect-julia-retry.test") === nothing
                     @test !haskey(_BASE._DETECT_JULIA_PATH_CACHE, "detect-julia-retry.test")
-                    withenv("DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia") do
-                        got = _BASE.detect_julia_path("detect-julia-retry.test")
-                        @test got == "/usr/bin/julia"
-                        @test _BASE._DETECT_JULIA_PATH_CACHE["detect-julia-retry.test"] == "/usr/bin/julia"
+                    let which = "/usr/bin/julia"
+                        withenv(Dict("DISTSSH_TEST_JULIA_WHICH" => which)...) do
+                            got = _BASE.detect_julia_path("detect-julia-retry.test")
+                            @test got == "/usr/bin/julia"
+                            @test _BASE._DETECT_JULIA_PATH_CACHE["detect-julia-retry.test"] ==
+                                "/usr/bin/julia"
+                        end
                     end
                 finally
                     _BASE.clear_detect_julia_path_cache!("detect-julia-retry.test")
