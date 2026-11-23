@@ -351,6 +351,17 @@ else
     "${ROOT}/scripts/gate/lint.sh"
 fi
 
+if ! git merge-base "${GATE_DIFF_BASE}" "${GATE_DIFF_HEAD}" >/dev/null 2>&1; then
+  die "news-fragment: could not resolve merge base for ${GATE_DIFF_BASE} and ${GATE_DIFF_HEAD}"
+fi
+if [[ "${CHECK_VERBOSE}" == 1 ]]; then
+  "${ROOT}/.github/news-fragment.sh" --offline "${GATE_DIFF_BASE}" "${GATE_DIFF_HEAD}"
+  section "check: news-fragment ok"
+else
+  gate_capture "news-fragment" "${ROOT}/.github/news-fragment.sh" --offline \
+    "${GATE_DIFF_BASE}" "${GATE_DIFF_HEAD}"
+fi
+
 gate_capture "shellcheck" "${ROOT}/scripts/gate/shellcheck.sh"
 gate_capture "gitleaks" "${ROOT}/scripts/gate/gitleaks.sh"
 

@@ -14,7 +14,10 @@
 #
 # Usage:
 #   ./.github/news-fragment.sh OLD_REF NEW_REF
+#   ./.github/news-fragment.sh --offline OLD_REF NEW_REF
 #   ./.github/news-fragment.sh --self-test
+# Offline (--offline or NEWS_FRAGMENT_OFFLINE=1): merge-base from git only;
+# fragment need and format checks run; breaking-label checks stay in CI.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -70,6 +73,10 @@ resolve_diff_base() {
   if mb="$(git merge-base "$old" "$new" 2>/dev/null)" && [[ -n "$mb" ]]; then
     printf '%s\n' "$mb"
     return 0
+  fi
+  if [[ "${NEWS_FRAGMENT_OFFLINE:-}" == 1 ]]; then
+    die "could not resolve merge base"
+    return 1
   fi
   token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
   repo="${GITHUB_REPOSITORY:-}"
@@ -216,6 +223,7 @@ scan_diff() {
 decide() {
   local dependabot="$1" need="$2" label="$3" fragments="$4"
   local introduced="$5" edited="$6" removed="$7" anomaly="${8:-0}"
+  local offline="${9:-false}"
   if [[ "$dependabot" == true ]]; then
     echo "Dependabot: fragment check skipped"
     return 0
@@ -233,13 +241,15 @@ decide() {
     die "changes under src/, lib/**/src/, or ext/ need a changelog.d fragment"
     return 1
   fi
-  if [[ "$introduced" -gt 0 && "$label" != true ]]; then
-    die "category: breaking requires the breaking label"
-    return 1
-  fi
-  if [[ "$label" == true && $((introduced + edited)) -lt 1 ]]; then
-    die "breaking label requires a fragment with category: breaking"
-    return 1
+  if [[ "$offline" != true ]]; then
+    if [[ "$introduced" -gt 0 && "$label" != true ]]; then
+      die "category: breaking requires the breaking label"
+      return 1
+    fi
+    if [[ "$label" == true && $((introduced + edited)) -lt 1 ]]; then
+      die "breaking label requires a fragment with category: breaking"
+      return 1
+    fi
   fi
   echo "news-fragment: ok"
 }
@@ -743,6 +753,55 @@ EOF
     fail "depth-2 error: $(cat "$tmp/err")"
   fi
 
+  local offline_tmp offline_repo offline_base offline_tip
+  offline_tmp="$(mktemp -d)"
+  offline_repo="$offline_tmp/repo"
+  mkdir -p "$offline_repo/src" "$offline_repo/changelog.d"
+  git -C "$offline_repo" init -q
+  git -C "$offline_repo" config user.email "news-fragment@example.com"
+  git -C "$offline_repo" config user.name "news-fragment"
+  git -C "$offline_repo" config commit.gpgsign false
+  printf 'base\n' >"$offline_repo/src/a.jl"
+  git -C "$offline_repo" add src
+  git -C "$offline_repo" commit -q -m base
+  offline_base="$(git -C "$offline_repo" rev-parse HEAD)"
+  if ! decide false false false 1 1 0 0 0 true >/dev/null; then
+    fail "offline breaking without label"
+  fi
+  if decide false true false 0 0 0 0 0 true >/dev/null 2>"$tmp/err"; then
+    fail "offline src without fragment"
+  fi
+  if ! grep -q 'need a changelog.d fragment' "$tmp/err"; then
+    fail "offline need message: $(cat "$tmp/err")"
+  fi
+  printf 'more\n' >>"$offline_repo/src/a.jl"
+  write_frag "$offline_repo/changelog.d/fixed.md" fixed "covers the src change with enough words"
+  git -C "$offline_repo" add src changelog.d
+  git -C "$offline_repo" commit -q -m change
+  offline_tip="$(git -C "$offline_repo" rev-parse HEAD)"
+  if ! (
+    cd "$offline_repo"
+    NEWS_FRAGMENT_OFFLINE=1 bash "$script_path" "$offline_base" "$offline_tip"
+  ) | grep -q 'news-fragment: ok'; then
+    fail "offline cli with fragment"
+  fi
+  main_tip="$offline_tip"
+  git -C "$offline_repo" checkout -q --orphan other
+  printf 'orphan\n' >"$offline_repo/README"
+  git -C "$offline_repo" add README
+  git -C "$offline_repo" commit -q -m other
+  other_rev="$(git -C "$offline_repo" rev-parse HEAD)"
+  if (
+    cd "$offline_repo"
+    NEWS_FRAGMENT_OFFLINE=1 bash "$script_path" "$main_tip" "$other_rev"
+  ) >/dev/null 2>"$tmp/err"; then
+    fail "offline unresolved merge base"
+  fi
+  if ! grep -q 'could not resolve merge base' "$tmp/err"; then
+    fail "offline merge-base error: $(cat "$tmp/err")"
+  fi
+  rm -rf "$offline_tmp"
+
   rm -rf "$tmp"
   if [[ "$failed" -ne 0 ]]; then
     exit 1
@@ -753,6 +812,18 @@ EOF
 if [[ "${1:-}" == --self-test ]]; then
   self_test
   exit 0
+fi
+
+offline=false
+if [[ "${1:-}" == --offline ]]; then
+  offline=true
+  shift
+fi
+if [[ "${NEWS_FRAGMENT_OFFLINE:-}" == 1 ]]; then
+  offline=true
+fi
+if [[ "$offline" == true ]]; then
+  export NEWS_FRAGMENT_OFFLINE=1
 fi
 
 if [[ "${AUTHOR:-}" == "dependabot[bot]" ]]; then
@@ -776,5 +847,8 @@ if [[ -z "$need" || -z "$fragments" || -z "$introduced" || -z "$edited" || -z "$
   die "could not read fragment scan"
   exit 1
 fi
-label="$(fetch_breaking_label)"
-decide false "$need" "$label" "$fragments" "$introduced" "$edited" "$removed" "$anomaly"
+label=false
+if [[ "$offline" != true ]]; then
+  label="$(fetch_breaking_label)"
+fi
+decide false "$need" "$label" "$fragments" "$introduced" "$edited" "$removed" "$anomaly" "$offline"
