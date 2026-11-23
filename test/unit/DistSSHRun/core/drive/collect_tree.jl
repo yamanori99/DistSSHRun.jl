@@ -81,9 +81,16 @@ end
                     extra_env
                 )
                 DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!()
-                withenv(env...) do
-                    DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true))
-                    return f(state_dir, proj)
+                prev_sel = DistSSHRun.active_source_selection()
+                prev_rec = DistSSHRun.active_deploy_record()
+                try
+                    withenv(env...) do
+                        DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true))
+                        return f(state_dir, proj)
+                    end
+                finally
+                    DistSSHRun._set_active_selection!(prev_sel)
+                    DistSSHRun._set_active_deploy_record!(prev_rec)
                 end
             end
         end

@@ -80,17 +80,11 @@ if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
         if before.proj != after.proj
             push!(msgs, "active_project before=$(repr(before.proj)) after=$(repr(after.proj))")
         end
-        if before.deploy != after.deploy
-            push!(
-                msgs,
-                "active_deploy_record before=$(repr(before.deploy)) after=$(repr(after.deploy))",
-            )
+        if after.deploy !== nothing
+            push!(msgs, "active_deploy_record left=$(repr(after.deploy))")
         end
-        if before.selection !== after.selection
-            push!(
-                msgs,
-                "active_source_selection before=$(repr(before.selection)) after=$(repr(after.selection))",
-            )
+        if after.selection !== nothing
+            push!(msgs, "active_source_selection left=$(repr(after.selection))")
         end
         return msgs
     end
@@ -126,6 +120,9 @@ if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
                 println(stderr, "leak: $(rel): $(msg)")
             end
             @test isempty(msgs)
+            # Isolate the next file on a reused parallel worker.
+            DistSSHRun._clear_active_deploy_record!()
+            DistSSHRun._clear_active_selection!()
             _assert_no_leaked_processes(tag; label = rel)
         end
     end

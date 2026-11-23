@@ -75,7 +75,7 @@ end
     )
     deploy_msgs = _leak_guard_state_messages(before, leaked)
     @test length(deploy_msgs) == 1
-    @test occursin("active_deploy_record", deploy_msgs[1])
+    @test occursin("active_deploy_record left=", deploy_msgs[1])
 end
 
 @testset "leak guard precompile tokens" begin
