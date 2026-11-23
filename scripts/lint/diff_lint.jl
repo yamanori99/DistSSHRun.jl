@@ -3042,7 +3042,7 @@ function test_env_mutation_hit_node(node, withenv_depth::Int)
     is_env_write_node(node) && return true
     kind(node) == K"call" || return false
     call_head_name(node) == "merge!" || return false
-    numchildren(node) >= 2 && sourcetext(node[2]) == "ENV"
+    return numchildren(node) >= 2 && sourcetext(node[2]) == "ENV"
 end
 
 function walk_test_env_mutation!(node, src, path, added, withenv_depth, hits)

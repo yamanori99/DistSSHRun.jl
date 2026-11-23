@@ -120,7 +120,7 @@ function fold_join_call(node, consts)
     numchildren(node) < 3 && return nothing
     sep = fold_string_expr(node[2], consts)
     sep === nothing && return nothing
-  parts = fold_string_vector(node[3], consts)
+    parts = fold_string_vector(node[3], consts)
     parts === nothing && return nothing
     return join(parts, sep)
 end
@@ -168,7 +168,7 @@ const SPLIT_TOKEN_CHAR = r"[A-Za-z0-9_]"
 
 function split_token_bad_join(left::AbstractString, right::AbstractString)::Bool
     isempty(left) || isempty(right) && return false
-    occursin(SPLIT_TOKEN_CHAR, string(last(left))) && occursin(SPLIT_TOKEN_CHAR, string(first(right)))
+    return occursin(SPLIT_TOKEN_CHAR, string(last(left))) && occursin(SPLIT_TOKEN_CHAR, string(first(right)))
 end
 
 function folded_string_parts(node, consts::Dict{String, String})::Union{Vector{String}, Nothing}
