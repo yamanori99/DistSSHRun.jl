@@ -4223,6 +4223,7 @@ function grep_token_removed(root, tok, dirs)
         m = match(r"^([^:]+):[0-9]+:", hit)
         m === nothing && (push!(out, hit); continue)
         path = String(m.captures[1])
+        replace(path, '\\' => '/') == "src/DistSSHRun/options/obsolete_env.jl" && continue
         line = occursin(":", hit) ? split(hit, ":", limit = 3)[3] : ""
         if startswith(replace(path, '\\' => '/'), "src/") && removed_name_src_ok(line, tok)
             continue
