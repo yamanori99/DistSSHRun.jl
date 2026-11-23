@@ -13,14 +13,16 @@ using DistSSHRun
         root = pkgdir(DistSSHRun)
         allowed = DistSSHRun.user_env_names()
         legacy_old = Set{String}(old for (old, _) in DistSSHRun.DistSSHBase.LEGACY_ENV_RENAMES)
-        obsolete_reject = Set{String}([
-            "DISTSSH_SIZE_PROBE",
-            "GB_PER_WORKER",
-            "DISTSSH_SOURCE_COMMIT",
-            "DISTSSH_SOURCE_DIRTY",
-            "DISTSSH_SOURCE_CAPTURED",
-            "DISTSSH_SOURCE_UNTRACKED",
-        ])
+        obsolete_reject = Set{String}(
+            [
+                "DISTSSH_SIZE_PROBE",
+                "GB_PER_WORKER",
+                "DISTSSH_SOURCE_COMMIT",
+                "DISTSSH_SOURCE_DIRTY",
+                "DISTSSH_SOURCE_CAPTURED",
+                "DISTSSH_SOURCE_UNTRACKED",
+            ]
+        )
         pat = r"\b((?:DISTSSH_|DISTRIBUTED_)[A-Z0-9_]+)"
         bad = String[]
         for (dir, _, files) in walkdir(joinpath(root, "src"))
