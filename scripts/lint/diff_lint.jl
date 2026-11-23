@@ -3405,6 +3405,8 @@ const CEILING_ENV_WRITE = 38
 const CEILING_KWARGS_SPLAT = 22
 const CEILING_SUPPRESSION = 18
 const CEILING_ADDPROCS_KW_SPLAT = 0
+const CEILING_LITERAL_STRING_CONCAT = 52
+const CEILING_ENV_TABLE = 0
 const ADDDROCS_KW_ALLOWLIST = Set{Symbol}(
     [
         :cmdline_cookie,
@@ -3555,7 +3557,7 @@ function walk_process!(node, parent, src, path, added, in_builder, in_doc, hits)
     st = sourcetext(node)
     skip = in_doc || string_is_function_docstring(node, parent)
     if !in_builder && !skip && kind(node) in (K"vect", K"ref", K"string", K"String")
-        if occursin(r"(?i)(?<![A-Za-z])(pkill|pgrep)(?![A-Za-z])", st) && node_touches_added(src, node, added)
+        if occursin(r"(?i)(?<![A-Za-z0-9_])(pkill|pgrep)(?![A-Za-z0-9_])", st) && node_touches_added(src, node, added)
             a = line_of(src, Int(first(byte_range(node))))
             push!(hits, (path, a, "process-pattern"))
         end
@@ -4255,12 +4257,13 @@ function lint_excuse_ceiling(root)
 end
 
 function lint_literal_string_concat(root, files, src_for_path)
-    return lint_mode_zero(
+    return lint_mode_dual(
         root,
         files,
         src_for_path,
         collect_literal_string_concat,
         "CEILING_LITERAL_STRING_CONCAT",
+        CEILING_LITERAL_STRING_CONCAT,
     )
 end
 
