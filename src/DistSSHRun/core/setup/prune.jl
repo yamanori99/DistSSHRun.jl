@@ -255,10 +255,10 @@ function _prune_remote_shell(
         [ -n "\$(find "\$_child" -maxdepth 0 -mtime +"\$((older - 1))" 2>/dev/null)" ] || return 0
       fi
       if _distssh_tree_blocks "\$_child"; then
-        printf '%s\\n' "\$_child" >> "\$_distssh_refused"
+        printf '%s\\n' "\$_child" >> "\$_distssh_refused" || printf x > "\$_distssh_io"
         return 0
       fi
-      printf '%s\\n' "\$_child" >> "\$_distssh_victims"
+      printf '%s\\n' "\$_child" >> "\$_distssh_victims" || printf x > "\$_distssh_io"
     }
     # The walk below reads find output by line. A newline in a parent of
     # `.distsshkit` splits that path, and the prefix can be pruned.
@@ -291,6 +291,11 @@ function _prune_remote_shell(
       printf 'refusing to prune: could not scan state directories\\n' >&2
       exit 1
     }
+    _distssh_io=\$(mktemp) || {
+      rm -f "\$_distssh_victims" "\$_distssh_refused" "\$_distssh_nl"
+      printf 'refusing to prune: could not scan state directories\\n' >&2
+      exit 1
+    }
     find "\$root" \\( -type d -name .distssh -o -type d -name .distsshkit \\) 2>/dev/null | while IFS= read -r kit; do
       go="\$kit/go"
       if [ -d "\$go" ]; then
@@ -318,11 +323,16 @@ function _prune_remote_shell(
       fi
     done
     if [ -s "\$_distssh_nl" ]; then
-      rm -f "\$_distssh_victims" "\$_distssh_refused" "\$_distssh_nl"
+      rm -f "\$_distssh_victims" "\$_distssh_refused" "\$_distssh_nl" "\$_distssh_io"
       printf 'refusing to prune a path that contains a newline\\n' >&2
       exit 1
     fi
-    rm -f "\$_distssh_nl"
+    if [ -s "\$_distssh_io" ]; then
+      rm -f "\$_distssh_victims" "\$_distssh_refused" "\$_distssh_nl" "\$_distssh_io"
+      printf 'refusing to prune: could not record a leaf\\n' >&2
+      exit 1
+    fi
+    rm -f "\$_distssh_nl" "\$_distssh_io"
     # Local prune inspects every victim before rm. The collect loop is a
     # pipeline subshell, so the list file is the hand-off. Do not rm the
     # list while a loop still reads it.

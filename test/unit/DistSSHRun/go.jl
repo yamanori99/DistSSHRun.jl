@@ -402,6 +402,7 @@ using Dates
         slot = "demos/output/go_sim/root@192.0.2.10-1"
         slot_q = DistSSHRun._remote_shell_path_word(slot)
         @test occursin("_distssh_hold_lock $(slot_q)", inner)
+        @test occursin("output lock: refusing", inner)
         @test !occursin("\$(dirname", inner)
         @test occursin("cd $(DistSSHRun._remote_shell_path_word("~/proj")) && mkdir -p $(slot_q)", inner)
         @test occursin("mkdir -p $(DistSSHRun._remote_shell_path_word(slot * "/.distssh"))", inner)

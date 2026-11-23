@@ -730,6 +730,19 @@ using Test
                 @test isfile(bad)
             end
             _with_tempdir() do tmp
+                fifo = joinpath(tmp, ".distssh.lock")
+                run(`mkfifo $fifo`)
+                err = try
+                    DistSSHRun.output_dir_lock!(tmp)
+                    nothing
+                catch e
+                    e
+                end
+                @test err isa ArgumentError
+                @test occursin("malformed lock", err.msg)
+                rm(fifo; force = true)
+            end
+            _with_tempdir() do tmp
                 leaf = joinpath(tmp, ".distssh", "go", "job_20200101T000000Z")
                 mkpath(leaf)
                 write(joinpath(leaf, "keep.txt"), "x")

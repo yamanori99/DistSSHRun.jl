@@ -166,6 +166,9 @@ function output_dir_lock!(
     end
     for _ in 1:_OUTPUT_LOCK_TRIES
         _excl_write_lock(lock_path, body) && return release
+        if ispath(lock_path) && !isfile(lock_path)
+            throw(ArgumentError("output lock: malformed lock $(lock_path)"))
+        end
         raw = try
             read(lock_path, String)
         catch
@@ -267,7 +270,7 @@ function _output_lock_shell_helpers()::String
         _cur=\$(awk '$awk' "/proc/\${_pid}/stat") || return 1
       else
         [ -x /bin/ps ] || return 1
-        _cur=\$(/bin/ps -o lstart= -p "\$_pid" 2>/dev/null) || return 1
+        _cur=\$(TZ=UTC LC_ALL=C /bin/ps -o lstart= -p "\$_pid" 2>/dev/null) || return 1
         _cur=\$(printf '%s' "\$_cur" | sed 's/^[[:space:]]*//;s/[[:space:]]*\$//')
       fi
       [ -n "\$_cur" ] || return 1

@@ -675,7 +675,7 @@ function _go_remote_slot_shell_inner(
         _output_lock_hold_shell_helpers(),
         "cd $rr && mkdir -p $slot_q && mkdir -p $kit_q && ",
         hold_lock,
-        " || exit 1 && ",
+        " || { printf 'output lock: refusing %s\\n' $(slot_q) >&2; exit 1; } && ",
         "export DISTSSH_OUTPUT_DIR=$slot_q && ",
         seed_export,
         job_export,

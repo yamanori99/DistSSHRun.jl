@@ -42,7 +42,7 @@ end
 """
     kit_process_start_key(pid) -> Union{Nothing,String}
 
-Identity of this OS pid's start (Linux `/proc` starttime, else `/bin/ps -o lstart=`).
+Identity of this OS pid's start (Linux `/proc` starttime, else `TZ=UTC LC_ALL=C /bin/ps -o lstart=`).
 `nothing` if the pid is gone, unreadable, or Windows.
 """
 function kit_process_start_key(pid::Integer)::Union{Nothing, String}
@@ -53,7 +53,9 @@ function kit_process_start_key(pid::Integer)::Union{Nothing, String}
     end
     isfile("/bin/ps") || return nothing
     try
-        s = strip(read(`/bin/ps -o lstart= -p $(Int(pid))`, String))
+        s = withenv("TZ" => "UTC", "LC_ALL" => "C") do
+            strip(read(`/bin/ps -o lstart= -p $(Int(pid))`, String))
+        end
         return isempty(s) ? nothing : s
     catch
         return nothing
