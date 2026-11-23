@@ -1062,7 +1062,7 @@ function _write_provenance_sidecar(
         end
         mv(tmp, dest; force = true)
     catch
-        # non-fatal
+        # best-effort only
     end
     return nothing
 end

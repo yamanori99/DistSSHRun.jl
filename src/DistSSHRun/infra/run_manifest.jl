@@ -324,7 +324,7 @@ function write_kit_run_toml!(
         end
         mv(tmp, dest; force = true)
     catch
-        # non-fatal
+        # best-effort only
     end
     _write_provenance_sidecar(output_dir, provenance)
     return nothing
@@ -386,7 +386,7 @@ function _stamp_run_toml_stop!(run_dir::AbstractString, stop::Symbol)
         end
         mv(tmp, dest; force = true)
     catch
-        # non-fatal
+        # best-effort only
     end
     return nothing
 end
