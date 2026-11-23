@@ -1,2 +1,2 @@
 self-hosted-runner:
-  labels: [xcode-27]
+  labels: [xcode-27, macos-15-intel]
