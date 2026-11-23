@@ -54,10 +54,13 @@ if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
         for (k, v) in ENV
             env[String(k)] = String(v)
         end
+        rec = DistSSHRun.active_deploy_record()
         return (
             env = env,
             load = copy(LOAD_PATH),
             proj = Base.active_project(),
+            deploy = rec === nothing ? nothing : deepcopy(rec),
+            selection = DistSSHRun.active_source_selection(),
         )
     end
 
@@ -76,6 +79,18 @@ if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
         end
         if before.proj != after.proj
             push!(msgs, "active_project before=$(repr(before.proj)) after=$(repr(after.proj))")
+        end
+        if before.deploy != after.deploy
+            push!(
+                msgs,
+                "active_deploy_record before=$(repr(before.deploy)) after=$(repr(after.deploy))",
+            )
+        end
+        if before.selection !== after.selection
+            push!(
+                msgs,
+                "active_source_selection before=$(repr(before.selection)) after=$(repr(after.selection))",
+            )
         end
         return msgs
     end

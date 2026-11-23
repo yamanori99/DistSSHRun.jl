@@ -47,13 +47,35 @@ function _stop_tagged_orphan(tag::AbstractString)
 end
 
 @testset "leak guard state" begin
-    before = (env = Dict("A" => "1"), load = ["x"], proj = "/p")
-    after = (env = Dict("A" => "2"), load = ["x"], proj = "/p")
+    before = (
+        env = Dict("A" => "1"),
+        load = ["x"],
+        proj = "/p",
+        deploy = nothing,
+        selection = nothing,
+    )
+    after = (
+        env = Dict("A" => "2"),
+        load = ["x"],
+        proj = "/p",
+        deploy = nothing,
+        selection = nothing,
+    )
     msgs = _leak_guard_state_messages(before, after)
     @test length(msgs) == 1
     @test occursin("ENV[A]", msgs[1])
     @test occursin("1", msgs[1])
     @test occursin("2", msgs[1])
+    leaked = (
+        env = Dict("A" => "1"),
+        load = ["x"],
+        proj = "/p",
+        deploy = Dict{String, Any}("mode" => "ship-tree"),
+        selection = nothing,
+    )
+    deploy_msgs = _leak_guard_state_messages(before, leaked)
+    @test length(deploy_msgs) == 1
+    @test occursin("active_deploy_record", deploy_msgs[1])
 end
 
 @testset "leak guard precompile tokens" begin

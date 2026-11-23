@@ -591,11 +591,18 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             end
             script = joinpath(tmp, "job.jl")
             write(script, "")
-            @test_throws ErrorException redirect_stdout(devnull) do
-                DistSSHRun.add_drive_workers!(
-                    _EMPTY_DRIVE_HOSTS, 0, nothing, nothing, tmp, script, tmp
-                )
+            err = try
+                redirect_stdout(devnull) do
+                    DistSSHRun.add_drive_workers!(
+                        _EMPTY_DRIVE_HOSTS, 0, nothing, nothing, tmp, script, tmp
+                    )
+                end
+                nothing
+            catch e
+                e
             end
+            @test err isa ErrorException
+            @test err.msg == DistSSHRun._NO_WORKERS_JOINED
         end
 
         @testset "add_drive_workers! adds only local workers when requested" begin
