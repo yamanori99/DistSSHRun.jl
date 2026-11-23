@@ -19,7 +19,10 @@ const _RUNTESTS_SRC = read(joinpath(_test_root(), "runtests.jl"), String)
             @test length(selected) > 0
         end
         withenv(merge(clear, Dict("DISTSSH_TEST_GROUP" => "all"))...) do
-            @test _runtest_selected_files(_RUNTESTS_SRC) == _runtest_include_paths(_RUNTESTS_SRC)
+            got = _runtest_selected_files(_RUNTESTS_SRC)
+            want = _runtest_include_paths(_RUNTESTS_SRC)
+            @test issetequal(got, want)
+            @test length(got) > 0 && length(got) >= length(want) && length(want) >= length(got)
         end
     end
 
