@@ -25,17 +25,17 @@ function lint_allow_reason_valid(reason::AbstractString)
     length(r) < 20 && return false
     low = lowercase(r)
     for bad in (
-        "todo",
-        "fixme",
-        "tbd",
-        "n/a",
-        "na",
-        "none",
-        "xxx",
-        "placeholder",
-        "temporary",
-        "temp",
-    )
+            "todo",
+            "fixme",
+            "tbd",
+            "n/a",
+            "na",
+            "none",
+            "xxx",
+            "placeholder",
+            "temporary",
+            "temp",
+        )
         low == bad && return false
     end
     occursin(r"^\.\.\.+$", r) && return false
