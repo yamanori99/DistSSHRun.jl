@@ -1280,59 +1280,75 @@ function _go_run!(
 
             n_slots > 0 && _kit_progress_mark!("run")
             slot_run_ok = fill(false, n_slots)
-            _foreach_bounded(collect(1:n_slots), kit_host_jobs()) do i
-                slot = slots[i]
-                kit_progress_item!(slot.label; status = :running)
-                outcome, err = try
-                    (
-                        _go_exec_slot!(
-                            slot,
-                            proj,
-                            script_path,
-                            args,
-                            batch_dir,
-                            run_rr;
-                            quiet = quiet,
-                            julia = julia,
-                        ),
-                        nothing,
-                    )
-                catch e
-                    (
-                        (
-                            run = DriveResult(false, 1),
-                            collect = nothing,
-                            collect_fail = false,
-                        ),
-                        e,
-                    )
-                end
-                slot_run_ok[i] = outcome.run.ok
-                lock(_GO_IO_LOCK) do
-                    last_run[] = outcome.run
-                    if !outcome.run.ok && first_fail_run[] === nothing
-                        first_fail_run[] = outcome.run
-                    end
-                    if err !== nothing
-                        any_run_fail[] = true
-                        kit_progress_item!(slot.label; status = :fail)
-                        _progress_release_line!()
-                        write(stderr, "  ")
-                        print_err("✗ $(slot.label): $(sprint(showerror, err))"; io = stderr)
-                        println(stderr)
-                    elseif !outcome.run.ok
-                        any_run_fail[] = true
-                        kit_progress_item!(slot.label; status = :fail)
-                        _progress_release_line!()
-                        write(stderr, "  ")
-                        print_err(
-                            "✗ $(slot.label) (exit $(outcome.run.exit_code))$(_go_trace_suffix(outcome.run.output_dir))";
-                            io = stderr,
-                        )
-                        println(stderr)
-                    else
-                        kit_progress_item!(slot.label; status = :ok)
-                        ok(slot.label)
+            # `DISTSSH_JOBS` caps child SSH only. Parent slots stay concurrent.
+            ssh_jobs = kit_host_jobs()
+            ssh_permits = Channel{Nothing}(ssh_jobs)
+            for _ in 1:ssh_jobs
+                put!(ssh_permits, nothing)
+            end
+            @sync for i in 1:n_slots
+                let i = i
+                    @async begin
+                        slot = slots[i]
+                        child = slot.kind === :child
+                        child && take!(ssh_permits)
+                        try
+                            kit_progress_item!(slot.label; status = :running)
+                            outcome, err = try
+                                (
+                                    _go_exec_slot!(
+                                        slot,
+                                        proj,
+                                        script_path,
+                                        args,
+                                        batch_dir,
+                                        run_rr;
+                                        quiet = quiet,
+                                        julia = julia,
+                                    ),
+                                    nothing,
+                                )
+                            catch e
+                                (
+                                    (
+                                        run = DriveResult(false, 1),
+                                        collect = nothing,
+                                        collect_fail = false,
+                                    ),
+                                    e,
+                                )
+                            end
+                            slot_run_ok[i] = outcome.run.ok
+                            lock(_GO_IO_LOCK) do
+                                last_run[] = outcome.run
+                                if !outcome.run.ok && first_fail_run[] === nothing
+                                    first_fail_run[] = outcome.run
+                                end
+                                if err !== nothing
+                                    any_run_fail[] = true
+                                    kit_progress_item!(slot.label; status = :fail)
+                                    _progress_release_line!()
+                                    write(stderr, "  ")
+                                    print_err("✗ $(slot.label): $(sprint(showerror, err))"; io = stderr)
+                                    println(stderr)
+                                elseif !outcome.run.ok
+                                    any_run_fail[] = true
+                                    kit_progress_item!(slot.label; status = :fail)
+                                    _progress_release_line!()
+                                    write(stderr, "  ")
+                                    print_err(
+                                        "✗ $(slot.label) (exit $(outcome.run.exit_code))$(_go_trace_suffix(outcome.run.output_dir))";
+                                        io = stderr,
+                                    )
+                                    println(stderr)
+                                else
+                                    kit_progress_item!(slot.label; status = :ok)
+                                    ok(slot.label)
+                                end
+                            end
+                        finally
+                            child && put!(ssh_permits, nothing)
+                        end
                     end
                 end
             end

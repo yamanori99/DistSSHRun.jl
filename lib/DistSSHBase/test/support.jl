@@ -27,7 +27,23 @@ function _distssh_base_for_tests()
     return getfield(getfield(Main, :DistSSHRun), :DistSSHBase)
 end
 
+function _load_distssh_run_for_tests!()
+    isdefined(Main, :DistSSHRun) || @eval Main using DistSSHRun
+    return nothing
+end
+
 function _install_injected_ssh!()
+    m = @__MODULE__
+    if isdefined(m, :DistSSHBase) || isdefined(m, :DistSSHRun) || isdefined(Main, :DistSSHRun)
+        _install_injected_ssh_now()
+        return nothing
+    end
+    _load_distssh_run_for_tests!()
+    Base.invokelatest(_install_injected_ssh_now)
+    return nothing
+end
+
+function _install_injected_ssh_now()
     BaseMod = _distssh_base_for_tests()
     BaseMod._injected_ssh[] = BaseMod.InjectedSshTransport(
         () -> strip(get(ENV, "DISTSSH_TEST", "")) == "1",

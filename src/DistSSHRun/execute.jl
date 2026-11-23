@@ -1278,7 +1278,7 @@ function _drive_init_delay_sec(; ssh::Bool)::Float64
     v = DistSSHBase.parse_env_float(
         "DISTSSH_INIT_DELAY_SEC",
         String(ENV["DISTSSH_INIT_DELAY_SEC"]);
-        positive = true,
+        nonnegative = true,
     )
     return Float64(v)
 end

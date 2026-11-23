@@ -57,7 +57,7 @@ Unset uses the default. A present blank value is an error.
 | `DISTSSH_SKIP_COLLECT` | bool | `false` | — | skip post-run collect |
 | `DISTSSH_HEARTBEAT_DEADLINE_SEC` | float > 0 | `unset` | — | required when master-silence-exit is on |
 | `DISTSSH_HEARTBEAT_INTERVAL_SEC` | float > 0 | `30` | — | heartbeat ping interval |
-| `DISTSSH_INIT_DELAY_SEC` | float > 0 | `5` | — | SSH worker init delay; local-only is 0 |
+| `DISTSSH_INIT_DELAY_SEC` | float >= 0 | `5` | — | SSH worker init delay; local-only is 0 |
 | `DISTSSH_PING_RETRIES` | int >= 1 | `6` | — | worker ping attempts during drive init |
 | `DISTSSH_JOB_ID` | string | `unset` | — | job id for tagged remote processes |
 | `DISTSSH_JOB_SEED` | uint64 | `unset` | — | controller job seed |

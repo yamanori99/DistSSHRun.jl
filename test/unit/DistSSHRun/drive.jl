@@ -917,6 +917,12 @@ end
         withenv("DISTSSH_INIT_DELAY_SEC" => "0") do
             @test DistSSHRun._drive_init_delay_sec(; ssh = true) == 0.0
         end
+        withenv("DISTSSH_INIT_DELAY_SEC" => "") do
+            @test_throws ArgumentError DistSSHRun._drive_init_delay_sec(; ssh = true)
+        end
+        withenv("DISTSSH_INIT_DELAY_SEC" => "-1") do
+            @test_throws ArgumentError DistSSHRun._drive_init_delay_sec(; ssh = true)
+        end
     end
 
     # `-orphan` is rejected before `ssh` runs, so these drives do not connect.
