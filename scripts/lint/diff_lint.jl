@@ -226,7 +226,9 @@ function git_diff(root::AbstractString)
 end
 
 function skipped_path(path::AbstractString)
-    return startswith(path, "scripts/lint/")
+    p = replace(String(path), '\\' => '/')
+    startswith(p, "scripts/lint/fixtures/") && return false
+    return startswith(p, "scripts/lint/")
 end
 
 const EXCUSE_PHRASES = let
