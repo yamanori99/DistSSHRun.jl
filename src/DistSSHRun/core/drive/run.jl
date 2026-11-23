@@ -305,8 +305,7 @@ function run_drive_parsed!(
         cfg = resolve_run_job_config_from_parsed(parsed; command = :drive)
         return with_run_unsafe_options!(cfg) do
             return _drive_frame(; cli = false) do
-                return Base.invokelatest(
-                    _run_drive_parsed_specialized!,
+                return _run_drive_parsed_specialized!(
                     parsed,
                     original_args,
                     resolved_output_dir,

@@ -253,6 +253,50 @@ function worker_addprocs_blas_kwargs()::NamedTuple
     return (enable_threaded_blas = true,)
 end
 
+function _addprocs_one_local(julia_bin, flags, env)
+    _requested_worker_blas_count() === nothing && return addprocs(
+        1;
+        exename = julia_bin,
+        exeflags = flags,
+        env = env,
+        topology = topology_for_launch(),
+    )
+    return addprocs(
+        1;
+        exename = julia_bin,
+        exeflags = flags,
+        env = env,
+        topology = topology_for_launch(),
+        enable_threaded_blas = true,
+    )
+end
+
+function _addprocs_one_ssh(machine, exename, sshflags, project, flags, env)
+    _requested_worker_blas_count() === nothing && return addprocs(
+        [(machine, 1)];
+        exename = exename,
+        sshflags = sshflags,
+        dir = project,
+        tunnel = ssh_tunnel_enabled(),
+        cmdline_cookie = false,
+        exeflags = flags,
+        env = env,
+        topology = topology_for_launch(),
+    )
+    return addprocs(
+        [(machine, 1)];
+        exename = exename,
+        sshflags = sshflags,
+        dir = project,
+        tunnel = ssh_tunnel_enabled(),
+        cmdline_cookie = false,
+        exeflags = flags,
+        env = env,
+        topology = topology_for_launch(),
+        enable_threaded_blas = true,
+    )
+end
+
 const _WORKER_PKG_UUID = Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f")
 const _WORKER_PKG_PRECOMPILE_EXPR = :(
     let
@@ -611,14 +655,7 @@ function _add_local_drive_workers!(
     try
         for (i, rank) in enumerate(rank_list)
             env = worker_env_pairs(project; ssh = false, rank = rank)
-            joined = addprocs(
-                1;
-                exename = julia_bin,
-                exeflags = flags,
-                env = env,
-                topology = topology_for_launch(),
-                worker_addprocs_blas_kwargs()...,
-            )
+            joined = _addprocs_one_local(julia_bin, flags, env)
             just = Int[Int(w) for w in joined]
             for w in just
                 register_launch_rank!(w, rank)
@@ -662,18 +699,7 @@ function _add_ssh_drive_workers!(
     try
         for (i, rank) in enumerate(rank_list)
             env = worker_env_pairs(project; ssh = true, rank = rank)
-            joined = addprocs(
-                [(machine, 1)];
-                exename = exename,
-                sshflags = sshflags,
-                dir = project,
-                tunnel = ssh_tunnel_enabled(),
-                cmdline_cookie = false,
-                exeflags = flags,
-                env = env,
-                topology = topology_for_launch(),
-                worker_addprocs_blas_kwargs()...,
-            )
+            joined = _addprocs_one_ssh(machine, exename, sshflags, project, flags, env)
             just = Int[Int(w) for w in joined]
             for w in just
                 register_launch_rank!(w, rank)

@@ -15,6 +15,7 @@ module DistSSHShip
 using Dates
 using DistSSHBase
 using DistSSHBase: HostResult
+using GitIgnore
 using TOML
 using Tar
 
