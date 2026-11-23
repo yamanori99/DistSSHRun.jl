@@ -629,7 +629,7 @@ jobs:
   queue-ssh-e2e:
     name: Downstream SSH E2E (DistSSHQueue, 1.13)
     # Paused: DistSSHQueue main still expects ride demos and DISTRIBUTED_*; Run uses DISTSSH_* only.
-    if: false
+    if: false && github.event_name != ''
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
