@@ -14,8 +14,6 @@ concurrency:
 permissions:
   contents: read
 
-cache-mode: read
-
 jobs:
   fix-tests-on-base:
     name: fix tests fail on merge-base src
@@ -36,7 +34,6 @@ jobs:
       - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - name: Run added tests on HEAD src then merge-base src
         env:
           BASE: ${{ github.event.pull_request.base.sha }}

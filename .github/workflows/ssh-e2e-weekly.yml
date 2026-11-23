@@ -19,8 +19,6 @@ concurrency:
 permissions:
   contents: read
 
-cache-mode: read
-
 jobs:
   linux-image:
     runs-on: ubuntu-latest
@@ -67,7 +65,6 @@ jobs:
       - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
       - name: Log in to GHCR
         run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
@@ -114,7 +111,6 @@ jobs:
       - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
       - name: Colima
         run: ./testenv/docker-ssh/scripts/setup-colima-ci.sh
@@ -258,7 +254,6 @@ jobs:
       - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
         with:
           project: lib/DistSSHUp
@@ -297,7 +292,6 @@ jobs:
       - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
         with:
           project: lib/DistSSHBase
@@ -336,7 +330,6 @@ jobs:
       - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
         with:
           project: lib/DistSSHUp
@@ -390,7 +383,6 @@ jobs:
       - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
         with:
           project: lib/DistSSHBase

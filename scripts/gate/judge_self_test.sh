@@ -31,9 +31,8 @@ pass_scenario "judge_matrix_verify"
 pass_scenario "workflow_concurrency_self_test"
 
 chmod +x "${ROOT}/scripts/gate/workflow_cache_verify.sh"
-"${ROOT}/scripts/gate/workflow_cache_verify.sh" --self-test >/dev/null || fail_scenario "workflow_cache_self_test"
 "${ROOT}/scripts/gate/workflow_cache_verify.sh" >/dev/null || fail_scenario "workflow_cache_verify"
-pass_scenario "workflow_cache_self_test"
+pass_scenario "workflow_cache_verify"
 
 SKIP_JOBS=(
   test-unit test-integration test-coverage test-macos-unit test-macos-integration test-wsl

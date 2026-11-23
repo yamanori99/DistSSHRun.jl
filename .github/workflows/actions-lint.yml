@@ -21,8 +21,6 @@ concurrency:
 permissions:
   contents: read
 
-cache-mode: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'write' || 'read' }}
-
 jobs:
   lint:
     name: actionlint, zizmor, pinact
@@ -88,7 +86,6 @@ jobs:
       - uses: ./.github/actions/julia-depot-cache
         with:
           cache-scratchspaces: false
-          delete-old-caches: false
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
       - name: shellcheck generated remote sh
         shell: bash

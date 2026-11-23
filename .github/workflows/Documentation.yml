@@ -14,8 +14,6 @@ concurrency:
   group: docs-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
 
-cache-mode: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'write' || 'read' }}
-
 jobs:
   detect:
     name: detect
