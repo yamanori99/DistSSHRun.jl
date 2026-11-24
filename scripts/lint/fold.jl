@@ -3,7 +3,7 @@
 const FOLD_CONST_PASS = 2
 
 function fold_const_binding!(node, consts::Dict{String, String})
-        kind(node) == K"=" || return
+    kind(node) == K"=" || return
     numchildren(node) >= 2 || return
     lhs = node[1]
     rhs = node[2]

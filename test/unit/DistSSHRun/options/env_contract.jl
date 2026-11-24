@@ -17,9 +17,11 @@ using DistSSHRun
         # Quoted complete env names only (not Julia identifiers like
         # DISTSSH_RUN_DIR_ENV). Trailing "_" prefixes must not match.
         pat = r"(?<![A-Z0-9_])((?:DISTSSH_|DISTRIBUTED_)[A-Z0-9_]*[A-Z0-9])(?![A-Z0-9_])"
-        binding_names = Set((
-            "DISTSSH_RUN_DIR_ENV",
-        ))
+        binding_names = Set(
+            (
+                "DISTSSH_RUN_DIR_ENV",
+            )
+        )
         bad = String[]
         for (dir, _, files) in walkdir(joinpath(root, "src"))
             for f in files
