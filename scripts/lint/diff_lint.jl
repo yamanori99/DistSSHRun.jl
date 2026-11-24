@@ -1746,6 +1746,41 @@ function self_test_body_main()
         die("self-test: env-default int empty valid")
     invalid_env_literal_for_kind("bool", "", Set{String}()) &&
         die("self-test: env-default bool empty valid")
+    invalid_env_literal_for_kind("float > 0", "", Set{String}()) ||
+        die("self-test: env-default float empty invalid")
+    kinds_st = parse_user_env_kinds(repo_root())
+    ch_pg = documented_choice_values(repo_root(), "DISTSSH_PROGRESS_BG")
+    !invalid_env_literal(
+        "DISTSSH_PROGRESS_BG",
+        "",
+        kinds_st;
+        choices = Dict("DISTSSH_PROGRESS_BG" => ch_pg),
+    ) || die("self-test: env-default progress bg empty valid")
+    invalid_env_literal(
+        "DISTSSH_TOPOLOGY",
+        "",
+        kinds_st;
+        choices = Dict("DISTSSH_TOPOLOGY" => Set(["auto", "master_worker"])),
+    ) || die("self-test: env-default topology empty invalid")
+    root = repo_root()
+    mapr = documented_env_reader_functions(root)
+    "user_env_table" in get(mapr, "DISTSSH_JOBS", Set{String}()) &&
+        die("self-test: env-default user_env_table not reader")
+    throw_covers_key(Set(["user_env_table"]), "DISTSSH_JOBS", root) &&
+        die("self-test: env-default throw user_env_table")
+    throw_covers_key(Set(["worker_env_pairs"]), "DISTSSH_JOB_SEED", root) &&
+        die("self-test: env-default throw worker_env_pairs")
+    throw_covers_key(Set(["run_option_table"]), "DISTSSH_TOPOLOGY", root) &&
+        die("self-test: env-default throw run_option_table")
+    throw_covers_key(Set(["placement_host_source_label"]), "DISTSSH_HOSTS", root) &&
+        die("self-test: env-default throw placement_host_source_label")
+    throw_covers_key(Set(["_resolve_interrupt_grace"]), "DISTSSH_WAIT_SIGINT_GRACE", root) ||
+        die("self-test: env-default throw resolve grace")
+    throw_covers_key(Set(["job_seed"]), "DISTSSH_JOB_SEED", root) ||
+        die("self-test: env-default throw job_seed")
+    ut_sup = "withenv(\"DISTSSH_JOBS\" => \"nope\") do\n    @test x == 1\n    @test_throws ArgumentError user_env_table()\nend\n"
+    length(collect_env_default_test(root, Dict("test/t.jl" => [Hunk(1, 0, 1, 4, String[])]), _ -> ut_sup; whole = false)) >= 1 ||
+        die("self-test: env-default withenv user_env_table throw")
     outer_pe = "withenv(\"DISTSSH_JOBS\" => \"nope\") do\n    @test only(ProcessEnv(Dict())) == 1\n    @test_throws ArgumentError only(ProcessEnv(Dict()))\nend\n"
     length(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 4, String[])]), _ -> outer_pe; whole = false)) >= 1 ||
         die("self-test: env-default ProcessEnv throws unrelated")
@@ -1812,6 +1847,18 @@ function self_test_body_main()
     bracket_sh = "run(`sh -c \"ps aux | grep [j]ulia\"`)\n"
     length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> bracket_sh; whole = false)) >= 1 ||
         die("self-test: process-pattern sh bracket trick")
+    pk_str = "run(`sh -c \$(string(\"pk\", \"ill -f x\"))`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> pk_str; whole = false)) >= 1 ||
+        die("self-test: process-pattern sh string concat")
+    pk_star = "run(`sh -c \$(\"pk\" * \"ill -f x\")`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> pk_star; whole = false)) >= 1 ||
+        die("self-test: process-pattern sh star concat")
+    echo_br = "run(`echo \"see [j]ulia docs\"`)\n"
+    isempty(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> echo_br; whole = false)) ||
+        die("self-test: process-pattern echo bracket prose")
+    grep_file = "run(`grep -n x [a]bc.txt`)\n"
+    isempty(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> grep_file; whole = false)) ||
+        die("self-test: process-pattern grep filename bracket")
     allow_mal = "x = 1 # lint-allow: split-token =# not documented\n"
     malformed_allow_comment_lines(allow_mal) == [1] || die("self-test: malformed allow equals-hash")
     red_str = "s = reduce(string, [\"DISTSSH_\", \"FOO\"])\n"
@@ -4376,6 +4423,7 @@ function invalid_env_literal_for_kind(
         return false
     end
     if startswith(k, "float")
+        # Present `""` under `withenv` reaches float parsers and errors (unlike int/bool blank-as-unset).
         n = tryparse(Float64, val)
         n === nothing && return true
         !isfinite(n) && return true
@@ -4511,6 +4559,7 @@ function invalid_env_literal(
     end
     known = get(choices, key, Set{String}())
     if !isempty(known)
+        key in ENV_DEFAULT_EMPTY_VALID_CHOICE_KEYS && isempty(val) && return false
         return !(lowercase(val) in known)
     end
     kind_str = get(kinds, key, "")
@@ -4668,6 +4717,112 @@ end
 const ENV_READER_CACHE = Ref{Union{Nothing, Dict{String, Set{String}}}}(nothing)
 const ENV_READER_CACHE_ROOT = Ref("")
 
+# `env-default-test` treats present `""` like unset for int/bool/uint readers
+# (see `job_seed`, `parse_env_bool` on optional keys). Float readers such as
+# `DISTSSH_WAIT_SCALE` still error on a present blank (`parse_env_float`).
+# `DISTSSH_PROGRESS_BG` treats blank like unset; `DISTSSH_TOPOLOGY` rejects blank.
+const ENV_DEFAULT_EMPTY_VALID_CHOICE_KEYS = Set{String}(["DISTSSH_PROGRESS_BG"])
+
+const ENV_PARSE_ACCESSORS = (
+    "parse_env_bool",
+    "parse_env_int",
+    "parse_env_float",
+    "parse_env_uint64",
+)
+
+function file_env_key_aliases(text::AbstractString)
+    aliases = Dict{String, String}()
+    for m in eachmatch(r"const\s+(\w+)\s*=\s*\"((?:DISTSSH_[A-Z0-9_]+)|JULIA_DISTRIBUTED_EXE)\"", text)
+        aliases[String(m.captures[1])] = String(m.captures[2])
+    end
+    return aliases
+end
+
+function env_key_from_expr(node, aliases::Dict{String, String})
+    v = string_literal_value(node)
+    if v !== nothing
+        s = String(v)
+        return (startswith(s, "DISTSSH_") || s == "JULIA_DISTRIBUTED_EXE") ? s : nothing
+    end
+    kind(node) == K"Identifier" || return nothing
+    return get(aliases, sourcetext(node), nothing)
+end
+
+function env_ref_assign_lhs(node, parent)
+    parent === nothing && return false
+    kind(parent) == K"=" || return false
+    numchildren(parent) >= 2 || return false
+    return parent[1] === node
+end
+
+function env_table_name(node)
+    kind(node) == K"Identifier" && sourcetext(node) == "ENV" && return true
+    return false
+end
+
+function function_body_nodes(node)
+    k = kind(node)
+    k == K"function" && return numchildren(node) >= 2 ? [node[2]] : SyntaxNode[]
+    k == K"=" && return numchildren(node) >= 2 ? [node[2]] : SyntaxNode[]
+    return SyntaxNode[]
+end
+
+function env_read_keys_in_node!(node, parent, aliases::Dict{String, String}, acc::Set{String})
+    if kind(node) == K"ref" && numchildren(node) >= 2 && env_table_name(node[1]) &&
+            !env_ref_assign_lhs(node, parent)
+        k = env_key_from_expr(node[2], aliases)
+        k !== nothing && push!(acc, k)
+    end
+    if kind(node) == K"call"
+        h = call_head_name(node)
+        n = numchildren(node)
+        if h == "get" && n >= 3 && env_table_name(node[2])
+            k = env_key_from_expr(node[3], aliases)
+            k !== nothing && push!(acc, k)
+        elseif h == "haskey" && n >= 3 && env_table_name(node[2])
+            k = env_key_from_expr(node[3], aliases)
+            k !== nothing && push!(acc, k)
+        elseif h in ENV_PARSE_ACCESSORS && n >= 3
+            k = env_key_from_expr(node[2], aliases)
+            k !== nothing && push!(acc, k)
+        elseif h == "env_flag" && n >= 3
+            k = env_key_from_expr(node[2], aliases)
+            k !== nothing && env_table_name(node[3]) && push!(acc, k)
+        end
+    end
+    for i in 1:numchildren(node)
+        env_read_keys_in_node!(node[i], node, aliases, acc)
+    end
+    return acc
+end
+
+function env_read_keys_in_function_body(body, aliases::Dict{String, String})
+    acc = Set{String}()
+    for b in body
+        env_read_keys_in_node!(b, nothing, aliases, acc)
+    end
+    return acc
+end
+
+function walk_function_defs!(node, aliases::Dict{String, String}, readers::Dict{String, Set{String}})
+    fname = defined_function_name(node)
+    if fname !== nothing
+        keys = env_read_keys_in_function_body(function_body_nodes(node), aliases)
+        for k in keys
+            push!(
+                get!(readers, k) do
+                    Set{String}()
+                end,
+                fname,
+            )
+        end
+    end
+    for i in 1:numchildren(node)
+        walk_function_defs!(node[i], aliases, readers)
+    end
+    return nothing
+end
+
 function documented_env_reader_functions(root::AbstractString)
     cache = ENV_READER_CACHE[]
     if cache !== nothing && ENV_READER_CACHE_ROOT[] == String(root)
@@ -4677,32 +4832,15 @@ function documented_env_reader_functions(root::AbstractString)
     for path in tracked_jl(root)
         p = replace(String(path), '\\' => '/')
         startswith(p, "src/") || continue
-        text = read(joinpath(root, path), String)
-        aliases = Dict{String, String}()
-        for m in eachmatch(r"const\s+(\w+)\s*=\s*\"(DISTSSH_[A-Z0-9_]+)\"", text)
-            aliases[String(m.captures[1])] = String(m.captures[2])
+        full = joinpath(root, path)
+        text = read(full, String)
+        aliases = file_env_key_aliases(text)
+        tree = try
+            parse_tree(text)
+        catch
+            continue
         end
-        fun_re = Regex("function\\s+([A-Za-z_][\\w]*)([\\s\\S]*?)(?=\\nfunction\\s+|\\z)")
-        for m in eachmatch(fun_re, text)
-            fname = String(m.captures[1])
-            body = String(m.captures[2])
-            for (sym, env_key) in aliases
-                occursin(sym, body) || continue
-                push!(
-                    get!(readers, env_key) do
-                        Set{String}()
-                    end, fname
-                )
-            end
-            for km in eachmatch(r"\"(DISTSSH_[A-Z0-9_]+)\"", body)
-                env_key = String(km.captures[1])
-                push!(
-                    get!(readers, env_key) do
-                        Set{String}()
-                    end, fname
-                )
-            end
-        end
+        walk_function_defs!(tree, aliases, readers)
     end
     ENV_READER_CACHE[] = readers
     ENV_READER_CACHE_ROOT[] = String(root)

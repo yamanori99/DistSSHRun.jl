@@ -193,8 +193,26 @@ function process_kill_word(s::AbstractString)
     m === nothing && return nothing
     word = lowercase(String(m.captures[1]))
     word in PROCESS_KILL_WORDS && return word
-    occursin(BRACKET_TRICK_RE, w) && return "bracket"
     return nothing
+end
+
+function bracket_trick_filename_token(tok::AbstractString)
+    occursin(r"\.[A-Za-z0-9]{1,8}\s*$", strip(tok)) && return true
+    return occursin('/', tok) || occursin('\\', tok)
+end
+
+function segment_bracket_trick_process_hit(seg::AbstractString)
+    occursin(BRACKET_TRICK_RE, seg) || return false
+    low = lowercase(seg)
+    (
+        occursin(r"\bgrep\b", low) || occursin(r"\bpgrep\b", low) ||
+            occursin(r"\bps\b", low) || occursin('|', seg)
+    ) || return false
+    for tok in split(seg)
+        occursin(BRACKET_TRICK_RE, tok) || continue
+        bracket_trick_filename_token(tok) && return false
+    end
+    return true
 end
 
 function shell_segments(script::AbstractString)
@@ -264,7 +282,7 @@ end
 function command_position_kill(script::AbstractString; second::Bool = false)::Bool
     for seg in shell_segments(script)
         stripped = strip(seg)
-        occursin(BRACKET_TRICK_RE, stripped) && return true
+        segment_bracket_trick_process_hit(stripped) && return true
         toks = split(stripped)
         isempty(toks) && continue
         i = 1
@@ -285,8 +303,7 @@ function command_position_kill(script::AbstractString; second::Bool = false)::Bo
             end
             nxt = i < length(toks) ? shell_token(String(toks[i + 1])) : ""
             hit = process_kill_word(base) !== nothing ||
-                (second && process_kill_word(nxt) !== nothing) ||
-                occursin(BRACKET_TRICK_RE, raw)
+                (second && process_kill_word(nxt) !== nothing)
             hit && return true
             break
         end
@@ -404,13 +421,49 @@ function shell_sh_c_string(node, consts::Dict{String, String})
     return nothing
 end
 
+function fold_cmdstring_interpolation(expr_src::AbstractString, consts::Dict{String, String})
+    src = strip(String(expr_src))
+    tree = try
+        parse_tree(src)
+    catch
+        return nothing
+    end
+    kind(tree) == K"toplevel" || return nothing
+    numchildren(tree) < 1 && return nothing
+    return fold_string_expr(tree[1], consts; partial = true)
+end
+
 function expand_cmdstring_vars(inner::AbstractString, consts::Dict{String, String})
     out = String(inner)
-    for m in eachmatch(r"\$\(\s*string\s*\(\s*\"([^\"]+)\"\s*\)\s*\)", out)
-        out = replace(out, m.match => String(m.captures[1]))
-    end
-    for m in eachmatch(r"\$\(\s*\"([^\"]+)\"\s*\)", out)
-        out = replace(out, m.match => String(m.captures[1]))
+    changed = true
+    while changed
+        changed = false
+        i = firstindex(out)
+        while i <= lastindex(out)
+            if i < lastindex(out) && out[i:(i + 1)] == "\$("
+                depth = 1
+                j = nextind(out, i + 1)
+                start = j
+                while j <= lastindex(out)
+                    c = out[j]
+                    c == '(' && (depth += 1)
+                    c == ')' && (depth -= 1)
+                    depth == 0 && break
+                    j = nextind(out, j)
+                end
+                depth == 0 || break
+                expr = out[start:prevind(out, j)]
+                folded = fold_cmdstring_interpolation(expr, consts)
+                if folded !== nothing
+                    out = out[firstindex(out):prevind(out, i)] * folded * out[nextind(out, j):lastindex(out)]
+                    changed = true
+                    break
+                end
+                i = nextind(out, j)
+            else
+                i = nextind(out, i)
+            end
+        end
     end
     for pattern in (r"\$\((\w+)\)", r"\$(\w+)")
         for m in eachmatch(pattern, out)
