@@ -1019,6 +1019,9 @@ function lint_fixture_suite!(root::AbstractString)
     proc_rel = "scripts/lint/fixtures/evasion/pkill_cmd.jl"
     isempty(collect_process_pattern(root, file_hunks(proc_rel), src_for; whole = false)) &&
         die("self-test: fixture process-pattern evasion")
+    tick_rel = "scripts/lint/fixtures/evasion/pkill_backtick.jl"
+    isempty(collect_process_pattern(root, file_hunks(tick_rel), src_for; whole = false)) &&
+        die("self-test: fixture process-pattern backtick evasion")
     doc_rel = "scripts/lint/fixtures/clean/doc_pkill.jl"
     !isempty(collect_process_pattern(root, file_hunks(doc_rel), src_for; whole = false)) &&
         die("self-test: fixture process-pattern clean")
@@ -2238,7 +2241,10 @@ end
 
 function string_literal_value(node)
     kind(node) == K"string" || return nothing
-    if numchildren(node) >= 1 && kind(node[1]) == K"String"
+    # Interpolation keeps more than one child; refuse so a prefix chunk is not
+    # treated as the full name (e.g. "DISTSSH_JOBS$(suffix)").
+    numchildren(node) > 1 && return nothing
+    if numchildren(node) == 1 && kind(node[1]) == K"String"
         v = sourcetext(node[1])
         return occursin('\0', v) ? nothing : v
     end
@@ -2274,12 +2280,12 @@ end
 const DISTSSH_ENV_NAME_RE = r"^DISTSSH_[A-Z0-9_]*[A-Z0-9]$"
 
 function walk_split_token!(node, src, path, added, consts, rule, hits)
-    if kind(node) == K"doc"
+    if kind(node) == K"doc" ||
+            (kind(node) == K"macrocall" && macro_head_name(node) in ("@doc", "doc"))
+        # Skip the docstring operand; still scan the attached declaration.
+        n = numchildren(node)
+        n >= 2 && walk_split_token!(node[n], src, path, added, consts, rule, hits)
         return
-    end
-    if kind(node) == K"macrocall"
-        mh = macro_head_name(node)
-        mh in ("@doc", "doc") && return
     end
     if split_token_expr_hit(node, consts) && node_touches_added(src, node, added)
         push!(hits, (path, line_of(src, Int(first(byte_range(node)))), rule))
@@ -2328,8 +2334,15 @@ function parse_user_env_table_names(root::AbstractString)
     path = joinpath(root, "src", "DistSSHRun", "options", "env_table.jl")
     isfile(path) || return Set{String}()
     names = Set{String}()
-    for m in eachmatch(r"EnvRow\(\s*\"([^\"]+)\"", read(path, String))
+    text = read(path, String)
+    for m in eachmatch(r"EnvRow\(\s*\"([^\"]+)\"", text)
         push!(names, String(m.captures[1]))
+    end
+    # EnvRow(string("DISTSSH_", "FOO"), ...) keeps a split spelling in source.
+    for m in eachmatch(r"EnvRow\(\s*string\(([^)]*)\)", text)
+        parts = String[String(mm.captures[1]) for mm in eachmatch(r"\"([^\"]*)\"", m.captures[1])]
+        isempty(parts) && continue
+        push!(names, join(parts))
     end
     return names
 end
@@ -2368,18 +2381,37 @@ function removed_env_fragment_names(root::AbstractString)
     return Set(n for n in changelog_removed_fragment_names(root) if occursin(REMOVED_ENV_NAME_RE, n))
 end
 
+# After a version cut, news-collect deletes consumed changelog.d fragments.
+# Removed: lines that sat in those fragment bodies are copied into NEWS.md with
+# the bullets, so the table sync must read both pending fragments and NEWS.md.
+# Bidirectional checks apply only to pending changelog.d names; NEWS.md is a
+# durable one-way source (every table name must appear somewhere).
+function durable_removed_env_names(root::AbstractString)
+    names = String[]
+    append!(names, changelog_removed_fragment_names(root))
+    news = joinpath(root, "NEWS.md")
+    if isfile(news)
+        append!(names, markdown_removed_names(read(news, String)))
+    end
+    return Set(n for n in unique(names) if occursin(REMOVED_ENV_NAME_RE, n))
+end
+
 function lint_obsolete_env_reject_table_sync(root::AbstractString)
     table = parse_removed_env_reject_table(root)
     isempty(table) && return 1
-    fragment = removed_env_fragment_names(root)
+    durable = durable_removed_env_names(root)
+    pending = removed_env_fragment_names(root)
     n = 0
     for name in table
-        name in fragment || begin
-            println(stderr, "lint: obsolete env table name $(name) missing from changelog Removed: line")
+        name in durable || begin
+            println(
+                stderr,
+                "lint: obsolete env table name $(name) missing from changelog Removed: line or NEWS.md",
+            )
             n += 1
         end
     end
-    for name in fragment
+    for name in pending
         name in table || begin
             println(stderr, "lint: changelog Removed env name $(name) missing from obsolete env table")
             n += 1
@@ -2443,7 +2475,20 @@ function withenv_pair_distssh_name(node, consts::Dict{String, String})
 end
 
 function walk_env_table_names!(node, src, path, added, consts, table, legacy, removed, hits)
-    if kind(node) == K"call" && call_head_name(node) in ("replace", "throw_renamed_env!")
+    if kind(node) == K"doc" ||
+            (kind(node) == K"macrocall" && macro_head_name(node) in ("@doc", "doc"))
+        n = numchildren(node)
+        n >= 2 && walk_env_table_names!(
+            node[n],
+            src,
+            path,
+            added,
+            consts,
+            table,
+            legacy,
+            removed,
+            hits,
+        )
         return
     end
     name = distssh_env_folded_name(node, consts)
@@ -2464,10 +2509,6 @@ function walk_env_table_names!(node, src, path, added, consts, table, legacy, re
                 push!(hits, (path, line_of(src, Int(first(byte_range(node)))), "env-table"))
             end
         end
-    end
-    kind(node) == K"doc" && return
-    if kind(node) == K"macrocall" && macro_head_name(node) in ("@doc", "doc")
-        return
     end
     for i in 1:numchildren(node)
         walk_env_table_names!(node[i], src, path, added, consts, table, legacy, removed, hits)
@@ -3041,32 +3082,92 @@ function collect_env_write(root, files, src_for_path; whole::Bool)
     return collect_src_walk(root, files, src_for_path; whole, rule = "env-write", walk_fn = walk_env_write!)
 end
 
-function test_env_mutation_hit_node(node, withenv_depth::Int)
-    withenv_depth > 0 && return false
-    is_env_write_node(node) && return true
-    kind(node) == K"call" || return false
-    call_head_name(node) == "merge!" || return false
-    return numchildren(node) >= 2 && sourcetext(node[2]) == "ENV"
+function withenv_pair_key(node)::Union{Nothing, String}
+    kind(node) == K"call" || return nothing
+    numchildren(node) < 3 && return nothing
+    key_i = if sourcetext(node[1]) in ("=>", ":(=>)")
+        2
+    elseif sourcetext(node[2]) in ("=>", ":(=>)")
+        1
+    else
+        return nothing
+    end
+    key = string_literal_value(node[key_i])
+    key === nothing && (key = string_literal_value_src(node[key_i], ""))
+    return key
 end
 
-function walk_test_env_mutation!(node, src, path, added, withenv_depth, hits)
+# nothing → pair keys are not all literals; body gets an empty restore set.
+function withenv_restored_keys(node)::Union{Nothing, Set{String}}
+    keys = Set{String}()
+    n = numchildren(node)
+    n < 2 && return keys
+    for i in 2:(n - 1)
+        key = withenv_pair_key(node[i])
+        key === nothing && return nothing
+        push!(keys, key)
+    end
+    return keys
+end
+
+function env_write_target_key(node)::Union{Nothing, String}
+    if kind(node) == K"="
+        numchildren(node) >= 1 || return nothing
+        lhs = node[1]
+        kind(lhs) == K"ref" && numchildren(lhs) >= 2 || return nothing
+        sourcetext(lhs[1]) == "ENV" || return nothing
+        key = string_literal_value(lhs[2])
+        key === nothing && (key = string_literal_value_src(lhs[2], ""))
+        return key
+    end
+    if kind(node) == K"call"
+        name = call_head_name(node)
+        name in ("delete!", "pop!") || return nothing
+        numchildren(node) >= 3 || return nothing
+        sourcetext(node[2]) == "ENV" || return nothing
+        key = string_literal_value(node[3])
+        key === nothing && (key = string_literal_value_src(node[3], ""))
+        return key
+    end
+    return nothing
+end
+
+# restored === nothing → outside withenv (every write hits).
+# restored isa Set → inside withenv; only writes to other/unknown keys hit.
+function test_env_mutation_hit_node(node, restored::Union{Nothing, Set{String}})
+    if kind(node) == K"call" && call_head_name(node) == "merge!" &&
+            numchildren(node) >= 2 && sourcetext(node[2]) == "ENV"
+        return true
+    end
+    is_env_write_node(node) || return false
+    restored === nothing && return true
+    key = env_write_target_key(node)
+    key === nothing && return true
+    return !(key in restored)
+end
+
+function walk_test_env_mutation!(node, src, path, added, restored::Union{Nothing, Set{String}}, hits)
     if kind(node) == K"call" && call_head_name(node) == "withenv"
         n = numchildren(node)
         n < 2 && return
         body = node[n]
-        inner = withenv_depth
-        kind(body) == K"do" && (inner += 1)
+        inner = restored
+        if kind(body) == K"do"
+            keys = withenv_restored_keys(node)
+            added_keys = keys === nothing ? Set{String}() : keys
+            inner = restored === nothing ? added_keys : union(restored, added_keys)
+        end
         for i in 1:n
-            d = i == n ? inner : withenv_depth
+            d = i == n ? inner : restored
             walk_test_env_mutation!(node[i], src, path, added, d, hits)
         end
         return
     end
-    if test_env_mutation_hit_node(node, withenv_depth) && node_touches_added(src, node, added)
+    if test_env_mutation_hit_node(node, restored) && node_touches_added(src, node, added)
         push!(hits, (path, line_of(src, Int(first(byte_range(node)))), "test-env-mutation"))
     end
     for i in 1:numchildren(node)
-        walk_test_env_mutation!(node[i], src, path, added, withenv_depth, hits)
+        walk_test_env_mutation!(node[i], src, path, added, restored, hits)
     end
     return
 end
@@ -3089,7 +3190,7 @@ function collect_test_env_mutation(root, files, src_for_path; whole::Bool)
         src === nothing && continue
         added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
         whole || (isempty(added) && continue)
-        walk_test_env_mutation!(parse_tree(src), src, path, added, 0, hits)
+        walk_test_env_mutation!(parse_tree(src), src, path, added, nothing, hits)
     end
     return unique(hits)
 end
@@ -3574,7 +3675,7 @@ end
 
 const BANNED_NEW = ("best-effort", "until", "lockstep", "pending", "known failure", "pre-existing")
 const CEILING_ID_MATCH = 0
-const CEILING_PROCESS_PATTERN = 2
+const CEILING_PROCESS_PATTERN = 1
 const CEILING_LOCK_CREATE = 0
 const CEILING_ENV_DEFAULT = 0
 const CEILING_ENV_DEFAULT_TEST = 8
@@ -3590,8 +3691,8 @@ const CEILING_KWARGS_SPLAT = 22
 const CEILING_SUPPRESSION = 18
 const CEILING_ADDPROCS_KW_SPLAT = 0
 const CEILING_SPLIT_TOKEN = 10
-const CEILING_ENV_TABLE = 3
-const CEILING_TEST_ENV_MUTATION = 71
+const CEILING_ENV_TABLE = 0
+const CEILING_TEST_ENV_MUTATION = 72
 const ADDDROCS_KW_ALLOWLIST = Set{Symbol}(
     [
         :cmdline_cookie,
@@ -4184,14 +4285,19 @@ const LINT_RULE_PROTECT = Dict(
     ),
 )
 
-function lint_evasion_fixture_rel(path::AbstractString)
+function lint_fixture_rel(path::AbstractString)
     p = replace(String(path), '\\' => '/')
-    return startswith(p, "scripts/lint/fixtures/evasion/")
+    return startswith(p, "scripts/lint/fixtures/")
+end
+
+function filter_debt_hits!(hits, root::AbstractString)
+    filter!(h -> !lint_fixture_rel(h[1]), hits)
+    filter_lint_allows!(hits, root)
+    return hits
 end
 
 function report_hits(hits, root::AbstractString)
-    filter!(h -> !lint_evasion_fixture_rel(h[1]), hits)
-    filter_lint_allows!(hits, root)
+    filter_debt_hits!(hits, root)
     n = 0
     for (path, line, rule) in hits
         info = get(LINT_RULE_PROTECT, rule, ("", ""))
@@ -4212,6 +4318,7 @@ function lint_mode_dual(root, files, src_for_path, collect_fn, ceiling_name, cei
     added = collect_fn(root, files, src_for_path; whole = false)
     n = report_hits(added, root)
     whole = collect_fn(root, files, src_for_path; whole = true)
+    filter_debt_hits!(whole, root)
     n += check_ceiling(ceiling_name, length(whole), ceiling)
     return n
 end
@@ -4619,6 +4726,7 @@ function main(args)
         lint_stdlib_compat(root) == 0 || exit(1)
         return 0
     end
+    register_lint_rules!(collect(GATE_LINT_NAMES))
     files = parse_diff(git_diff(root))
     src_for = path -> begin
         p = joinpath(root, path)

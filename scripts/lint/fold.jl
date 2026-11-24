@@ -2,14 +2,23 @@
 
 const FOLD_CONST_PASS = 2
 
+function fold_const_binding!(node, consts::Dict{String, String})
+    kind(node) == K"=" || return
+    numchildren(node) >= 2 || return
+    lhs = node[1]
+    rhs = node[2]
+    kind(lhs) == K"Identifier" || return
+    v = fold_string_expr(rhs, consts; partial = false)
+    v !== nothing && (consts[sourcetext(lhs)] = v)
+    return
+end
+
 function fold_module_consts!(tree, consts::Dict{String, String})
     function walk(node)
-        if kind(node) == K"const" && numchildren(node) >= 2
-            lhs = node[1]
-            rhs = node[2]
-            if kind(lhs) == K"Identifier"
-                v = fold_string_expr(rhs, consts; partial = false)
-                v !== nothing && (consts[sourcetext(lhs)] = v)
+        if kind(node) == K"const"
+            # JuliaSyntax nests the assignment under const.
+            for i in 1:numchildren(node)
+                fold_const_binding!(node[i], consts)
             end
         end
         for i in 1:numchildren(node)
@@ -33,6 +42,9 @@ end
 function try_fold_string_expr(node, consts::Dict{String, String})
     if kind(node) == K"string" || kind(node) == K"String"
         return string_literal_value_src(node, "")
+    end
+    if kind(node) == K"Identifier"
+        return get(consts, sourcetext(node), nothing)
     end
     kind(node) == K"call" || return nothing
     head = call_head_name(node)

@@ -13,11 +13,19 @@ function process_kill_word(s::AbstractString)
 end
 
 function folded_cmd_first_word(node, consts::Dict{String, String})
-    kind(node) == K"string" || kind(node) == K"String" || return nothing
     s = fold_string_expr(node, consts)
     s === nothing && (s = string_literal_value(node))
     s === nothing && return nothing
     return process_kill_word(s)
+end
+
+function cmd_argv_vector(node)
+    kind(node) == K"vect" && return node
+    # Typed argv: String["pgrep"] parses as (::)(vect, Type) in JuliaSyntax.
+    if kind(node) == K"::" && numchildren(node) >= 1 && kind(node[1]) == K"vect"
+        return node[1]
+    end
+    return nothing
 end
 
 function cmd_array_first_kill(node, consts::Dict{String, String})
@@ -25,9 +33,10 @@ function cmd_array_first_kill(node, consts::Dict{String, String})
     call_head_name(node) == "Cmd" || return nothing
     numchildren(node) < 2 && return nothing
     arg = node[2]
-    if kind(arg) == K"vect"
-        numchildren(arg) < 1 && return nothing
-        return folded_cmd_first_word(arg[1], consts)
+    vect = cmd_argv_vector(arg)
+    if vect !== nothing
+        numchildren(vect) < 1 && return nothing
+        return folded_cmd_first_word(vect[1], consts)
     end
     return folded_cmd_first_word(arg, consts)
 end
@@ -37,20 +46,29 @@ function shell_sh_c_string(node, consts::Dict{String, String})
     call_head_name(node) == "Cmd" || return nothing
     numchildren(node) < 2 && return nothing
     arg = node[2]
-    kind(arg) != K"vect" && return nothing
-    n = numchildren(arg)
+    vect = cmd_argv_vector(arg)
+    vect === nothing && return nothing
+    n = numchildren(vect)
     n < 2 && return nothing
-    sh = fold_string_expr(arg[1], consts)
-    sh === nothing && (sh = string_literal_value(arg[1]))
+    sh = fold_string_expr(vect[1], consts)
+    sh === nothing && (sh = string_literal_value(vect[1]))
     sh === nothing && return nothing
     lowercase(sh) in ("sh", "bash") || return nothing
     for i in 2:(n - 1)
-        fl = fold_string_expr(arg[i], consts)
-        fl === nothing && (fl = string_literal_value(arg[i]))
+        fl = fold_string_expr(vect[i], consts)
+        fl === nothing && (fl = string_literal_value(vect[i]))
         fl == "-c" || continue
-        return folded_cmd_first_word(arg[i + 1], consts)
+        return folded_cmd_first_word(vect[i + 1], consts)
     end
     return nothing
+end
+
+function cmdstring_first_kill(node)
+    kind(node) == K"cmdstring" || return nothing
+    if numchildren(node) >= 1
+        return process_kill_word(sourcetext(node[1]))
+    end
+    return process_kill_word(replace(sourcetext(node), r"^`+|`+$" => ""))
 end
 
 function run_family_name(node)
@@ -58,16 +76,25 @@ function run_family_name(node)
     return call_head_name(node)
 end
 
+function run_family_cmd_builder_hit(arg, consts::Dict{String, String})
+    cmd_array_first_kill(arg, consts) !== nothing && return true
+    shell_sh_c_string(arg, consts) !== nothing && return true
+    cmdstring_first_kill(arg) !== nothing && return true
+    return false
+end
+
 function run_family_shell_arg_hit(node, consts::Dict{String, String})
     name = run_family_name(node)
     name in ("run", "pipeline", "open", "read", "success") || return false
     for i in 2:numchildren(node)
-        w = folded_cmd_first_word(node[i], consts)
-        w !== nothing && return true
-        w2 = cmd_array_first_kill(node[i], consts)
-        w2 !== nothing && return true
-        w3 = shell_sh_c_string(node[i], consts)
-        w3 !== nothing && return true
+        arg = node[i]
+        # open/read take a filename string; only Cmd/backtick builders count.
+        if name in ("open", "read")
+            run_family_cmd_builder_hit(arg, consts) && return true
+            continue
+        end
+        folded_cmd_first_word(arg, consts) !== nothing && return true
+        run_family_cmd_builder_hit(arg, consts) && return true
     end
     return false
 end
@@ -91,6 +118,7 @@ function process_pattern_builder_hit(node, consts::Dict{String, String})
     cmd_macro_arg_hit(node, consts) && return true
     cmd_array_first_kill(node, consts) !== nothing && return true
     shell_sh_c_string(node, consts) !== nothing && return true
+    cmdstring_first_kill(node) !== nothing && return true
     run_family_shell_arg_hit(node, consts) && return true
     return false
 end
