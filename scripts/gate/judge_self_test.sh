@@ -52,6 +52,10 @@ pass_scenario "bash32_compat_self_test"
 "${ROOT}/scripts/gate/bash32_compat_verify.sh" >/dev/null || fail_scenario "bash32_compat_verify"
 pass_scenario "bash32_compat_verify"
 
+chmod +x "${ROOT}/scripts/gate/lint_change_guard.sh"
+"${ROOT}/scripts/gate/lint_change_guard.sh" --self-test >/dev/null || fail_scenario "lint_change_guard_self_test"
+pass_scenario "lint_change_guard_self_test"
+
 SKIP_JOBS=(
   test-unit test-integration test-tty test-coverage test-macos-unit test-macos-integration test-macos-tty test-wsl
   test-1-14-pre-unit test-1-14-pre-integration test-1-14-pre-tty test-1-14-pre-macos-unit test-1-14-pre-macos-integration test-1-14-pre-macos-tty
@@ -61,7 +65,7 @@ SKIP_JOBS=(
   ship-test-ubuntu ship-test-macos ship-test-wsl
   heartbeat-test-ubuntu heartbeat-test-macos heartbeat-test-wsl
   up-ssh-e2e base-ssh-e2e ship-ssh-e2e heartbeat-ssh-e2e ssh-e2e ssh-e2e-1-14-pre queue-ssh-e2e
-  aqua-1-14-pre aqua-nightly jetls-1-14-pre
+  aqua-1-14-pre aqua-nightly jetls-1-14-pre lint-change-guard
 )
 
 export_judge_skipped() {
@@ -83,6 +87,7 @@ export_heavy_pr_core_success() {
   export RESULT_test_wsl=skipped
   export RESULT_test_nightly=skipped
   export RESULT_pkgeval=skipped
+  export RESULT_lint_change_guard=success
 }
 
 export DETECT_E2E=false
@@ -96,6 +101,7 @@ export DETECT_COVERAGE=false
 export RESULT_detect=success
 export RESULT_runic=success
 export RESULT_diff_lint_self_test=skipped
+export RESULT_lint_change_guard=skipped
 export RESULT_jetls=success
 export RESULT_aqua=success
 export RESULT_fix_tests_on_base=skipped

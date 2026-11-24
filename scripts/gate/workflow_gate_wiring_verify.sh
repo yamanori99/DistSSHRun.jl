@@ -69,6 +69,7 @@ judge_id_for_job() {
   local job="$1"
   case "${job}" in
     diff-lint-self-test) echo "diff_lint_self_test" ;;
+    lint-change-guard) echo "lint_change_guard" ;;
     fix-tests-on-base) echo "fix_tests_on_base" ;;
     *) echo "${job}" ;;
   esac

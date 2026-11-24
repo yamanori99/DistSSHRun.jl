@@ -1,0 +1,1 @@
+s = string("DISTSSH_", "FOO")
