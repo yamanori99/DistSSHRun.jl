@@ -1695,12 +1695,33 @@ function self_test_body_main()
     prog_bad2 = "withenv(\"DISTSSH_PROGRESS_BG\" => \"bogus123\") do\n    @test x == 1\nend\n"
     length(collect_env_default_test(repo_root(), Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> prog_bad2; whole = false)) >= 1 ||
         die("self-test: env-default progress bogus123")
-    julia_bad = "withenv(\"JULIA_DISTRIBUTED_EXE\" => \"bogus\") do\n    @test x == 1\nend\n"
-    length(collect_env_default_test(repo_root(), Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> julia_bad; whole = false)) >= 1 ||
-        die("self-test: env-default julia bogus")
-    julia_empty = "withenv(\"JULIA_DISTRIBUTED_EXE\" => \"\") do\n    @test x == 1\nend\n"
-    length(collect_env_default_test(repo_root(), Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> julia_empty; whole = false)) >= 1 ||
-        die("self-test: env-default julia empty")
+    valid_root = "withenv(\"DISTSSH_REMOTE_PROJECT_ROOT\" => \"/tmp/proj\") do\n    @test true\nend\n"
+    isempty(collect_env_default_test(repo_root(), Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> valid_root; whole = false)) ||
+        die("self-test: env-default valid remote root path")
+    valid_ssh = "withenv(\"DISTSSH_SSH_OPTS\" => \"-o BatchMode=yes\") do\n    @test x == 1\nend\n"
+    isempty(collect_env_default_test(repo_root(), Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> valid_ssh; whole = false)) ||
+        die("self-test: env-default valid ssh opts")
+    valid_hosts = "withenv(\"DISTSSH_HOSTS_FILE\" => \"\") do\n    @test x == 1\nend\n"
+    isempty(collect_env_default_test(repo_root(), Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> valid_hosts; whole = false)) ||
+        die("self-test: env-default valid empty hosts file")
+    valid_exe = "withenv(\"JULIA_DISTRIBUTED_EXE\" => \"/usr/bin/julia\") do\n    @test x == 1\nend\n"
+    isempty(collect_env_default_test(repo_root(), Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> valid_exe; whole = false)) ||
+        die("self-test: env-default valid julia exe path")
+    valid_auto = "withenv(\"JULIA_DISTRIBUTED_EXE\" => \"auto\") do\n    @test x == 1\nend\n"
+    isempty(collect_env_default_test(repo_root(), Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> valid_auto; whole = false)) ||
+        die("self-test: env-default valid julia exe auto")
+    oxford = "accent: auto, light, or dark"
+    ch = choice_words_from_env_row_desc(oxford)
+    ch == Set(["auto", "light", "dark"]) || die("self-test: env-default oxford choices")
+    backtick_desc = raw"set to `light` or `dark`"
+    ch2 = choice_words_from_env_row_desc(backtick_desc)
+    ch2 == Set(["light", "dark"]) || die("self-test: env-default backtick choices")
+    bool_bad = "withenv(\"DISTSSH_SSH_TUNNEL\" => \"maybe\") do\n    @test ssh_tunnel_enabled() == true\nend\n"
+    length(collect_env_default_test(repo_root(), Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> bool_bad; whole = false)) >= 1 ||
+        die("self-test: env-default bool maybe silent")
+    helper_throws = "withenv(\"DISTSSH_JOBS\" => \"nope\") do\n    @test kit_host_jobs() == 1\n    @test_throws ArgumentError first([1])\nend\n"
+    length(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 4, String[])]), _ -> helper_throws; whole = false)) >= 1 ||
+        die("self-test: env-default helper throws unrelated")
     outer_pe = "withenv(\"DISTSSH_JOBS\" => \"nope\") do\n    @test only(ProcessEnv(Dict())) == 1\n    @test_throws ArgumentError only(ProcessEnv(Dict()))\nend\n"
     length(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 4, String[])]), _ -> outer_pe; whole = false)) >= 1 ||
         die("self-test: env-default ProcessEnv throws unrelated")
@@ -1722,6 +1743,41 @@ function self_test_body_main()
     print_pk = "println(\"pkill failed on host\")\n"
     isempty(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> print_pk; whole = false)) ||
         die("self-test: process-pattern println prose")
+    print_plain = "print(\"pkill failed on host\")\n"
+    isempty(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> print_plain; whole = false)) ||
+        die("self-test: process-pattern print prose")
+    string_pk = "string(\"pkill failed on host\")\n"
+    isempty(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> string_pk; whole = false)) ||
+        die("self-test: process-pattern string prose")
+    read_pk = "println(read(`pkill -f x`, String))\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> read_pk; whole = false)) >= 1 ||
+        die("self-test: process-pattern println read cmd")
+    sudo_n = "run(`sudo -n pkill -f x`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> sudo_n; whole = false)) >= 1 ||
+        die("self-test: process-pattern sudo -n")
+    sudo_nu = "run(`sudo -nu root pkill -f x`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> sudo_nu; whole = false)) >= 1 ||
+        die("self-test: process-pattern sudo -nu")
+    cmd_sudo = "Cmd([\"sudo\", \"pkill\", \"-f\", \"x\"])\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> cmd_sudo; whole = false)) >= 1 ||
+        die("self-test: process-pattern Cmd sudo pkill")
+    cmd_ex = "Cmd([exe, \"pkill\"])\n"
+    isempty(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> cmd_ex; whole = false)) ||
+        die("self-test: process-pattern Cmd exe pkill shift")
+    cmd_ex2 = "Cmd([exe, \"sudo\", \"pkill\"])\n"
+    isempty(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> cmd_ex2; whole = false)) ||
+        die("self-test: process-pattern Cmd exe sudo pkill")
+    var_dollar = "t = \"pkill\"\nrun(`\$(t) -f x`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 2, 1, String[])]), _ -> var_dollar; whole = false)) >= 1 ||
+        die("self-test: process-pattern backtick paren var")
+    nice_n = "run(`nice -5 pkill -f x`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> nice_n; whole = false)) >= 1 ||
+        die("self-test: process-pattern nice -N")
+    env_u = "run(`env -u FOO pkill -f x`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> env_u; whole = false)) >= 1 ||
+        die("self-test: process-pattern env -u")
+    allow_mal = "x = 1 # lint-allow: split-token =# not documented\n"
+    malformed_allow_comment_lines(allow_mal) == [1] || die("self-test: malformed allow equals-hash")
     red_str = "s = reduce(string, [\"DISTSSH_\", \"FOO\"])\n"
     length(collect_split_token("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> red_str; whole = false)) >= 1 ||
         die("self-test: split-token reduce string")
@@ -3935,8 +3991,8 @@ const CEILING_ID_MATCH = 0
 const CEILING_PROCESS_PATTERN = 5
 const CEILING_LOCK_CREATE = 0
 const CEILING_ENV_DEFAULT = 0
-const CEILING_ENV_DEFAULT_TEST = 41
-const CEILING_ENV_DEFAULT_TEST_RULE_REV = 4
+const CEILING_ENV_DEFAULT_TEST = 0
+const CEILING_ENV_DEFAULT_TEST_RULE_REV = 5
 const CEILING_SWALLOWED_CATCH_RULE_REV = 2
 const CEILING_SWALLOWED_CATCH = 146
 const CEILING_LOOP_SKIP = 0
@@ -4090,11 +4146,21 @@ function diagnostic_prose_context(parent, gparent)
     for p in (parent, gparent)
         p === nothing && continue
         if kind(p) == K"macrocall"
-            macro_head_name(p) in ("@warn", "@error", "@info", "warn", "error", "info") && return true
+            mh = macro_head_name(p)
+            mh in ("@warn", "@error", "@info", "@debug", "warn", "error", "info", "debug") && return true
         end
         if kind(p) == K"call"
             h = call_head_name(p)
-            h in ("error", "throw", "warn", "println", "showerror") && return true
+            h in (
+                "error",
+                "throw",
+                "warn",
+                "println",
+                "print",
+                "string",
+                "sprint",
+                "showerror",
+            ) && return true
             h in ("ArgumentError", "ErrorException") && return true
         end
     end
@@ -4258,7 +4324,7 @@ function invalid_env_literal_for_kind(
         choices::Set{String},
     )::Bool
     k = lowercase(strip(kind_str))
-    if startswith(k, "int")
+    if startswith(k, "int") || startswith(k, "uint")
         n = tryparse(Int, val)
         n === nothing && return true
         occursin(">= 1", k) && return n < 1
@@ -4275,35 +4341,75 @@ function invalid_env_literal_for_kind(
         return false
     end
     if startswith(k, "bool")
+        isempty(val) && return false
         low = lowercase(val)
         low in ("true", "false", "yes", "no", "on", "off", "0", "1") && return false
         return true
     end
-    if startswith(k, "string") || startswith(k, "path")
-        isempty(val) && return true
-        !isempty(choices) && return !(lowercase(val) in choices)
-        return invalid_env_literal_generic(val)
+    if startswith(k, "string") || startswith(k, "path") || occursin("path list", k)
+        isempty(choices) && return false
+        return !(lowercase(val) in choices)
     end
-    return invalid_env_literal_generic(val)
+    return false
 end
 
 function invalid_env_literal(s::AbstractString)::Bool
     return invalid_env_literal_generic(s)
 end
 
+const CHOICE_DESC_STOPWORDS = Set{String}(
+    [
+        "a",
+        "an",
+        "and",
+        "of",
+        "one",
+        "or",
+        "set",
+        "the",
+        "to",
+    ]
+)
+
+function choice_word_token(raw::AbstractString)
+    s = strip(String(raw), [' ', '`', '"', '\'', ','])
+    isempty(s) && return nothing
+    m = match(r"^([a-z][a-z0-9_]*)$", lowercase(s))
+    m === nothing && return nothing
+    tok = String(m.captures[1])
+    tok in CHOICE_DESC_STOPWORDS && return nothing
+    return tok
+end
+
+function choice_tail_word(frag::AbstractString)
+    s = strip(String(frag))
+    s = replace(s, r"^.*:\s*" => "")
+    m = match(r"\b([a-z][a-z0-9_]*)\s*$", lowercase(strip(s)))
+    m === nothing && return nothing
+    tok = String(m.captures[1])
+    tok in CHOICE_DESC_STOPWORDS && return nothing
+    return tok
+end
+
 function choice_words_from_env_row_desc(desc::AbstractString)
     vals = Set{String}()
-    occursin(" or ", desc) || return vals
-    parts = split(String(desc), " or ")
-    m = match(r"\b([a-z][a-z0-9_]*)\s*$", strip(parts[1]))
-    m !== nothing && push!(vals, String(m.captures[1]))
-    for i in 2:length(parts)
-        m = match(r"^\s*([a-z][a-z0-9_]*)\b", strip(parts[i]))
-        m !== nothing && push!(vals, String(m.captures[1]))
-        for m2 in eachmatch(r"\bor\s+([a-z][a-z0-9_]*)\b", parts[i])
-            push!(vals, String(m2.captures[1]))
-        end
+    d = String(desc)
+    for m in eachmatch(r"`([^`]+)`", d)
+        w = choice_word_token(m.captures[1])
+        w !== nothing && push!(vals, w)
     end
+    low = lowercase(d)
+    if !occursin(r"\bor\b", low) && !occursin("one of", low)
+        return length(vals) >= 2 ? vals : Set{String}()
+    end
+    plain = replace(d, r"`[^`]*`" => "")
+    comma_or = replace(plain, r"\bor\b" => ",")
+    for part in split(comma_or, ',')
+        w = choice_word_token(part)
+        w === nothing && (w = choice_tail_word(part))
+        w !== nothing && push!(vals, w)
+    end
+    length(vals) < 2 && return Set{String}()
     return vals
 end
 
@@ -4355,9 +4461,9 @@ function invalid_env_literal(
         choices::Dict{String, Set{String}} = Dict{String, Set{String}}(),
         patterns::Dict{String, Regex} = Dict{String, Regex}(),
     )::Bool
-    isempty(val) && return true
     pat = get(patterns, key, nothing)
     if pat !== nothing
+        isempty(val) && return false
         return !occursin(pat, val)
     end
     known = get(choices, key, Set{String}())
@@ -4365,10 +4471,7 @@ function invalid_env_literal(
         return !(lowercase(val) in known)
     end
     kind_str = get(kinds, key, "")
-    if isempty(kind_str)
-        isempty(val) && return true
-        return invalid_env_literal_generic(val)
-    end
+    isempty(kind_str) && return false
     return invalid_env_literal_for_kind(kind_str, val, known)
 end
 
@@ -4432,6 +4535,26 @@ const ENV_TEST_WRAPPER_CALLS = Set{String}(
         "pairs",
         "strip",
         "getfield",
+        "first",
+        "last",
+        "length",
+        "isempty",
+        "collect",
+        "each",
+        "map",
+        "filter",
+        "parse",
+        "Int",
+        "UInt",
+        "Float64",
+        "Bool",
+        "error",
+        "ArgumentError",
+        "ErrorException",
+        "Exception",
+        "Set",
+        "Vector",
+        "Array",
     ]
 )
 
@@ -4477,16 +4600,13 @@ function env_test_reader_names(node)
     return names
 end
 
-function test_flags_in_subtree(node, watched_keys::AbstractSet{<:AbstractString} = Set{String}())
-    _ = watched_keys
-    has_eq = env_test_equality_macro(node)
-    eq = env_test_reader_names(node)
-    throw = Set{String}()
+function env_test_throw_reader_names(node)
+    names = Set{String}()
     function walk_throw(n)
         if kind(n) == K"macrocall" && macro_head_name(n) in ("test_throws", "@test_throws")
             for i in 2:numchildren(n)
                 kind(n[i]) == K"call" &&
-                    union!(throw, setdiff(called_names(n[i]), ENV_TEST_WRAPPER_CALLS))
+                    union!(names, setdiff(called_names(n[i]), ENV_TEST_WRAPPER_CALLS))
             end
         end
         for i in 1:numchildren(n)
@@ -4495,8 +4615,31 @@ function test_flags_in_subtree(node, watched_keys::AbstractSet{<:AbstractString}
         return
     end
     walk_throw(node)
+    return names
+end
+
+function throw_covers_bad_env_keys(throw::Set{String}, bad_keys::AbstractSet{<:AbstractString})
+    isempty(throw) && return false
+    for key in bad_keys
+        stem = lowercase(replace(String(key), r"^DISTSSH_" => ""))
+        for name in throw
+            low = lowercase(name)
+            low == stem && return true
+            occursin(stem, low) && return true
+        end
+    end
+    return false
+end
+
+function test_flags_in_subtree(node, watched_keys::AbstractSet{<:AbstractString} = Set{String}())
+    has_eq = env_test_equality_macro(node)
+    eq = env_test_reader_names(node)
+    throw = env_test_throw_reader_names(node)
     shared = !isempty(intersect(eq, throw))
-    return has_eq, shared
+    throws_only_reader = !has_eq && !isempty(throw)
+    throw_covers = throw_covers_bad_env_keys(throw, watched_keys)
+    suppress = shared || throws_only_reader || throw_covers
+    return has_eq, suppress
 end
 
 function withenv_invalid_test_keys(node, kinds::Dict{String, String}, root, choices, patterns)
@@ -4524,8 +4667,8 @@ function walk_env_default_test!(node, src, path, added, kinds, root, choices, pa
         if !isempty(bad_keys)
             numchildren(node) >= 2 || return
             body = node[numchildren(node)]
-            has_eq, has_related_throws = test_flags_in_subtree(body, Set(bad_keys))
-            if has_eq && !has_related_throws
+            has_eq, suppress = test_flags_in_subtree(body, Set(bad_keys))
+            if has_eq && !suppress
                 a = line_of(src, Int(first(byte_range(node))))
                 push!(hits, (path, a, "env-default"))
             end

@@ -8,6 +8,44 @@ function shell_token(tok::AbstractString)
     return basename(replace(String(tok), r"^['\"]|['\"]$" => ""))
 end
 
+function shell_skip_sudo_opts(i::Int, toks::AbstractVector)
+    n = length(toks)
+    sudo_noarg = Set(['n', 'v', 'E', 'h', 'K'])
+    sudo_witharg = Set(['u', 'g', 'p', 'C', 'H'])
+    while i <= n
+        t = String(toks[i])
+        startswith(t, "-") || break
+        if t in ("-n", "-E", "-v", "-h", "-K")
+            i += 1
+            continue
+        end
+        if t in ("-u", "-g", "-p", "-C", "-H")
+            i += 2
+            continue
+        end
+        if length(t) > 1 && t[2] != '-'
+            chars = collect(t[2:end])
+            j = 1
+            needs_arg = false
+            while j <= length(chars)
+                c = chars[j]
+                c in sudo_noarg && (j += 1; continue)
+                if c in sudo_witharg
+                    needs_arg = true
+                    j += 1
+                    break
+                end
+                j += 1
+            end
+            i += 1
+            needs_arg && i <= n && (i += 1)
+            continue
+        end
+        i += 1
+    end
+    return i
+end
+
 function shell_advance_past_wrapper(i::Int, toks::AbstractVector)
     n = length(toks)
     i > n && return i
@@ -18,45 +56,93 @@ function shell_advance_past_wrapper(i::Int, toks::AbstractVector)
         i += 1
         while i <= n
             t = String(toks[i])
+            if !startswith(t, "-")
+                occursin("=", t) && (i += 1; continue)
+                break
+            end
+            if t == "-u"
+                i += 2
+                continue
+            end
+            if t == "-i"
+                i += 1
+                continue
+            end
             startswith(t, "-") && (i += 1; continue)
-            occursin("=", t) && (i += 1; continue)
             break
         end
         return i
     end
     if low == "nice"
         i += 1
-        i <= n && lowercase(String(toks[i])) == "-n" && (i += 2)
+        i <= n || return i
+        t = String(toks[i])
+        if startswith(t, "-")
+            m = match(r"^-(-?\d+)$", t)
+            m !== nothing && (i += 1; return i)
+            t == "-n" && (i += 2; return i)
+            i += 1
+        end
         return i
     end
     if low == "sudo"
-        i += 1
-        while i <= n
-            t = String(toks[i])
-            startswith(t, "-") || break
-            i += 1
-            t in ("-u", "-g", "-h", "-p", "-C", "-n", "-E") && i <= n && (i += 1)
-        end
-        return i
+        return shell_skip_sudo_opts(i + 1, toks)
     end
     if low == "timeout"
         i += 1
         while i <= n
             t = String(toks[i])
-            if t == "-s"
-                i += 1
-                i <= n && (i += 1)
+            if !startswith(t, "-")
+                break
+            end
+            if t in ("-s", "-k", "-u", "-p")
+                i += 2
                 continue
             end
-            startswith(t, "-") && (i += 1; continue)
-            break
+            if t == "-v"
+                i += 1
+                continue
+            end
+            i += 1
         end
-        i <= n && (i += 1)
+        if i <= n && tryparse(Float64, String(toks[i])) !== nothing
+            i += 1
+        end
         return i
     end
     if low == "ssh"
+        ssh_val = Set(
+            [
+                "-o",
+                "-p",
+                "-i",
+                "-l",
+                "-F",
+                "-J",
+                "-b",
+                "-c",
+                "-E",
+                "-L",
+                "-R",
+                "-W",
+                "-m",
+                "-D",
+            ]
+        )
         i += 1
-        while i <= n && startswith(String(toks[i]), "-")
+        while i <= n
+            t = String(toks[i])
+            if !startswith(t, "-")
+                break
+            end
+            if occursin('=', t)
+                i += 1
+                continue
+            end
+            if t in ssh_val
+                i += 2
+                continue
+            end
             i += 1
         end
         i <= n && (i += 1)
@@ -228,7 +314,6 @@ end
 
 function cmd_argv_vector(node)
     kind(node) == K"vect" && return node
-    # Typed argv String["pgrep"] is a ref whose later children are the elements.
     if kind(node) == K"ref" && numchildren(node) >= 2
         return node
     end
@@ -260,26 +345,21 @@ function cmd_argv_slots(vect, consts::Dict{String, String})
 end
 
 function cmd_slots_kill(slots::Vector{Union{Nothing, String}})
-    i = 1
-    n = length(slots)
-    while i <= n
-        slots[i] === nothing && (i += 1; continue)
-        i > 1 && return nothing
-        words = String[w for w in slots[i:n] if w !== nothing]
-        isempty(words) && return nothing
-        j = shell_advance_past_wrapper(1, words)
-        if j != 1
-            i += j - 1
-            continue
-        end
-        payload = shell_payload_after_sh(1, words)
-        if payload !== nothing
-            return command_position_kill(payload; second = true) ? "pkill" : nothing
-        end
-        base = shell_token(words[1])
-        return process_kill_word(base) !== nothing ? "pkill" : nothing
+    slots[1] === nothing && return nothing
+    words = String[]
+    for w in slots
+        w !== nothing && push!(words, w)
     end
-    return nothing
+    isempty(words) && return nothing
+    j = shell_advance_past_wrapper(1, words)
+    tail = words[j:end]
+    isempty(tail) && return nothing
+    payload = shell_payload_after_sh(1, tail)
+    if payload !== nothing
+        return command_position_kill(payload; second = true) ? "pkill" : nothing
+    end
+    base = shell_token(tail[1])
+    return process_kill_word(base) !== nothing ? "pkill" : nothing
 end
 
 function cmd_array_first_kill(node, consts::Dict{String, String})
@@ -321,10 +401,12 @@ end
 
 function expand_cmdstring_vars(inner::AbstractString, consts::Dict{String, String})
     out = String(inner)
-    for m in eachmatch(r"\$(\w+)", out)
-        v = get(consts, String(m.captures[1]), nothing)
-        v === nothing && continue
-        out = replace(out, m.match => v)
+    for pattern in (r"\$\((\w+)\)", r"\$(\w+)")
+        for m in eachmatch(pattern, out)
+            v = get(consts, String(m.captures[1]), nothing)
+            v === nothing && continue
+            out = replace(out, m.match => v)
+        end
     end
     return out
 end
@@ -395,7 +477,6 @@ function run_family_shell_arg_hit(node, consts::Dict{String, String})
     name in ("run", "pipeline", "open", "read", "success") || return false
     for i in 2:numchildren(node)
         arg = node[i]
-        # open/read take a filename string; only Cmd/backtick builders count.
         if name in ("open", "read")
             run_family_cmd_builder_hit(arg, consts) && return true
             if kind(arg) == K"call" && call_head_name(arg) in ("pipeline", "ignorestatus")

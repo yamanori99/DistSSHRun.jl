@@ -180,7 +180,7 @@ function malformed_allow_comment_lines(src::AbstractString)
     for tok in tokenize(src)
         kind(tok) == K"Comment" || continue
         text = untokenize(tok, src)
-        (startswith(text, "#=") || occursin("=#", text)) && continue
+        startswith(text, "#=") && continue
         lint_allow_line_malformed(text) || continue
         push!(lines, line_of(src, Int(first(tok.range))))
     end
