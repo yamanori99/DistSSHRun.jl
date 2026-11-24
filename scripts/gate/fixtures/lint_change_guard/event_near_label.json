@@ -1,0 +1,9 @@
+{
+  "pull_request": {
+    "labels": [
+      {
+        "name": "needs lint-change-approved review"
+      }
+    ]
+  }
+}

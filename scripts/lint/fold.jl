@@ -67,10 +67,18 @@ function fold_string_expr_partial(node, consts::Dict{String, String})
         return String(take!(io))
     end
     is_star_call(node) || return nothing
-    a = fold_string_expr(star_lhs(node), consts; partial = true)
-    b = fold_string_expr(star_rhs(node), consts; partial = true)
-    (a === nothing || b === nothing) && return nothing
-    return a * b
+    return fold_star_operands(star_operands(node), consts; partial = true)
+end
+
+function fold_star_operands(ops, consts; partial::Bool = false)
+    isempty(ops) && return nothing
+    io = IOBuffer()
+    for op in ops
+        p = fold_string_expr(op, consts; partial = partial)
+        p === nothing && return nothing
+        write(io, p)
+    end
+    return String(take!(io))
 end
 
 function is_star_call(node)
@@ -78,14 +86,16 @@ function is_star_call(node)
     return sourcetext(node[1]) == "*" || (numchildren(node) >= 3 && sourcetext(node[2]) == "*")
 end
 
-function star_lhs(node)
-    sourcetext(node[1]) == "*" && return node[2]
-    return node[1]
-end
-
-function star_rhs(node)
-    sourcetext(node[1]) == "*" && return node[3]
-    return node[3]
+# JuliaSyntax keeps a * b * c as one call with every operand.
+function star_operands(node)
+    if sourcetext(node[1]) == "*"
+        return [node[i] for i in 2:numchildren(node)]
+    end
+    ops = Any[node[1]]
+    for i in 3:numchildren(node)
+        push!(ops, node[i])
+    end
+    return ops
 end
 
 function fold_symbol_string(node, consts)
@@ -110,18 +120,20 @@ function fold_string_call(node, consts)
 end
 
 function fold_star_call(node, consts)
-    a = fold_string_expr(star_lhs(node), consts)
-    b = fold_string_expr(star_rhs(node), consts)
-    (a === nothing || b === nothing) && return nothing
-    return a * b
+    return fold_star_operands(star_operands(node), consts; partial = false)
 end
 
 function fold_join_call(node, consts)
-    numchildren(node) < 3 && return nothing
-    sep = fold_string_expr(node[2], consts)
-    sep === nothing && return nothing
-    parts = fold_string_vector(node[3], consts)
+    # join(iterator) or join(iterator, delim); delim defaults to "".
+    numchildren(node) < 2 && return nothing
+    parts = fold_string_vector(node[2], consts)
     parts === nothing && return nothing
+    sep = ""
+    if numchildren(node) >= 3
+        s = fold_string_expr(node[3], consts)
+        s === nothing && return nothing
+        sep = s
+    end
     return join(parts, sep)
 end
 
@@ -143,20 +155,35 @@ function fold_string_vector(node, consts)
     return nothing
 end
 
+const FOLD_REPEAT_MAX_CHARS = 4096
+
 function fold_repeat_call(node, consts)
     numchildren(node) < 3 && return nothing
     s = fold_string_expr(node[2], consts)
     n = fold_int_literal(node[3])
     (s === nothing || n === nothing) && return nothing
+    n < 0 && return nothing
+    # Refuse huge expansions while scanning source (keeps lint bounded).
+    typemax(Int) ÷ max(sizeof(s), 1) < n && return nothing
+    sizeof(s) * n > FOLD_REPEAT_MAX_CHARS && return nothing
     return repeat(s, n)
 end
 
 function fold_int_literal(node)
     txt = sourcetext(node)
     m = match(r"^-?\d+$", strip(txt))
-    m !== nothing && return Base.parse(Int, m.match)
-    kind(node) == K"call" && call_head_name(node) == "-" && numchildren(node) >= 2 && return -fold_int_literal(node[2])
-    return nothing
+    if m !== nothing
+        v = try
+            Base.parse(Int, m.match)
+        catch
+            return nothing
+        end
+        return v
+    end
+    kind(node) == K"call" && call_head_name(node) == "-" && numchildren(node) >= 2 || return nothing
+    inner = fold_int_literal(node[2])
+    inner === nothing && return nothing
+    return -inner
 end
 
 function fold_prod_reduce_star(node, consts)
@@ -167,7 +194,7 @@ end
 const SPLIT_TOKEN_CHAR = r"[A-Za-z0-9_]"
 
 function split_token_bad_join(left::AbstractString, right::AbstractString)::Bool
-    isempty(left) || isempty(right) && return false
+    (isempty(left) || isempty(right)) && return false
     return occursin(SPLIT_TOKEN_CHAR, string(last(left))) && occursin(SPLIT_TOKEN_CHAR, string(first(right)))
 end
 
@@ -188,15 +215,23 @@ function folded_string_parts(node, consts::Dict{String, String})::Union{Vector{S
         return out
     end
     if is_star_call(node)
-        l = folded_string_parts(star_lhs(node), consts)
-        r = folded_string_parts(star_rhs(node), consts)
-        (l === nothing || r === nothing) && return nothing
-        return vcat(l, r)
+        out = String[]
+        for op in star_operands(node)
+            sub = folded_string_parts(op, consts)
+            sub === nothing && return nothing
+            append!(out, sub)
+        end
+        return out
     end
     if call_head_name(node) == "Symbol"
-        v = fold_symbol_string(node, consts)
-        v === nothing && return nothing
-        return [v]
+        # Keep argument boundaries so Symbol("A", "B") stays a split.
+        out = String[]
+        for i in 2:numchildren(node)
+            sub = folded_string_parts(node[i], consts)
+            sub === nothing && return nothing
+            append!(out, sub)
+        end
+        return out
     end
     v = try_fold_string_expr(node, consts)
     v === nothing && return nothing
@@ -214,6 +249,7 @@ function split_token_expr_hit(node, consts::Dict{String, String})::Bool
     split_token_candidate(node) || return false
     parts = folded_string_parts(node, consts)
     parts === nothing && return false
+    parts = filter(!isempty, parts)
     length(parts) < 2 && return false
     for i in 1:(length(parts) - 1)
         split_token_bad_join(parts[i], parts[i + 1]) && return true

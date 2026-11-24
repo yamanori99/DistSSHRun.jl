@@ -23,7 +23,10 @@ using DistSSHRun
                 "DISTSSH_SOURCE_UNTRACKED",
             ]
         )
-        pat = r"\b((?:DISTSSH_|DISTRIBUTED_)[A-Z0-9_]+)"
+        # Complete env names end in A-Z0-9 and are not a proper prefix of a longer
+        # DISTSSH_/DISTRIBUTED_ token. "DISTSSH_SOURCE_" (prefix only) must not
+        # match as "DISTSSH_SOURCE".
+        pat = r"\b((?:DISTSSH_|DISTRIBUTED_)[A-Z0-9_]*[A-Z0-9])(?![A-Z0-9_])"
         bad = String[]
         for (dir, _, files) in walkdir(joinpath(root, "src"))
             for f in files

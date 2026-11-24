@@ -10,7 +10,7 @@ die() {
   exit 1
 }
 
-# Labels from the webhook payload (no gh token).
+# One label name per line from the webhook payload (no gh token).
 pull_request_labels_from_event() {
   local event_path="${GITHUB_EVENT_PATH:-}"
   local labels=""
@@ -19,9 +19,11 @@ pull_request_labels_from_event() {
   fi
   if command -v jq >/dev/null 2>&1; then
     if ! labels="$(
-      jq -er '
-        if (.pull_request | type) != "object" then error("pull_request missing")
-        else (.pull_request.labels // []) | map(.name) | join(" ")
+      jq -r '
+        if (.pull_request | type) != "object" then
+          "pull_request missing\n" | halt_error(1)
+        else
+          (.pull_request.labels // []) | map(.name) | .[]
         end
       ' "${event_path}" 2>&1
     )"; then
@@ -43,12 +45,10 @@ if labels is None:
     labels = []
 if not isinstance(labels, list):
     sys.exit("pull_request.labels invalid")
-names = []
 for item in labels:
     if not isinstance(item, dict) or "name" not in item:
         sys.exit("pull_request.labels entry invalid")
-    names.append(str(item["name"]))
-print(" ".join(names))
+    print(str(item["name"]))
 PY
     )"; then
       die "could not parse event payload: ${labels}"
@@ -59,6 +59,16 @@ PY
   printf '%s' "${labels}"
 }
 
+has_exact_label() {
+  local want="$1"
+  local labels="$2"
+  local label
+  while IFS= read -r label || [[ -n "${label}" ]]; do
+    [[ "${label}" == "${want}" ]] && return 0
+  done <<< "${labels}"
+  return 1
+}
+
 lint_infra_touched() {
   if [[ "${_LINT_CHANGE_GUARD_SELF_TEST_PATHS:-}" == 1 ]]; then
     return 0
@@ -67,7 +77,9 @@ lint_infra_touched() {
   git fetch --no-tags origin "${base}" 2>/dev/null || true
   local range="origin/${base}...HEAD"
   local paths
-  paths="$(git diff --name-only "${range}" || true)"
+  if ! paths="$(git diff --name-only "${range}")"; then
+    die "could not compare changed paths (${range})"
+  fi
   if printf '%s\n' "${paths}" | grep -qE '^(scripts/lint/|scripts/check\.sh|AGENTS\.md|\.github/workflows/)'; then
     return 0
   fi
@@ -91,6 +103,11 @@ self_test() {
 
   GITHUB_EVENT_NAME=pull_request GITHUB_EVENT_PATH="${fixture}/event_labeled.json" \
     _LINT_CHANGE_GUARD_SELF_TEST_PATHS=1 "${script}" || die "self-test: expected exit 0 with label"
+
+  GITHUB_EVENT_NAME=pull_request GITHUB_EVENT_PATH="${fixture}/event_near_label.json" \
+    _LINT_CHANGE_GUARD_SELF_TEST_PATHS=1 "${script}" 2>/dev/null && {
+    die "self-test: expected exit 1 for near-miss label name"
+  }
 
   GITHUB_EVENT_NAME=pull_request GITHUB_EVENT_PATH="${fixture}/event_not_a_file" \
     _LINT_CHANGE_GUARD_SELF_TEST_PATHS=1 "${script}" 2>"${tmp}/err" && {
@@ -119,7 +136,7 @@ fi
 lint_infra_touched || exit 0
 
 labels="$(pull_request_labels_from_event)"
-if [[ " ${labels} " != *" lint-change-approved "* ]]; then
+if ! has_exact_label "lint-change-approved" "${labels}"; then
   die "touch lint infra without label lint-change-approved"
 fi
 exit 0

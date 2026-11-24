@@ -2270,7 +2270,8 @@ function env_table_src_path(path::AbstractString)::Bool
     return occursin(r"^lib/[^/]+/src/", p)
 end
 
-const DISTSSH_ENV_NAME_RE = r"^DISTSSH_[A-Z0-9_]+$"
+# Complete names end in A-Z0-9. A trailing "_" is a prefix pattern, not one var.
+const DISTSSH_ENV_NAME_RE = r"^DISTSSH_[A-Z0-9_]*[A-Z0-9]$"
 
 function walk_split_token!(node, src, path, added, consts, rule, hits)
     if kind(node) == K"doc"
