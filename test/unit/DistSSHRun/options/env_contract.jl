@@ -13,7 +13,17 @@ using DistSSHRun
         root = pkgdir(DistSSHRun)
         allowed = DistSSHRun.user_env_names()
         legacy_old = Set{String}(old for (old, _) in DistSSHRun.DistSSHBase.LEGACY_ENV_RENAMES)
-        pat = r"\b((?:DISTSSH_|DISTRIBUTED_)[A-Z0-9_]+)"
+        obsolete_reject = Set{String}(DistSSHRun.OBSOLETE_ENV_REJECTION_NAMES)
+        obsolete_old = Set{String}(first(pair) for pair in DistSSHRun.OBSOLETE_ENV_RENAME_PAIRS)
+        # Word-boundary names in source, including unquoted help and errors.
+        # Trailing "_" prefixes must not match. Binding names below are Julia
+        # identifiers that hold a different env string.
+        pat = r"(?<![A-Z0-9_])((?:DISTSSH_|DISTRIBUTED_)[A-Z0-9_]*[A-Z0-9])(?![A-Z0-9_])"
+        binding_names = Set(
+            (
+                "DISTSSH_RUN_DIR_ENV",
+            )
+        )
         bad = String[]
         for (dir, _, files) in walkdir(joinpath(root, "src"))
             for f in files
@@ -22,11 +32,13 @@ using DistSSHRun
                 text = read(path, String)
                 for m in eachmatch(pat, text)
                     name = String(m.captures[1])
+                    name in binding_names && continue
                     name == "JULIA_DISTRIBUTED_EXE" && continue # "keep JULIA_DISTRIBUTED_EXE"
                     startswith(name, "DISTSSH_INTERNAL_") && continue
                     name in allowed && continue
                     name in legacy_old && continue
-                    endswith(name, "_ENV") && name[1:(end - 4)] in allowed && continue
+                    name in obsolete_reject && continue
+                    name in obsolete_old && continue
                     push!(bad, "$(relpath(path, root)): $name")
                 end
             end
@@ -41,17 +53,26 @@ using DistSSHRun
                     text = read(path, String)
                     for m in eachmatch(pat, text)
                         name = String(m.captures[1])
+                        name in binding_names && continue
                         name == "JULIA_DISTRIBUTED_EXE" && continue # "keep JULIA_DISTRIBUTED_EXE"
                         startswith(name, "DISTSSH_INTERNAL_") && continue
                         name in allowed && continue
                         name in legacy_old && continue
-                        endswith(name, "_ENV") && name[1:(end - 4)] in allowed && continue
+                        name in obsolete_reject && continue
+                        name in obsolete_old && continue
                         push!(bad, "$(relpath(path, root)): $name")
                     end
                 end
             end
         end
         @test isempty(bad)
+        help = read(joinpath(root, "src", "DistSSHRun", "argv", "session.jl"), String)
+        ssh = read(joinpath(root, "lib", "DistSSHBase", "src", "ssh", "ssh.jl"), String)
+        help_names = Set(String(m.captures[1]) for m in eachmatch(pat, help))
+        ssh_names = Set(String(m.captures[1]) for m in eachmatch(pat, ssh))
+        @test "DISTSSH_SKIP_GLOBAL_WORKER_PKILL" in help_names
+        @test "DISTSSH_SSH_OPTS" in ssh_names
+        @test "DISTSSH_WAIT_SSH_AUTH" in ssh_names
     end
 
     @testset "legacy DISTRIBUTED_ name errors" begin
@@ -76,18 +97,17 @@ using DistSSHRun
         withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/srv/staged") do
             @test_throws ArgumentError DistSSHRun.DistSSHBase.remote_deploy_root(pwd())
         end
-        old_src = string("DISTSSH_", "SOURCE_COMMIT")
-        withenv(old_src => "abc") do
+        withenv("DISTSSH_SOURCE_COMMIT" => "abc") do
             @test_throws ArgumentError DistSSHRun._source_from_env()
         end
         @test DistSSHRun._reject_obsolete_pipeline_size_env(
             DistSSHRun.ProcessEnv(Dict{String, String}()),
         ) === nothing
         @test_throws ArgumentError DistSSHRun._reject_obsolete_pipeline_size_env(
-            DistSSHRun.ProcessEnv(Dict(string("DISTSSH_", "SIZE_PROBE") => "1")),
+            DistSSHRun.ProcessEnv(Dict("DISTSSH_SIZE_PROBE" => "1")),
         )
         @test_throws ArgumentError DistSSHRun._reject_obsolete_pipeline_size_env(
-            DistSSHRun.ProcessEnv(Dict(string("DISTSSH_", "SIZE_PROBE") => "")),
+            DistSSHRun.ProcessEnv(Dict("DISTSSH_SIZE_PROBE" => "")),
         )
         withenv("DISTRIBUTED_INIT_DELAY_SEC" => "1") do
             @test_throws ArgumentError DistSSHRun._drive_init_delay_sec(; ssh = false)
