@@ -1,7 +1,10 @@
 # lint-allow parsing and filtering (included into Main).
 
 const KNOWN_LINT_RULES = Set{String}()
+# Documented form: `# lint-allow: <rule-id> -- <reason>`
 const LINT_ALLOW_LINE_RE = r"^\s*#\s*lint-allow:\s*([a-z0-9-]+)\s*--\s*(.+)\s*$"
+# Near-miss: mentions lint-allow but is not the documented form.
+const LINT_ALLOW_LOOSE_RE = r"^\s*#\s*lint-allow\b"
 
 function register_lint_rules!(names)
     for n in names
@@ -18,6 +21,11 @@ function parse_lint_allow_line(line::AbstractString)
     rule = String(m.captures[1])
     reason = strip(String(m.captures[2]))
     return (rule, reason)
+end
+
+function lint_allow_line_malformed(line::AbstractString)::Bool
+    occursin(LINT_ALLOW_LOOSE_RE, line) || return false
+    return parse_lint_allow_line(line) === nothing
 end
 
 function lint_allow_reason_valid(reason::AbstractString)
@@ -91,6 +99,21 @@ end
 
 function lint_unknown_or_bad_allows(root::AbstractString)
     n = 0
+    for path in readlines(Cmd(`git -C $root ls-files`; ignorestatus = true))
+        skipped_path(path) && continue
+        endswith(path, ".jl") || endswith(path, ".sh") || continue
+        full = joinpath(root, path)
+        isfile(full) || continue
+        lines = split(read(full, String), '\n'; keepempty = true)
+        for (i, line) in enumerate(lines)
+            lint_allow_line_malformed(line) || continue
+            println(
+                stderr,
+                "lint: $(path):$(i): lint-allow must be `# lint-allow: <rule> -- <reason>`",
+            )
+            n += 1
+        end
+    end
     for (path, line, rule, reason) in collect_lint_allow_markers(root)
         if !lint_rule_id_known(rule)
             println(stderr, "lint: $(path):$(line): lint-allow unknown rule id $(rule)")

@@ -40,7 +40,6 @@ using DistSSHRun
                     name in allowed && continue
                     name in legacy_old && continue
                     name in obsolete_reject && continue
-                    endswith(name, "_ENV") && name[1:(end - 4)] in allowed && continue
                     push!(bad, "$(relpath(path, root)): $name")
                 end
             end
@@ -60,7 +59,6 @@ using DistSSHRun
                         name in allowed && continue
                         name in legacy_old && continue
                         name in obsolete_reject && continue
-                        endswith(name, "_ENV") && name[1:(end - 4)] in allowed && continue
                         push!(bad, "$(relpath(path, root)): $name")
                     end
                 end

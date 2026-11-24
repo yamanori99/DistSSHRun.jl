@@ -2441,16 +2441,12 @@ function env_name_allowed(
         legacy::Set{String},
         obsolete::Set{String},
     )::Bool
+    # Explicit row, legacy map, or obsolete rejection only. Prefix and _ENV
+    # aliases are not membership. DISTSSH_INTERNAL_* is skipped by the walker.
     name == "JULIA_DISTRIBUTED_EXE" && return true
-    startswith(name, "DISTSSH_INTERNAL_") && return true
-    startswith(name, "DISTSSH_TEST_") && return true
     name in table && return true
     name in legacy && return true
     name in obsolete && return true
-    if endswith(name, "_ENV")
-        base = name[1:(end - 4)]
-        base in table && return true
-    end
     return false
 end
 
@@ -3678,8 +3674,8 @@ const CEILING_ID_MATCH = 0
 const CEILING_PROCESS_PATTERN = 1
 const CEILING_LOCK_CREATE = 0
 const CEILING_ENV_DEFAULT = 0
-const CEILING_ENV_DEFAULT_TEST = 8
-const CEILING_ENV_DEFAULT_TEST_RULE_REV = 1
+const CEILING_ENV_DEFAULT_TEST = 9
+const CEILING_ENV_DEFAULT_TEST_RULE_REV = 2
 const CEILING_SWALLOWED_CATCH_RULE_REV = 2
 const CEILING_SWALLOWED_CATCH = 146
 const CEILING_LOOP_SKIP = 0
@@ -3933,12 +3929,65 @@ function collect_env_default(root, files, src_for_path; whole::Bool)
     return unique(hits)
 end
 
-function invalid_env_literal(s::AbstractString)::Bool
+function parse_user_env_kinds(root::AbstractString)::Dict{String, String}
+    path = joinpath(root, "src", "DistSSHRun", "options", "env_table.jl")
+    isfile(path) || return Dict{String, String}()
+    text = read(path, String)
+    kinds = Dict{String, String}()
+    for m in eachmatch(r"EnvRow\(\s*\"([^\"]+)\"\s*,\s*\"([^\"]+)\"", text)
+        kinds[String(m.captures[1])] = String(m.captures[2])
+    end
+    for m in eachmatch(r"EnvRow\(\s*string\(([^)]*)\)\s*,\s*\"([^\"]+)\"", text)
+        parts = String[String(mm.captures[1]) for mm in eachmatch(r"\"([^\"]*)\"", m.captures[1])]
+        isempty(parts) && continue
+        kinds[join(parts)] = String(m.captures[2])
+    end
+    return kinds
+end
+
+function invalid_env_literal_generic(s::AbstractString)::Bool
     isempty(s) && return false
     s in ("0", "-1", "nope", "maybe", "foo") && return true
     all(isletter, s) || return false
     lowercase(s) in ("true", "false", "yes", "no", "on", "off", "unset") && return false
     return true
+end
+
+function invalid_env_literal_for_kind(kind_str::AbstractString, val::AbstractString)::Bool
+    k = lowercase(strip(kind_str))
+    if startswith(k, "int")
+        n = tryparse(Int, val)
+        n === nothing && return true
+        occursin(">= 1", k) && return n < 1
+        occursin("> 0", k) && return n <= 0
+        occursin(">= 0", k) && return n < 0
+        return false
+    end
+    if startswith(k, "float")
+        n = tryparse(Float64, val)
+        n === nothing && return true
+        !isfinite(n) && return true
+        occursin("> 0", k) && return !(n > 0)
+        occursin(">= 0", k) && return n < 0
+        return false
+    end
+    if startswith(k, "bool")
+        low = lowercase(val)
+        low in ("true", "false", "yes", "no", "on", "off", "0", "1") && return false
+        return true
+    end
+    # string / path / path list: keep the generic garbage heuristic
+    return invalid_env_literal_generic(val)
+end
+
+function invalid_env_literal(s::AbstractString)::Bool
+    return invalid_env_literal_generic(s)
+end
+
+function invalid_env_literal(key::AbstractString, val::AbstractString, kinds::Dict{String, String})::Bool
+    kind_str = get(kinds, key, "")
+    isempty(kind_str) && return invalid_env_literal_generic(val)
+    return invalid_env_literal_for_kind(kind_str, val)
 end
 
 function test_path(path::AbstractString)::Bool
@@ -3969,14 +4018,17 @@ function env_pair_string_literals(node)
     return (key, val)
 end
 
-function test_flags_in_subtree(node)
+function test_flags_in_subtree(node, watched_keys::AbstractSet{<:AbstractString} = Set{String}())
     has_eq = Ref(false)
-    has_throws = Ref(false)
+    has_related_throws = Ref(false)
     function walk(n)
         if kind(n) == K"macrocall"
             mh = macro_head_name(n)
             if mh in ("test_throws", "@test_throws")
-                has_throws[] = true
+                st = sourcetext(n)
+                related =
+                    occursin(r"\bENV\b", st) || any(k -> occursin(k, st), watched_keys)
+                related && (has_related_throws[] = true)
             elseif mh in ("test", "@test") && numchildren(n) >= 2
                 arg = n[2]
                 if kind(arg) == K"call" && numchildren(arg) >= 3
@@ -3991,33 +4043,37 @@ function test_flags_in_subtree(node)
         return
     end
     walk(node)
-    return has_eq[], has_throws[]
+    return has_eq[], has_related_throws[]
 end
 
-function withenv_has_invalid_test_literal(node)
-    kind(node) == K"call" || return false
-    call_head_name(node) == "withenv" || return false
+function withenv_invalid_test_keys(node, kinds::Dict{String, String})
+    kind(node) == K"call" || return String[]
+    call_head_name(node) == "withenv" || return String[]
+    keys = String[]
     for i in 2:numchildren(node)
         pair = env_pair_string_literals(node[i])
         pair === nothing && continue
-        invalid_env_literal(pair[2]) && return true
+        invalid_env_literal(pair[1], pair[2], kinds) && push!(keys, pair[1])
     end
-    return false
+    return keys
 end
 
-function walk_env_default_test!(node, src, path, added, hits)
+function walk_env_default_test!(node, src, path, added, kinds, hits)
     if kind(node) == K"call" && call_head_name(node) == "withenv" &&
-            node_touches_added(src, node, added) && withenv_has_invalid_test_literal(node)
-        numchildren(node) >= 2 || return
-        body = node[numchildren(node)]
-        has_eq, has_throws = test_flags_in_subtree(body)
-        if has_eq && !has_throws
-            a = line_of(src, Int(first(byte_range(node))))
-            push!(hits, (path, a, "env-default"))
+            node_touches_added(src, node, added)
+        bad_keys = withenv_invalid_test_keys(node, kinds)
+        if !isempty(bad_keys)
+            numchildren(node) >= 2 || return
+            body = node[numchildren(node)]
+            has_eq, has_related_throws = test_flags_in_subtree(body, Set(bad_keys))
+            if has_eq && !has_related_throws
+                a = line_of(src, Int(first(byte_range(node))))
+                push!(hits, (path, a, "env-default"))
+            end
         end
     end
     for i in 1:numchildren(node)
-        walk_env_default_test!(node[i], src, path, added, hits)
+        walk_env_default_test!(node[i], src, path, added, kinds, hits)
     end
     return
 end
@@ -4036,6 +4092,7 @@ end
 
 function collect_env_default_test(root, files, src_for_path; whole::Bool)
     hits = Tuple{String, Int, String}[]
+    kinds = parse_user_env_kinds(root)
     pick = whole ? env_default_test_ratchet_path : env_default_test_path
     paths = whole ? filter(env_default_test_ratchet_path, tracked_jl(root)) : collect(keys(files))
     for path in paths
@@ -4046,7 +4103,7 @@ function collect_env_default_test(root, files, src_for_path; whole::Bool)
         src === nothing && continue
         added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
         whole || (isempty(added) && continue)
-        walk_env_default_test!(parse_tree(src), src, path, added, hits)
+        walk_env_default_test!(parse_tree(src), src, path, added, kinds, hits)
     end
     return unique(hits)
 end
@@ -4358,12 +4415,12 @@ function grep_token(root, tok, dirs)
 end
 
 function removed_name_src_ok(line::AbstractString, tok::AbstractString)::Bool
+    # Only recognized rejection / migration constructs. Prose such as
+    # "was renamed to" on an active definition must still report.
     occursin("throw_renamed_env!", line) && return true
     occursin("_reject_obsolete", line) && return true
     occursin("_throw_if_obsolete", line) && return true
     occursin("LEGACY_ENV_RENAMES", line) && return true
-    occursin("is no longer used", line) && return true
-    occursin("was renamed to", line) && return true
     occursin("OBSOLETE_ENV_REJECTION_NAMES", line) && return true
     occursin(r"name in \(", line) && occursin(tok, line) && return true
     occursin(Regex("\\Q\"$(tok)\"\\s*=>"), line) && return true
@@ -4412,7 +4469,9 @@ function lint_removed_names(root::AbstractString, extra_root::AbstractString = "
             n += 1
         end
         if !isempty(extra_root)
-            for hit in grep_token_removed(extra_root, tok, ("src", "test", "README.md", "README.ja.md", "docs"))
+            # Downstream stays unfiltered: this package's rejection exemptions
+            # must not hide an active use in DistSSHQueue / DistSSHKit trees.
+            for hit in grep_token(extra_root, tok, ("src", "test", "README.md", "README.ja.md", "docs"))
                 println(stderr, "lint: removed name $(tok) still in downstream $(hit)")
                 n += 1
             end
@@ -4489,6 +4548,7 @@ function lint_env_default(root, files, src_for_path)
     added = collect_env_default_test(root, files, src_for_path; whole = false)
     n += report_hits(added, root)
     whole = collect_env_default_test(root, files, src_for_path; whole = true)
+    filter_debt_hits!(whole, root)
     n += check_env_default_test_ceiling(length(whole), CEILING_ENV_DEFAULT_TEST)
     return n
 end
@@ -4497,6 +4557,7 @@ function lint_swallowed_catch(root, files, src_for_path)
     added = collect_swallowed_catch(root, files, src_for_path; whole = false)
     n = report_hits(added, root)
     whole = collect_swallowed_catch(root, files, src_for_path; whole = true)
+    filter_debt_hits!(whole, root)
     n += check_swallowed_ceiling(length(whole), CEILING_SWALLOWED_CATCH)
     return n
 end
