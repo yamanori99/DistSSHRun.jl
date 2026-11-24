@@ -1,10 +1,10 @@
 # lint-allow parsing and filtering (included into Main).
 
 const KNOWN_LINT_RULES = Set{String}()
-# Documented form: `# lint-allow: <rule-id> -- <reason>`
-const LINT_ALLOW_LINE_RE = r"^\s*#\s*lint-allow:\s*([a-z0-9-]+)\s*--\s*(.+)\s*$"
+# Documented form: `# lint-allow: <rule-id> -- <reason>` alone or after code.
+const LINT_ALLOW_LINE_RE = r"(?:^|\s)#\s*lint-allow:\s*([a-z0-9-]+)\s*--\s*(.+)\s*$"
 # Near-miss: mentions lint-allow but is not the documented form.
-const LINT_ALLOW_LOOSE_RE = r"^\s*#\s*lint-allow\b"
+const LINT_ALLOW_LOOSE_RE = r"(?:^|\s)#\s*lint-allow\b"
 
 function register_lint_rules!(names)
     for n in names

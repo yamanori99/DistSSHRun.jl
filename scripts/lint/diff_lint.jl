@@ -1501,6 +1501,21 @@ function self_test_body_main()
     split_var = "a = \"x\"; s = string(a, \"y\")\n"
     isempty(collect_split_token("", Dict("src/x.jl" => [Hunk(1, 0, 2, 1, String[])]), _ -> split_var; whole = false)) ||
         die("self-test: split-token variable")
+    parse_lint_allow_line("ENV[\"X\"] = \"1\" # lint-allow: test-env-mutation -- fixture models a raw ENV write") !== nothing ||
+        die("self-test: inline lint-allow")
+    lint_allow_line_malformed("# lint-allow: split-token --") ||
+        die("self-test: malformed lint-allow empty reason")
+    commented = "# EnvRow(\"DISTSSH_UNLISTED\", \"string\", \"unset\", \"—\", \"gone\")\nEnvRow(\"DISTSSH_JOBS\", \"int >= 1\", \"1\", \"—\", \"jobs\")\n"
+    !occursin("DISTSSH_UNLISTED", source_without_full_line_comments(commented)) ||
+        die("self-test: commented EnvRow stripped")
+    occursin("DISTSSH_JOBS", source_without_full_line_comments(commented)) ||
+        die("self-test: live EnvRow kept")
+    malformed_num = "withenv(\"DISTSSH_JOBS\" => \"12oops\") do\n    @test kit_host_jobs() == 1\nend\n"
+    length(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> malformed_num; whole = false)) >= 1 ||
+        die("self-test: env-default malformed numeric")
+    unrelated_throws = "withenv(\"DISTSSH_JOBS\" => \"nope\") do\n    @test kit_host_jobs() == 1\n    @test_throws ArgumentError parse(Int, \"bad\")\nend\n"
+    length(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 4, String[])]), _ -> unrelated_throws; whole = false)) >= 1 ||
+        die("self-test: env-default unrelated throws")
     proc_doc = "function f()\n\"\"\"\nUse pkill with care.\n\"\"\"\nend\n"
     isempty(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 5, String[])]), _ -> proc_doc; whole = false)) ||
         die("self-test: process-pattern docstring")
@@ -2330,11 +2345,22 @@ function distssh_env_folded_name(node, consts::Dict{String, String})
     return v
 end
 
+# Drop full-line `#` comments so commented-out EnvRow / rename rows do not
+# count as declarations. Trailing comments on code lines stay (rare for rows).
+function source_without_full_line_comments(text::AbstractString)::String
+    parts = String[]
+    for line in eachsplit(text, '\n'; keepempty = true)
+        startswith(lstrip(line), "#") && continue
+        push!(parts, line)
+    end
+    return join(parts, '\n')
+end
+
 function parse_user_env_table_names(root::AbstractString)
     path = joinpath(root, "src", "DistSSHRun", "options", "env_table.jl")
     isfile(path) || return Set{String}()
     names = Set{String}()
-    text = read(path, String)
+    text = source_without_full_line_comments(read(path, String))
     for m in eachmatch(r"EnvRow\(\s*\"([^\"]+)\"", text)
         push!(names, String(m.captures[1]))
     end
@@ -2351,7 +2377,8 @@ function parse_legacy_env_old_names(root::AbstractString)
     path = joinpath(root, "lib", "DistSSHBase", "src", "env.jl")
     isfile(path) || return Set{String}()
     names = Set{String}()
-    for m in eachmatch(r"\"([A-Z0-9_]+)\"\s*=>", read(path, String))
+    text = source_without_full_line_comments(read(path, String))
+    for m in eachmatch(r"\"([A-Z0-9_]+)\"\s*=>", text)
         push!(names, String(m.captures[1]))
     end
     return names
@@ -2361,7 +2388,8 @@ function parse_removed_env_reject_table(root::AbstractString)
     path = joinpath(root, "src", "DistSSHRun", "options", "obsolete_env.jl")
     isfile(path) || return Set{String}()
     names = Set{String}()
-    for m in eachmatch(r"\"(DISTSSH_[A-Z0-9_]+|GB_PER_WORKER)\"", read(path, String))
+    text = source_without_full_line_comments(read(path, String))
+    for m in eachmatch(r"\"(DISTSSH_[A-Z0-9_]+|GB_PER_WORKER)\"", text)
         push!(names, String(m.captures[1]))
     end
     return names
@@ -3932,7 +3960,7 @@ end
 function parse_user_env_kinds(root::AbstractString)::Dict{String, String}
     path = joinpath(root, "src", "DistSSHRun", "options", "env_table.jl")
     isfile(path) || return Dict{String, String}()
-    text = read(path, String)
+    text = source_without_full_line_comments(read(path, String))
     kinds = Dict{String, String}()
     for m in eachmatch(r"EnvRow\(\s*\"([^\"]+)\"\s*,\s*\"([^\"]+)\"", text)
         kinds[String(m.captures[1])] = String(m.captures[2])
