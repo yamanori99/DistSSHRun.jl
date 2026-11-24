@@ -9,7 +9,7 @@ const OBSOLETE_ENV_RENAME_PAIRS = (
 
 # Names rejected outright. Renamed source names live only in the pair list.
 const OBSOLETE_ENV_REJECTION_NAMES = (
-    string("GB_", "PER_WORKER"),
-    string("DISTSSH_", "SIZE_PROBE"),
-    string("DISTSSH_INTERNAL_", "SIZE_PROBE"),
+    "GB_PER_WORKER",
+    "DISTSSH_SIZE_PROBE",
+    "DISTSSH_INTERNAL_SIZE_PROBE",
 )
