@@ -1,8 +1,100 @@
 # Shell command-building context for process-pattern (included into Main).
 
 const PROCESS_KILL_WORDS = ("pkill", "killall", "pgrep")
-const SHELL_WRAPPERS = ("sudo", "env", "nice", "command", "nohup")
+const SHELL_WRAPPERS = ("sudo", "env", "nice", "command", "nohup", "timeout", "ssh", "xargs")
 const BRACKET_TRICK_RE = r"(^|[^A-Za-z0-9_])\[[A-Za-z]\][A-Za-z]"
+
+function shell_token(tok::AbstractString)
+    return basename(replace(String(tok), r"^['\"]|['\"]$" => ""))
+end
+
+function shell_advance_past_wrapper(i::Int, toks::AbstractVector)
+    n = length(toks)
+    i > n && return i
+    raw = String(toks[i])
+    base = shell_token(raw)
+    low = lowercase(base)
+    if low == "env"
+        i += 1
+        while i <= n
+            t = String(toks[i])
+            startswith(t, "-") && (i += 1; continue)
+            occursin("=", t) && (i += 1; continue)
+            break
+        end
+        return i
+    end
+    if low == "nice"
+        i += 1
+        i <= n && lowercase(String(toks[i])) == "-n" && (i += 2)
+        return i
+    end
+    if low == "sudo"
+        i += 1
+        while i <= n
+            t = String(toks[i])
+            startswith(t, "-") || break
+            i += 1
+            t in ("-u", "-g", "-h", "-p", "-C", "-n", "-E") && i <= n && (i += 1)
+        end
+        return i
+    end
+    if low == "timeout"
+        i += 1
+        while i <= n
+            t = String(toks[i])
+            if t == "-s"
+                i += 1
+                i <= n && (i += 1)
+                continue
+            end
+            startswith(t, "-") && (i += 1; continue)
+            break
+        end
+        i <= n && (i += 1)
+        return i
+    end
+    if low == "ssh"
+        i += 1
+        while i <= n && startswith(String(toks[i]), "-")
+            i += 1
+        end
+        i <= n && (i += 1)
+        return i
+    end
+    if low == "xargs"
+        i += 1
+        while i <= n && startswith(String(toks[i]), "-")
+            arg = String(toks[i])
+            i += 1
+            arg in ("-I", "-i", "-n", "-P", "-L", "-x") && i <= n && (i += 1)
+        end
+        return i
+    end
+    if low in SHELL_WRAPPERS
+        return i + 1
+    end
+    return i
+end
+
+function shell_payload_after_sh(i::Int, toks::AbstractVector)
+    n = length(toks)
+    i > n && return nothing
+    low = lowercase(shell_token(String(toks[i])))
+    low in ("sh", "bash") || return nothing
+    i += 1
+    i > n && return nothing
+    flags = String(toks[i])
+    if flags == "-c"
+        i += 1
+        return i <= n ? join(String.(toks[i:n]), " ") : nothing
+    end
+    if startswith(flags, "-") && occursin('c', flags)
+        i += 1
+        return i <= n ? join(String.(toks[i:n]), " ") : nothing
+    end
+    return nothing
+end
 
 function process_kill_word(s::AbstractString)
     w = strip(s)
@@ -87,24 +179,20 @@ function command_position_kill(script::AbstractString; second::Bool = false)::Bo
         i = 1
         while i <= length(toks)
             raw = String(toks[i])
-            base = basename(replace(raw, r"^['\"]|['\"]$" => ""))
+            base = shell_token(raw)
             low = lowercase(base)
-            if low in SHELL_WRAPPERS
-                i += 1
+            i0 = shell_advance_past_wrapper(i, toks)
+            if i0 != i
+                i = i0
                 continue
             end
-            if low == "timeout"
-                i += 1
-                i <= length(toks) && (i += 1)
-                continue
-            end
-            if low in ("sh", "bash") && i < length(toks) && String(toks[i + 1]) == "-c"
-                payload = join(String.(toks[(i + 2):end]), " ")
+            payload = shell_payload_after_sh(i, toks)
+            if payload !== nothing
                 payload = strip(payload, ['"', '\''])
                 command_position_kill(payload; second = true) && return true
                 break
             end
-            nxt = i < length(toks) ? basename(replace(String(toks[i + 1]), r"^['\"]|['\"]$" => "")) : ""
+            nxt = i < length(toks) ? shell_token(String(toks[i + 1])) : ""
             hit = process_kill_word(base) !== nothing ||
                 (second && process_kill_word(nxt) !== nothing) ||
                 occursin(BRACKET_TRICK_RE, raw)
@@ -175,24 +263,20 @@ function cmd_slots_kill(slots::Vector{Union{Nothing, String}})
     i = 1
     n = length(slots)
     while i <= n
-        w = slots[i]
-        w === nothing && return nothing
-        base = basename(replace(w, r"^['\"]|['\"]$" => ""))
-        low = lowercase(base)
-        if low in SHELL_WRAPPERS
-            i += 1
+        slots[i] === nothing && (i += 1; continue)
+        i > 1 && return nothing
+        words = String[w for w in slots[i:n] if w !== nothing]
+        isempty(words) && return nothing
+        j = shell_advance_past_wrapper(1, words)
+        if j != 1
+            i += j - 1
             continue
         end
-        if low == "timeout"
-            i += 1
-            i <= n && (i += 1)
-            continue
+        payload = shell_payload_after_sh(1, words)
+        if payload !== nothing
+            return command_position_kill(payload; second = true) ? "pkill" : nothing
         end
-        if low in ("sh", "bash") && i < n && slots[i + 1] == "-c"
-            script = i + 2 <= n ? slots[i + 2] : nothing
-            script === nothing && return nothing
-            return command_position_kill(script; second = true) ? "pkill" : nothing
-        end
+        base = shell_token(words[1])
         return process_kill_word(base) !== nothing ? "pkill" : nothing
     end
     return nothing
@@ -235,9 +319,20 @@ function shell_sh_c_string(node, consts::Dict{String, String})
     return nothing
 end
 
-function cmdstring_first_kill(node)
+function expand_cmdstring_vars(inner::AbstractString, consts::Dict{String, String})
+    out = String(inner)
+    for m in eachmatch(r"\$(\w+)", out)
+        v = get(consts, String(m.captures[1]), nothing)
+        v === nothing && continue
+        out = replace(out, m.match => v)
+    end
+    return out
+end
+
+function cmdstring_first_kill(node, consts::Dict{String, String})
     kind(node) == K"cmdstring" || return nothing
     inner = replace(sourcetext(node), r"^`+|`+$" => "")
+    inner = expand_cmdstring_vars(inner, consts)
     return command_position_kill(inner) ? "pkill" : nothing
 end
 
@@ -260,7 +355,7 @@ end
 function run_family_cmd_builder_hit(arg, consts::Dict{String, String})
     cmd_array_first_kill(arg, consts) !== nothing && return true
     shell_sh_c_string(arg, consts) !== nothing && return true
-    cmdstring_first_kill(arg) !== nothing && return true
+    cmdstring_first_kill(arg, consts) !== nothing && return true
     which_kill_tool(arg, consts) !== nothing && return true
     return false
 end
@@ -334,7 +429,7 @@ function process_pattern_builder_hit(node, consts::Dict{String, String})
     cmd_macro_arg_hit(node, consts) && return true
     cmd_array_first_kill(node, consts) !== nothing && return true
     shell_sh_c_string(node, consts) !== nothing && return true
-    cmdstring_first_kill(node) !== nothing && return true
+    cmdstring_first_kill(node, consts) !== nothing && return true
     remote_shell_call_inner_hit(node, consts) && return true
     run_family_shell_arg_hit(node, consts) && return true
     return false

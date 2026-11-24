@@ -71,7 +71,7 @@ function comment_allow_markers(src::AbstractString)
         kind(tok) == K"Comment" || continue
         text = untokenize(tok, src)
         # Block comments are not allowance markers.
-        (startswith(text, "#=") || occursin("=#", text)) && continue
+        startswith(text, "#=") && continue
         parsed = parse_lint_allow_line(text)
         parsed === nothing && continue
         # Token ranges are already 1-based.

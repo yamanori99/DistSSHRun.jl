@@ -1671,16 +1671,63 @@ function self_test_body_main()
     lint_obsolete_env_reject_table_sync(repo_root()) == 0 ||
         die("self-test: obsolete env table sync")
     post = mktempdir()
+    ob = joinpath(post, "src/DistSSHRun/options/obsolete_env.jl")
+    mkpath(dirname(ob))
     mkpath(joinpath(post, "changelog.d"))
-    write(joinpath(post, "NEWS.md"), "Removed: `OLD_ENV_NAME`\n")
-    write(
-        joinpath(post, "src_table.txt"),
-        "Removed: `OLD_ENV_NAME`\n",
+    ob_text = """
+    const OBSOLETE_ENV_RENAME_PAIRS = (
+        "DISTSSH_SOURCE_COMMIT" => "DISTSSH_INTERNAL_SOURCE_COMMIT",
     )
-    news_names = Set(markdown_removed_names(read(joinpath(post, "NEWS.md"), String)))
-    "OLD_ENV_NAME" in news_names || die("self-test: post-cut news fixture")
-    isempty(readdir(joinpath(post, "changelog.d"))) || die("self-test: post-cut no fragment")
-    "MISSING_ENV" in news_names && die("self-test: post-cut missing name")
+    const OBSOLETE_ENV_REJECTION_NAMES = (
+        "GB_PER_WORKER",
+    )
+    """
+    write(ob, ob_text)
+    write(joinpath(post, "NEWS.md"), "Removed: `GB_PER_WORKER`\n")
+    lint_obsolete_env_reject_table_sync(post) == 0 || die("self-test: post-cut obsolete sync aligned")
+    write(joinpath(post, "NEWS.md"), "Removed: `OTHER_ENV`\n")
+    lint_obsolete_env_reject_table_sync(post) >= 1 || die("self-test: post-cut obsolete sync mismatch")
+    allow_eq = "x = 1 # lint-allow: split-token -- inline allow marker with enough reason text\n"
+    lint_allow_active(allow_eq, 1, "split-token") || die("self-test: inline allow not block comment")
+    prog_bad = "withenv(\"DISTSSH_PROGRESS_BG\" => \"bogus\") do\n    @test x == 1\nend\n"
+    length(collect_env_default_test(repo_root(), Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> prog_bad; whole = false)) >= 1 ||
+        die("self-test: env-default progress bogus")
+    prog_bad2 = "withenv(\"DISTSSH_PROGRESS_BG\" => \"bogus123\") do\n    @test x == 1\nend\n"
+    length(collect_env_default_test(repo_root(), Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> prog_bad2; whole = false)) >= 1 ||
+        die("self-test: env-default progress bogus123")
+    julia_bad = "withenv(\"JULIA_DISTRIBUTED_EXE\" => \"bogus\") do\n    @test x == 1\nend\n"
+    length(collect_env_default_test(repo_root(), Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> julia_bad; whole = false)) >= 1 ||
+        die("self-test: env-default julia bogus")
+    julia_empty = "withenv(\"JULIA_DISTRIBUTED_EXE\" => \"\") do\n    @test x == 1\nend\n"
+    length(collect_env_default_test(repo_root(), Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> julia_empty; whole = false)) >= 1 ||
+        die("self-test: env-default julia empty")
+    outer_pe = "withenv(\"DISTSSH_JOBS\" => \"nope\") do\n    @test only(ProcessEnv(Dict())) == 1\n    @test_throws ArgumentError only(ProcessEnv(Dict()))\nend\n"
+    length(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 4, String[])]), _ -> outer_pe; whole = false)) >= 1 ||
+        die("self-test: env-default ProcessEnv throws unrelated")
+    keytext = "withenv(\"DISTSSH_JOBS\" => \"nope\") do\n    @test kit_host_jobs() == 1\n    @test_throws ArgumentError error(\"DISTSSH_JOBS failed\")\nend\n"
+    length(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 4, String[])]), _ -> keytext; whole = false)) >= 1 ||
+        die("self-test: env-default throws key text unrelated")
+    wrapper_env = "run(`env VAR=1 nice -n 2 sudo -u root timeout -s SIG 5 pkill -f x`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> wrapper_env; whole = false)) >= 1 ||
+        die("self-test: process-pattern env nice sudo timeout flags")
+    var_which = "t = Sys.which(\"pkill\")\nrun(`\$t -f x`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 2, 1, String[])]), _ -> var_which; whole = false)) >= 1 ||
+        die("self-test: process-pattern backtick dollar which")
+    var_lit = "t = \"pkill\"\nrun(`\$t -f x`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 2, 1, String[])]), _ -> var_lit; whole = false)) >= 1 ||
+        die("self-test: process-pattern backtick dollar literal")
+    arg_err = "throw(ArgumentError(\"pkill failed on host\"))\n"
+    isempty(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> arg_err; whole = false)) ||
+        die("self-test: process-pattern throw ArgumentError prose")
+    print_pk = "println(\"pkill failed on host\")\n"
+    isempty(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> print_pk; whole = false)) ||
+        die("self-test: process-pattern println prose")
+    red_str = "s = reduce(string, [\"DISTSSH_\", \"FOO\"])\n"
+    length(collect_split_token("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> red_str; whole = false)) >= 1 ||
+        die("self-test: split-token reduce string")
+    prod_tup = "s = prod((\"DISTSSH_\", \"FOO\"))\n"
+    length(collect_split_token("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> prod_tup; whole = false)) >= 1 ||
+        die("self-test: split-token prod tuple")
     fence_ev = "## Testing\n\n```text\n## Worker output\n```\n\nKnown failure.\n\n## Risk\n"
     any(endswith(e, "known") for e in excuse_word_errors(section_named_text(fence_ev, "Testing"))) ||
         die("self-test: evidence after fence heading")
@@ -2544,10 +2591,24 @@ function parse_removed_env_reject_table(root::AbstractString)
     for mm in eachmatch(r"\"([^\"]+)\"", m.captures[1])
         push!(names, String(mm.captures[1]))
     end
-    for mm in eachmatch(r"\"([^\"]+)\"\s*=>", text)
+    return names
+end
+
+function parse_obsolete_env_rename_names(root::AbstractString)
+    path = joinpath(root, "src", "DistSSHRun", "options", "obsolete_env.jl")
+    isfile(path) || return Set{String}()
+    text = source_without_full_line_comments(read(path, String))
+    m = match(r"OBSOLETE_ENV_RENAME_PAIRS\s*=\s*\(([^)]*)\)", text)
+    m === nothing && return Set{String}()
+    names = Set{String}()
+    for mm in eachmatch(r"\"([^\"]+)\"\s*=>", m.captures[1])
         push!(names, String(mm.captures[1]))
     end
     return names
+end
+
+function parse_obsolete_env_known_names(root::AbstractString)
+    return union(parse_removed_env_reject_table(root), parse_obsolete_env_rename_names(root))
 end
 
 const REMOVED_ENV_NAME_RE = r"^(DISTSSH_[A-Z0-9_]+|GB_PER_WORKER)$"
@@ -2703,7 +2764,7 @@ function collect_env_table_names(root, files, src_for_path; whole::Bool)
     hits = Tuple{String, Int, String}[]
     table = parse_user_env_table_names(root)
     legacy = parse_legacy_env_old_names(root)
-    removed = parse_removed_env_reject_table(root)
+    removed = parse_obsolete_env_known_names(root)
     paths = whole ? filter(env_table_src_path, tracked_jl(root)) : collect(keys(files))
     for path in paths
         env_table_src_path(path) || continue
@@ -3874,8 +3935,8 @@ const CEILING_ID_MATCH = 0
 const CEILING_PROCESS_PATTERN = 5
 const CEILING_LOCK_CREATE = 0
 const CEILING_ENV_DEFAULT = 0
-const CEILING_ENV_DEFAULT_TEST = 0
-const CEILING_ENV_DEFAULT_TEST_RULE_REV = 3
+const CEILING_ENV_DEFAULT_TEST = 41
+const CEILING_ENV_DEFAULT_TEST_RULE_REV = 4
 const CEILING_SWALLOWED_CATCH_RULE_REV = 2
 const CEILING_SWALLOWED_CATCH = 146
 const CEILING_LOOP_SKIP = 0
@@ -3982,7 +4043,9 @@ end
 
 function lint_file_src(root, path, src_for_path)
     if !isempty(root) && !isfile(joinpath(root, path))
-        return nothing
+        src = src_for_path(path)
+        src === nothing && return nothing
+        return src
     end
     return src_for_path(path)
 end
@@ -4023,27 +4086,39 @@ function string_is_function_docstring(node, parent)
     return true
 end
 
-function walk_process_pattern!(node, parent, src, path, added, consts, hits)
+function diagnostic_prose_context(parent, gparent)
+    for p in (parent, gparent)
+        p === nothing && continue
+        if kind(p) == K"macrocall"
+            macro_head_name(p) in ("@warn", "@error", "@info", "warn", "error", "info") && return true
+        end
+        if kind(p) == K"call"
+            h = call_head_name(p)
+            h in ("error", "throw", "warn", "println", "showerror") && return true
+            h in ("ArgumentError", "ErrorException") && return true
+        end
+    end
+    return false
+end
+
+function walk_process_pattern!(node, parent, gparent, src, path, added, consts, hits)
     if kind(node) == K"doc" ||
             (kind(node) == K"macrocall" && macro_head_name(node) in ("@doc", "doc"))
         n = numchildren(node)
-        n >= 2 && walk_process_pattern!(node[n], node, src, path, added, consts, hits)
+        n >= 2 && walk_process_pattern!(node[n], node, parent, src, path, added, consts, hits)
         return
     end
     if kind(node) in (K"function", K"->", K"let", K"do", K"for", K"while", K"try", K"macro")
         inner = copy(consts)
         for i in 1:numchildren(node)
-            walk_process_pattern!(node[i], node, src, path, added, inner, hits)
+            walk_process_pattern!(node[i], node, parent, src, path, added, inner, hits)
         end
         return
     end
     kind(node) == K"=" && fold_const_binding!(node, consts)
-    diagnostic = kind(parent) == K"call" && call_head_name(parent) in ("error", "throw", "warn")
-    diagnostic = diagnostic || (
-        kind(parent) == K"macrocall" &&
-            macro_head_name(parent) in ("@warn", "@error", "@info", "warn", "error", "info")
-    )
-    filename_arg = kind(parent) == K"call" && call_head_name(parent) in ("read", "open")
+    diagnostic = diagnostic_prose_context(parent, gparent)
+    filename_arg = parent !== nothing && kind(parent) == K"call" &&
+        call_head_name(parent) in ("read", "open")
     if !diagnostic && !filename_arg && kind(node) == K"string" && node_touches_added(src, node, added)
         lit = string_literal_value(node)
         lit === nothing && (lit = literal_command_text(node))
@@ -4058,7 +4133,7 @@ function walk_process_pattern!(node, parent, src, path, added, consts, hits)
         push!(hits, (path, line_of(src, Int(first(byte_range(node)))), "process-pattern"))
     end
     for i in 1:numchildren(node)
-        walk_process_pattern!(node[i], node, src, path, added, consts, hits)
+        walk_process_pattern!(node[i], node, parent, src, path, added, consts, hits)
     end
     return
 end
@@ -4080,7 +4155,7 @@ function collect_process_pattern(root, files, src_for_path; whole::Bool)
         tree = parse_tree(src)
         consts = Dict{String, String}()
         fold_module_consts!(tree, consts)
-        walk_process_pattern!(tree, tree, src, path, added_set, consts, hits)
+        walk_process_pattern!(tree, nothing, nothing, src, path, added_set, consts, hits)
     end
     return unique(hits)
 end
@@ -4171,13 +4246,17 @@ function parse_user_env_kinds(root::AbstractString)::Dict{String, String}
 end
 
 function invalid_env_literal_generic(s::AbstractString)::Bool
+    s == "0" && return true
+    s == "-1" && return true
     isempty(s) && return false
-    s in ("0", "-1", "nope", "maybe", "foo") && return true
-    return false
+    return tryparse(Float64, s) === nothing
 end
 
-function invalid_env_literal_for_kind(kind_str::AbstractString, val::AbstractString)::Bool
-    isempty(val) && return false
+function invalid_env_literal_for_kind(
+        kind_str::AbstractString,
+        val::AbstractString,
+        choices::Set{String},
+    )::Bool
     k = lowercase(strip(kind_str))
     if startswith(k, "int")
         n = tryparse(Int, val)
@@ -4200,6 +4279,11 @@ function invalid_env_literal_for_kind(kind_str::AbstractString, val::AbstractStr
         low in ("true", "false", "yes", "no", "on", "off", "0", "1") && return false
         return true
     end
+    if startswith(k, "string") || startswith(k, "path")
+        isempty(val) && return true
+        !isempty(choices) && return !(lowercase(val) in choices)
+        return invalid_env_literal_generic(val)
+    end
     return invalid_env_literal_generic(val)
 end
 
@@ -4207,33 +4291,40 @@ function invalid_env_literal(s::AbstractString)::Bool
     return invalid_env_literal_generic(s)
 end
 
+function choice_words_from_env_row_desc(desc::AbstractString)
+    vals = Set{String}()
+    occursin(" or ", desc) || return vals
+    parts = split(String(desc), " or ")
+    m = match(r"\b([a-z][a-z0-9_]*)\s*$", strip(parts[1]))
+    m !== nothing && push!(vals, String(m.captures[1]))
+    for i in 2:length(parts)
+        m = match(r"^\s*([a-z][a-z0-9_]*)\b", strip(parts[i]))
+        m !== nothing && push!(vals, String(m.captures[1]))
+        for m2 in eachmatch(r"\bor\s+([a-z][a-z0-9_]*)\b", parts[i])
+            push!(vals, String(m2.captures[1]))
+        end
+    end
+    return vals
+end
+
+function env_row_descriptions(text::AbstractString, key::AbstractString)
+    descs = String[]
+    literal = Regex(
+        "EnvRow\\(\\s*\"\\Q$(key)\\E\"\\s*,\\s*\"[^\"]+\"\\s*,\\s*\"[^\"]+\"\\s*,\\s*\"[^\"]+\"\\s*,\\s*\"([^\"]+)\"",
+    )
+    for m in eachmatch(literal, text)
+        push!(descs, String(m.captures[1]))
+    end
+    return descs
+end
+
 function documented_choice_values(root::AbstractString, key::AbstractString)
     vals = Set{String}()
     table = joinpath(root, "src", "DistSSHRun", "options", "env_table.jl")
-    if isfile(table)
-        text = read(table, String)
-        for m in eachmatch(Regex("EnvRow\\(\\s*(?:\"\\Q$(key)\\E\"|string\\([^)]*\\))[^\\n]*\"([^\"]* or [^\"]*)\""), text)
-            for w in eachmatch(r"\b([a-z][a-z0-9_]*)\b", m.captures[1])
-                push!(vals, String(w.captures[1]))
-            end
-        end
-    end
-    for path in ("src", "docs")
-        dir = joinpath(root, path)
-        isdir(dir) || continue
-        for (d, _, files) in walkdir(dir)
-            for f in files
-                endswith(f, ".jl") || endswith(f, ".md") || continue
-                text = read(joinpath(d, f), String)
-                occursin(key, text) || continue
-                for line in eachsplit(text, '\n')
-                    occursin(key, line) || continue
-                    for w in eachmatch(r"`([a-z][a-z0-9_]*)`", line)
-                        push!(vals, String(w.captures[1]))
-                    end
-                end
-            end
-        end
+    isfile(table) || return vals
+    text = read(table, String)
+    for desc in env_row_descriptions(text, key)
+        union!(vals, choice_words_from_env_row_desc(desc))
     end
     return vals
 end
@@ -4264,16 +4355,21 @@ function invalid_env_literal(
         choices::Dict{String, Set{String}} = Dict{String, Set{String}}(),
         patterns::Dict{String, Regex} = Dict{String, Regex}(),
     )::Bool
-    isempty(val) && return false
+    isempty(val) && return true
     pat = get(patterns, key, nothing)
     if pat !== nothing
         return !occursin(pat, val)
     end
     known = get(choices, key, Set{String}())
-    lowercase(val) in known && return false
+    if !isempty(known)
+        return !(lowercase(val) in known)
+    end
     kind_str = get(kinds, key, "")
-    isempty(kind_str) && return invalid_env_literal_generic(val)
-    return invalid_env_literal_for_kind(kind_str, val)
+    if isempty(kind_str)
+        isempty(val) && return true
+        return invalid_env_literal_generic(val)
+    end
+    return invalid_env_literal_for_kind(kind_str, val, known)
 end
 
 function test_path(path::AbstractString)::Bool
@@ -4320,28 +4416,54 @@ function called_names(node)
     return names
 end
 
-function env_key_throw_related(key::AbstractString, throws_src::AbstractString)
-    return occursin(key, throws_src)
+const ENV_TEST_WRAPPER_CALLS = Set{String}(
+    [
+        "ProcessEnv",
+        "only",
+        "get",
+        "getproperty",
+        "getindex",
+        "broadcast",
+        "something",
+        "Dict",
+        "String",
+        "withenv",
+        "merge",
+        "pairs",
+        "strip",
+        "getfield",
+    ]
+)
+
+function env_test_equality_macro(node)
+    found = false
+    function walk(n)
+        if kind(n) == K"macrocall" && macro_head_name(n) in ("test", "@test") && numchildren(n) >= 2
+            arg = n[2]
+            if kind(arg) == K"call" && numchildren(arg) >= 3 && sourcetext(arg[2]) in ("==", "===")
+                found = true
+            end
+        end
+        for i in 1:numchildren(n)
+            walk(n[i])
+        end
+        return
+    end
+    walk(node)
+    return found
 end
 
-function test_flags_in_subtree(node, watched_keys::AbstractSet{<:AbstractString} = Set{String}())
-    has_eq = Ref(false)
-    eq_names = Set{String}()
-    throw_names = Set{String}()
-    throw_text = String[]
+function env_test_reader_names(node)
+    names = Set{String}()
     function walk(n)
         if kind(n) == K"macrocall"
             mh = macro_head_name(n)
-            if mh in ("test_throws", "@test_throws")
-                push!(throw_text, sourcetext(n))
-                union!(throw_names, called_names(n))
-            elseif mh in ("test", "@test") && numchildren(n) >= 2
+            if mh in ("test", "@test") && numchildren(n) >= 2
                 arg = n[2]
                 if kind(arg) == K"call" && numchildren(arg) >= 3
                     op = sourcetext(arg[2])
                     if op in ("==", "===")
-                        has_eq[] = true
-                        union!(eq_names, called_names(arg))
+                        union!(names, setdiff(called_names(arg), ENV_TEST_WRAPPER_CALLS))
                     end
                 end
             end
@@ -4352,12 +4474,29 @@ function test_flags_in_subtree(node, watched_keys::AbstractSet{<:AbstractString}
         return
     end
     walk(node)
-    key_hit = any(k -> any(t -> occursin(k, t), throw_text), watched_keys)
-    shared = !isempty(intersect(eq_names, throw_names))
-    # Field reads next to a rejection of the reader are not a second fallback.
-    eq_calls = setdiff(eq_names, Set(["getindex", "getproperty", "broadcast"]))
-    covered = !isempty(throw_names) && isempty(setdiff(eq_calls, throw_names))
-    return has_eq[], key_hit || shared || covered
+    return names
+end
+
+function test_flags_in_subtree(node, watched_keys::AbstractSet{<:AbstractString} = Set{String}())
+    _ = watched_keys
+    has_eq = env_test_equality_macro(node)
+    eq = env_test_reader_names(node)
+    throw = Set{String}()
+    function walk_throw(n)
+        if kind(n) == K"macrocall" && macro_head_name(n) in ("test_throws", "@test_throws")
+            for i in 2:numchildren(n)
+                kind(n[i]) == K"call" &&
+                    union!(throw, setdiff(called_names(n[i]), ENV_TEST_WRAPPER_CALLS))
+            end
+        end
+        for i in 1:numchildren(n)
+            walk_throw(n[i])
+        end
+        return
+    end
+    walk_throw(node)
+    shared = !isempty(intersect(eq, throw))
+    return has_eq, shared
 end
 
 function withenv_invalid_test_keys(node, kinds::Dict{String, String}, root, choices, patterns)

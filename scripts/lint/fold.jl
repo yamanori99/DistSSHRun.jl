@@ -156,7 +156,7 @@ function fold_join_call(node, consts)
 end
 
 function fold_string_vector(node, consts)
-    if kind(node) == K"vect"
+    if kind(node) in (K"vect", K"tuple")
         out = String[]
         for i in 1:numchildren(node)
             p = fold_string_expr(node[i], consts)
@@ -205,8 +205,13 @@ function fold_int_literal(node)
 end
 
 function fold_prod_reduce_star(node, consts)
-    # reduce(*, ["a", "b"]) or prod(...)
-    return fold_join_call(node, consts) # simplify: same as join for string vect
+    if call_head_name(node) == "reduce" && occursin("string", sourcetext(node))
+        for i in 2:numchildren(node)
+            parts = fold_string_vector(node[i], consts)
+            parts !== nothing && return join(parts, "")
+        end
+    end
+    return fold_join_call(node, consts)
 end
 
 const SPLIT_TOKEN_CHAR = r"[A-Za-z0-9_]"
@@ -259,13 +264,15 @@ function folded_string_parts(node, consts::Dict{String, String})::Union{Vector{S
         return parts
     end
     if call_head_name(node) in ("reduce", "prod")
-        call_head_name(node) == "reduce" && !occursin("*", sourcetext(node)) && return nothing
-        vect = nothing
-        for i in 2:numchildren(node)
-            kind(node[i]) == K"vect" && (vect = node[i])
+        st = sourcetext(node)
+        if call_head_name(node) == "reduce"
+            occursin("*", st) || occursin("string", st) || return nothing
         end
-        vect === nothing && return nothing
-        return fold_string_vector(vect, consts)
+        for i in 2:numchildren(node)
+            parts = fold_string_vector(node[i], consts)
+            parts !== nothing && return parts
+        end
+        return nothing
     end
     if call_head_name(node) == "Symbol"
         # Keep argument boundaries so Symbol("A", "B") stays a split.
