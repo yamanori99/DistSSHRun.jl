@@ -4688,15 +4688,19 @@ function documented_env_reader_functions(root::AbstractString)
             body = String(m.captures[2])
             for (sym, env_key) in aliases
                 occursin(sym, body) || continue
-                push!(get!(readers, env_key) do
-                    Set{String}()
-                end, fname)
+                push!(
+                    get!(readers, env_key) do
+                        Set{String}()
+                    end, fname
+                )
             end
             for km in eachmatch(r"\"(DISTSSH_[A-Z0-9_]+)\"", body)
                 env_key = String(km.captures[1])
-                push!(get!(readers, env_key) do
-                    Set{String}()
-                end, fname)
+                push!(
+                    get!(readers, env_key) do
+                        Set{String}()
+                    end, fname
+                )
             end
         end
     end
