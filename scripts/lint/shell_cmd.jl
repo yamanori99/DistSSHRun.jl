@@ -1,22 +1,60 @@
 # Shell command-building context for process-pattern (included into Main).
 
 const PROCESS_KILL_WORDS = ("pkill", "killall", "pgrep")
-const REMOTE_SHELL_CMD_FNS = (
-    "_host_sync_remote_shell_cmd",
-    "_remote_shell_cmd",
-    "_go_slot_remote_shell_cmd",
-)
+const SHELL_WRAPPERS = ("sudo", "env", "nice", "command", "nohup")
+const BRACKET_TRICK_RE = r"(^|[^A-Za-z0-9_])\[[A-Za-z]\][A-Za-z]"
 
 function process_kill_word(s::AbstractString)
     w = strip(s)
     isempty(w) && return nothing
-    m = match(r"^([A-Za-z0-9_\[\]]+)", w)
+    base = basename(replace(w, r"^['\"]|['\"]$" => ""))
+    m = match(r"^([A-Za-z0-9_.+-]+)", base)
     m === nothing && return nothing
     word = lowercase(String(m.captures[1]))
     word in PROCESS_KILL_WORDS && return word
-    word in ("[j]ulia", "[j]ulia.*--worker") && return "pkill"
-    occursin(r"^\[j\]ulia", word) && return "pkill"
+    occursin(BRACKET_TRICK_RE, w) && return "bracket"
     return nothing
+end
+
+function shell_segments(script::AbstractString)
+    s = replace(script, "&&" => "\n", "||" => "\n")
+    s = replace(s, ';' => '\n', '|' => '\n')
+    return split(s, '\n'; keepempty = false)
+end
+
+function literal_command_text(node)::Union{Nothing, String}
+    kind(node) == K"string" || return nothing
+    parts = String[]
+    for i in 1:numchildren(node)
+        kind(node[i]) == K"String" || continue
+        push!(parts, sourcetext(node[i]))
+    end
+    isempty(parts) && return string_literal_value(node)
+    return join(parts, " ")
+end
+
+function command_position_kill(script::AbstractString)::Bool
+    for seg in shell_segments(script)
+        toks = split(strip(seg))
+        isempty(toks) && continue
+        i = 1
+        while i <= length(toks)
+            raw = String(toks[i])
+            base = basename(replace(raw, r"^['\"]|['\"]$" => ""))
+            low = lowercase(base)
+            if low in SHELL_WRAPPERS
+                i += 1
+                continue
+            end
+            if low == "timeout"
+                i += 1
+                i <= length(toks) && (i += 1)
+                continue
+            end
+            return process_kill_word(base) !== nothing || occursin(BRACKET_TRICK_RE, raw)
+        end
+    end
+    return false
 end
 
 function remote_shell_script_hit(s::AbstractString)
@@ -59,11 +97,19 @@ function cmd_array_first_kill(node, consts::Dict{String, String})
     vect = cmd_argv_vector(arg)
     if vect !== nothing
         numchildren(vect) < 1 && return nothing
+        words = String[]
         for i in 1:numchildren(vect)
-            folded_cmd_first_word(vect[i], consts) !== nothing && return folded_cmd_first_word(vect[i], consts)
-            which_kill_tool(vect[i], consts) !== nothing && return which_kill_tool(vect[i], consts)
+            w = fold_string_expr(vect[i], consts)
+            w === nothing && (w = string_literal_value(vect[i]))
+            if w === nothing && kind(vect[i]) == K"Identifier"
+                w = get(consts, sourcetext(vect[i]), nothing)
+            end
+            w === nothing && which_kill_tool(vect[i], consts) !== nothing && (w = which_kill_tool(vect[i], consts))
+            push!(words, something(w, ""))
         end
-        return nothing
+        any(isempty, words) && (words = filter(!isempty, words))
+        isempty(words) && return nothing
+        return command_position_kill(join(words, " ")) ? "pkill" : nothing
     end
     return folded_cmd_first_word(arg, consts)
 end
@@ -88,7 +134,7 @@ function shell_sh_c_string(node, consts::Dict{String, String})
         inner = fold_string_expr(vect[i + 1], consts)
         inner === nothing && (inner = string_literal_value(vect[i + 1]))
         inner === nothing && return nothing
-        return remote_shell_script_hit(inner) ? "pkill" : nothing
+        return command_position_kill(inner) ? "pkill" : nothing
     end
     return nothing
 end
@@ -103,7 +149,7 @@ end
 
 function which_kill_tool(node, consts::Dict{String, String})
     kind(node) == K"call" || return nothing
-    call_head_name(node) != "Sys.which" && return nothing
+    call_head_name(node) in ("which", "Sys.which") || return nothing
     numchildren(node) < 2 && return nothing
     name = fold_string_expr(node[2], consts)
     name === nothing && (name = string_literal_value(node[2]))
@@ -125,15 +171,21 @@ function run_family_cmd_builder_hit(arg, consts::Dict{String, String})
     return false
 end
 
+function shellish_call_name(name::AbstractString)::Bool
+    n = lowercase(name)
+    return occursin("shell", n) || endswith(n, "_cmd")
+end
+
 function remote_shell_call_inner_hit(node, consts::Dict{String, String})
     kind(node) == K"call" || return false
     name = call_head_name(node)
-    name in REMOTE_SHELL_CMD_FNS || return false
+    name === nothing && return false
+    shellish_call_name(name) || return false
     numchildren(node) < 3 && return false
     inner = fold_string_expr(node[3], consts)
     inner === nothing && (inner = string_literal_value(node[3]))
     inner === nothing && return false
-    return remote_shell_script_hit(inner)
+    return command_position_kill(inner)
 end
 
 function run_family_shell_arg_deep_hit(arg, consts::Dict{String, String})
@@ -185,7 +237,6 @@ function process_pattern_builder_hit(node, consts::Dict{String, String})
     shell_sh_c_string(node, consts) !== nothing && return true
     cmdstring_first_kill(node) !== nothing && return true
     remote_shell_call_inner_hit(node, consts) && return true
-    which_kill_tool(node, consts) !== nothing && return true
     run_family_shell_arg_hit(node, consts) && return true
     return false
 end

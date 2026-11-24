@@ -64,22 +64,37 @@ function lint_allow_marker_valid(parsed)
     return lint_allow_reason_valid(reason)
 end
 
-function lint_allow_active(src::AbstractString, line::Int, rule::AbstractString)
+function comment_allow_markers(src::AbstractString)
+    markers = Tuple{Int, Symbol, String, String}[]
     lines = split(src, '\n'; keepempty = true)
-    if 1 <= line <= length(lines)
-        style = lint_allow_line_style(lines[line])
-        if style !== nothing && style[1] == :inline
-            rid, _ = style[2]
-            rid == rule && lint_allow_marker_valid(style[2]) && return true
+    for tok in tokenize(src)
+        kind(tok) == K"Comment" || continue
+        text = untokenize(tok, src)
+        parsed = parse_lint_allow_line(text)
+        parsed === nothing && continue
+        startb = Int(first(tok.range)) + 1
+        line = line_of(src, startb)
+        1 <= line <= length(lines) || continue
+        line_txt = lines[line]
+        # Bytes of this line before the comment: code remains => inline.
+        line_start = 1
+        for i in 1:(line - 1)
+            line_start += ncodeunits(lines[i]) + 1
         end
+        prefix = startb > line_start ? src[line_start:(startb - 1)] : ""
+        style = occursin(r"\S", prefix) ? :inline : :full
+        rule, reason = parsed
+        push!(markers, (line, style, rule, reason))
     end
-    prev = line - 1
-    if 1 <= prev <= length(lines)
-        style = lint_allow_line_style(lines[prev])
-        if style !== nothing && style[1] == :full
-            rid, _ = style[2]
-            rid == rule && lint_allow_marker_valid(style[2]) && return true
-        end
+    return markers
+end
+
+function lint_allow_active(src::AbstractString, line::Int, rule::AbstractString)
+    for (ml, style, rid, reason) in comment_allow_markers(src)
+        lint_allow_marker_valid((rid, reason)) || continue
+        rid == rule || continue
+        style == :inline && ml == line && return true
+        style == :full && ml == line - 1 && return true
     end
     return false
 end
@@ -141,11 +156,13 @@ function collect_lint_allow_markers(root::AbstractString)
         full = joinpath(root, path)
         isfile(full) || continue
         src = read(full, String)
-        in_str = endswith(path, ".jl") ? lines_in_string_literals(src) : falses(0)
-        for (i, line) in enumerate(split(src, '\n'; keepempty = true))
-            if endswith(path, ".jl") && i <= length(in_str) && in_str[i]
-                continue
+        if endswith(path, ".jl")
+            for (i, _style, rule, reason) in comment_allow_markers(src)
+                push!(out, (path, i, rule, reason))
             end
+            continue
+        end
+        for (i, line) in enumerate(split(src, '\n'; keepempty = true))
             parsed = parse_lint_allow_line(line)
             parsed === nothing && continue
             rule, reason = parsed

@@ -1,3 +1,3 @@
 category: changed
 
-- Diff lint adds `split-token` and `env-table` checks, narrows `process-pattern`, `env-default` test pairing, and `removed-names` in `src/`. Split `string(...)` / literal `*` env-name dodges in product code are rewritten to single literals. Behavior unchanged.
+- Diff lint adds folded string-join checks and an environment-name table check, narrows shell-pattern checks to command builders, and keeps removed environment names aligned with changelog lines. Multi-part probe and help strings stay multi-part. Behavior unchanged.

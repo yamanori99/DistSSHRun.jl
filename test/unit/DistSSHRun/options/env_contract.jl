@@ -16,7 +16,10 @@ using DistSSHRun
         obsolete_reject = Set{String}(DistSSHRun.OBSOLETE_ENV_REJECTION_NAMES)
         # Quoted complete env names only (not Julia identifiers like
         # DISTSSH_RUN_DIR_ENV). Trailing "_" prefixes must not match.
-        pat = r"\"((?:DISTSSH_|DISTRIBUTED_)[A-Z0-9_]*[A-Z0-9])\"(?![A-Z0-9_])"
+        pat = r"(?<![A-Z0-9_])((?:DISTSSH_|DISTRIBUTED_)[A-Z0-9_]*[A-Z0-9])(?![A-Z0-9_])"
+        binding_names = Set((
+            "DISTSSH_RUN_DIR_ENV",
+        ))
         bad = String[]
         for (dir, _, files) in walkdir(joinpath(root, "src"))
             for f in files
@@ -25,6 +28,7 @@ using DistSSHRun
                 text = read(path, String)
                 for m in eachmatch(pat, text)
                     name = String(m.captures[1])
+                    name in binding_names && continue
                     name == "JULIA_DISTRIBUTED_EXE" && continue # "keep JULIA_DISTRIBUTED_EXE"
                     startswith(name, "DISTSSH_INTERNAL_") && continue
                     name in allowed && continue
@@ -44,6 +48,7 @@ using DistSSHRun
                     text = read(path, String)
                     for m in eachmatch(pat, text)
                         name = String(m.captures[1])
+                        name in binding_names && continue
                         name == "JULIA_DISTRIBUTED_EXE" && continue # "keep JULIA_DISTRIBUTED_EXE"
                         startswith(name, "DISTSSH_INTERNAL_") && continue
                         name in allowed && continue
@@ -55,6 +60,10 @@ using DistSSHRun
             end
         end
         @test isempty(bad)
+        help = read(joinpath(root, "src", "DistSSHRun", "argv", "session.jl"), String)
+        ssh = read(joinpath(root, "lib", "DistSSHBase", "src", "ssh", "ssh.jl"), String)
+        @test any(m -> occursin("DISTSSH_", m.captures[1]), eachmatch(pat, help))
+        @test any(m -> occursin("DISTSSH_", m.captures[1]), eachmatch(pat, ssh))
     end
 
     @testset "legacy DISTRIBUTED_ name errors" begin

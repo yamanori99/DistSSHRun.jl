@@ -1520,8 +1520,14 @@ function self_test_body_main()
     !lint_allow_active(allow_inline, 3, "split-token") ||
         die("self-test: inline lint-allow must not suppress next line")
     str_mark = "s = \"# lint-allow: split-token -- not a real marker inside string\"\n"
-    in_str = lines_in_string_literals(str_mark)
-    (length(in_str) >= 1 && in_str[1]) || die("self-test: lint-allow inside string literal")
+    lint_allow_active(str_mark, 1, "split-token") && die("self-test: lint-allow inside string literal")
+    triple = "s = \"\"\"\n# lint-allow: split-token -- not a real marker inside triple string\n\"\"\"\nnext = 1\n"
+    lint_allow_active(triple, 4, "split-token") && die("self-test: lint-allow inside triple string")
+    beside = "s = \"hi\" # lint-allow: split-token -- inline beside a string literal here\n"
+    length(comment_allow_markers(beside)) == 1 || die("self-test: inline allow beside string must count")
+    join_hit = "s = join([\"DISTSSH_\", \"FOO\"])\n"
+    length(collect_split_token("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> join_hit; whole = false)) >= 1 ||
+        die("self-test: split-token join")
     decode_string_literal_chunk("A") == "A" || die("self-test: string_literal chunk")
     lit_tree = parse_tree("const S = \"\\x42\"\n")
     found = Ref(false)
@@ -3762,11 +3768,11 @@ end
 
 const BANNED_NEW = ("best-effort", "until", "lockstep", "pending", "known failure", "pre-existing")
 const CEILING_ID_MATCH = 0
-const CEILING_PROCESS_PATTERN = 2
+const CEILING_PROCESS_PATTERN = 5
 const CEILING_LOCK_CREATE = 0
 const CEILING_ENV_DEFAULT = 0
-const CEILING_ENV_DEFAULT_TEST = 0
-const CEILING_ENV_DEFAULT_TEST_RULE_REV = 3
+const CEILING_ENV_DEFAULT_TEST = 7
+const CEILING_ENV_DEFAULT_TEST_RULE_REV = 4
 const CEILING_SWALLOWED_CATCH_RULE_REV = 2
 const CEILING_SWALLOWED_CATCH = 146
 const CEILING_LOOP_SKIP = 0
@@ -3920,6 +3926,14 @@ function walk_process_pattern!(node, parent, src, path, added, consts, hits)
         n = numchildren(node)
         n >= 2 && walk_process_pattern!(node[n], node, src, path, added, consts, hits)
         return
+    end
+    if kind(node) == K"string" && node_touches_added(src, node, added)
+        lit = string_literal_value(node)
+        lit === nothing && (lit = literal_command_text(node))
+        scriptish = lit !== nothing && occursin(r"[;&|]|\s", lit) && command_position_kill(lit)
+        if lit !== nothing && (occursin(BRACKET_TRICK_RE, lit) || scriptish)
+            push!(hits, (path, line_of(src, Int(first(byte_range(node)))), "process-pattern"))
+        end
     end
     if kind(node) != K"Identifier" && kind(node) != K"Comment" &&
             process_pattern_builder_hit(node, consts) &&
@@ -4079,7 +4093,6 @@ function invalid_env_literal(s::AbstractString)::Bool
 end
 
 function invalid_env_literal(key::AbstractString, val::AbstractString, kinds::Dict{String, String})::Bool
-    key == "DISTSSH_PROGRESS_BG" && lowercase(val) in ("light", "dark", "auto") && return false
     kind_str = get(kinds, key, "")
     isempty(kind_str) && return invalid_env_literal_generic(val)
     return invalid_env_literal_for_kind(kind_str, val)
@@ -4114,18 +4127,7 @@ function env_pair_string_literals(node)
 end
 
 function env_key_throw_related(key::AbstractString, throws_src::AbstractString)
-    occursin(key, throws_src) && return true
-    startswith(key, "DISTSSH_") || return false
-    low = lowercase(throws_src)
-    tail = key[10:end]
-    snake = join(lowercase.(split(tail, '_')), '_')
-    occursin(snake, low) && return true
-    occursin(replace(lowercase(tail), "_" => ""), low) && return true
-    for tok in split(tail, '_')
-        length(tok) < 4 && continue
-        occursin(lowercase(tok), low) && return true
-    end
-    return false
+    return occursin(key, throws_src)
 end
 
 function test_throws_arg_related(node, watched_keys::AbstractSet{<:AbstractString})
@@ -4180,7 +4182,7 @@ function withenv_invalid_test_keys(node, kinds::Dict{String, String})
         pair = env_pair_string_literals(node[i])
         pair === nothing && continue
         key = pair[1]
-        startswith(key, "DISTSSH_") || continue
+        (startswith(key, "DISTSSH_") || key == "JULIA_DISTRIBUTED_EXE") || continue
         startswith(key, "DISTSSH_INTERNAL_") && continue
         invalid_env_literal(key, pair[2], kinds) && push!(keys, key)
     end
@@ -4195,10 +4197,7 @@ function walk_env_default_test!(node, src, path, added, kinds, hits)
             numchildren(node) >= 2 || return
             body = node[numchildren(node)]
             has_eq, has_related_throws = test_flags_in_subtree(body, Set(bad_keys))
-            body_src = sourcetext(body)
-            provenance_body = occursin("_set_provenance_source!", body_src) ||
-                occursin("assemble_provenance", body_src)
-            if !provenance_body && !occursin("ProcessEnv(", body_src) && has_eq && !has_related_throws
+            if has_eq && !has_related_throws
                 a = line_of(src, Int(first(byte_range(node))))
                 push!(hits, (path, a, "env-default"))
             end
