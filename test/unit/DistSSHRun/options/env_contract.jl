@@ -14,6 +14,7 @@ using DistSSHRun
         allowed = DistSSHRun.user_env_names()
         legacy_old = Set{String}(old for (old, _) in DistSSHRun.DistSSHBase.LEGACY_ENV_RENAMES)
         obsolete_reject = Set{String}(DistSSHRun.OBSOLETE_ENV_REJECTION_NAMES)
+        obsolete_old = Set{String}(first(pair) for pair in DistSSHRun.OBSOLETE_ENV_RENAME_PAIRS)
         # Word-boundary names in source, including unquoted help and errors.
         # Trailing "_" prefixes must not match. Binding names below are Julia
         # identifiers that hold a different env string.
@@ -37,6 +38,7 @@ using DistSSHRun
                     name in allowed && continue
                     name in legacy_old && continue
                     name in obsolete_reject && continue
+                    name in obsolete_old && continue
                     push!(bad, "$(relpath(path, root)): $name")
                 end
             end
@@ -57,6 +59,7 @@ using DistSSHRun
                         name in allowed && continue
                         name in legacy_old && continue
                         name in obsolete_reject && continue
+                        name in obsolete_old && continue
                         push!(bad, "$(relpath(path, root)): $name")
                     end
                 end
