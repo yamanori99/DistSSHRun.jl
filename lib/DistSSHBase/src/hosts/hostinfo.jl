@@ -36,7 +36,17 @@ end
 # Labeled lines so a missing RAM/CPU/OS command cannot shift later fields.
 # awk uses printf "%.0f" so MemTotal*1024 stays decimal; the parser still
 # accepts scientific notation if a remote awk uses default OFMT.
-const _HOSTINFO_PROBE_SCRIPT = "echo DISTSSH_INTERNAL_HOSTINFO; echo mem=\$(sysctl -n hw.memsize 2>/dev/null || awk '/MemTotal/{printf \"%.0f\\n\", \$2*1024}' /proc/meminfo 2>/dev/null); echo ncpu=\$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null); echo os=\$(uname -s 2>/dev/null); echo kernel=\$(uname -r 2>/dev/null); echo arch=\$(uname -m 2>/dev/null); echo os_version=\$(sw_vers -productVersion 2>/dev/null || awk -F= '/^VERSION_ID=/{gsub(/\"/,\"\",\$2); print \$2; exit}' /etc/os-release 2>/dev/null); echo os_pretty=\$(sw_vers -productName 2>/dev/null || awk -F= '/^PRETTY_NAME=/{gsub(/\"/,\"\",\$2); print \$2; exit}' /etc/os-release 2>/dev/null); echo cpu_model=\$(sysctl -n machdep.cpu.brand_string 2>/dev/null || awk -F': ' '/^[Mm]odel name/{print \$2; exit} /^Hardware/{print \$2; exit}' /proc/cpuinfo 2>/dev/null)"
+const _HOSTINFO_PROBE_SCRIPT = string(
+    "echo DISTSSH_INTERNAL_HOSTINFO; ",
+    "echo mem=\$(sysctl -n hw.memsize 2>/dev/null || awk '/MemTotal/{printf \"%.0f\\n\", \$2*1024}' /proc/meminfo 2>/dev/null); ",
+    "echo ncpu=\$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null); ",
+    "echo os=\$(uname -s 2>/dev/null); ",
+    "echo kernel=\$(uname -r 2>/dev/null); ",
+    "echo arch=\$(uname -m 2>/dev/null); ",
+    "echo os_version=\$(sw_vers -productVersion 2>/dev/null || awk -F= '/^VERSION_ID=/{gsub(/\"/,\"\",\$2); print \$2; exit}' /etc/os-release 2>/dev/null); ",
+    "echo os_pretty=\$(sw_vers -productName 2>/dev/null || awk -F= '/^PRETTY_NAME=/{gsub(/\"/,\"\",\$2); print \$2; exit}' /etc/os-release 2>/dev/null); ",
+    "echo cpu_model=\$(sysctl -n machdep.cpu.brand_string 2>/dev/null || awk -F': ' '/^[Mm]odel name/{print \$2; exit} /^Hardware/{print \$2; exit}' /proc/cpuinfo 2>/dev/null)",
+)
 
 const _HOSTINFO_PROBE_KEYS = (
     :total_memory_bytes,

@@ -41,7 +41,7 @@ end
 
 function try_fold_string_expr(node, consts::Dict{String, String})
     if kind(node) == K"string" || kind(node) == K"String"
-        return string_literal_value_src(node, "")
+        return string_literal_value_src(node)
     end
     if kind(node) == K"Identifier"
         return get(consts, sourcetext(node), nothing)
@@ -67,7 +67,7 @@ function try_fold_string_expr(node, consts::Dict{String, String})
 end
 
 function fold_string_expr_partial(node, consts::Dict{String, String})
-    kind(node) == K"string" && return string_literal_value_src(node, "")
+    kind(node) == K"string" && return string_literal_value_src(node)
     kind(node) != K"call" && return nothing
     if call_head_name(node) == "string"
         io = IOBuffer()
@@ -160,7 +160,7 @@ function fold_string_vector(node, consts)
         return out
     end
     if kind(node) == K"string"
-        v = string_literal_value_src(node, "")
+        v = string_literal_value_src(node)
         v === nothing && return nothing
         return [v]
     end
@@ -212,7 +212,7 @@ end
 
 function folded_string_parts(node, consts::Dict{String, String})::Union{Vector{String}, Nothing}
     if kind(node) == K"string"
-        v = string_literal_value_src(node, "")
+        v = string_literal_value_src(node)
         v === nothing && return nothing
         return [v]
     end

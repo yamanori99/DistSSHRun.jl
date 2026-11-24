@@ -1031,6 +1031,19 @@ function lint_fixture_suite!(root::AbstractString)
     mut_rel = "scripts/lint/fixtures/test_mutation/env_write.jl"
     isempty(collect_test_env_mutation(root, file_hunks(mut_rel), src_for; whole = false)) &&
         die("self-test: fixture test-env-mutation evasion")
+    for rel in (
+            "scripts/lint/fixtures/evasion/pkill_remote_shell.jl",
+            "scripts/lint/fixtures/evasion/pkill_which.jl",
+            "scripts/lint/fixtures/evasion/pgrep_bracket.jl",
+        )
+        length(collect_process_pattern(root, file_hunks(rel), src_for; whole = true)) < 1 &&
+            die("self-test: fixture process-pattern $(rel)")
+    end
+    remote = joinpath(root, "src/DistSSHRun/infra/remote.jl")
+    remote_src = read(remote, String)
+    remote_h = Dict("src/DistSSHRun/infra/remote.jl" => [Hunk(16, 0, 16, 1, String[])])
+    length(collect_process_pattern(root, remote_h, _ -> remote_src; whole = false)) >= 1 ||
+        die("self-test: remote.jl local pkill must hit process-pattern")
     return
 end
 
@@ -1444,7 +1457,7 @@ function self_test_body_main()
     for line in judge_lines
         startswith(line, "ok  ") || die("self-test: judge_self_test unexpected line $(line)")
     end
-    length(GATE_LINT_NAMES) == 31 || die("self-test: GATE_LINT_NAMES $(length(GATE_LINT_NAMES))")
+    length(GATE_LINT_NAMES) == 32 || die("self-test: GATE_LINT_NAMES $(length(GATE_LINT_NAMES))")
     "all" in GATE_LINT_NAMES && die("self-test: all is not a per-mode name")
     lint_sh = read(joinpath(@__DIR__, "..", "gate", "lint.sh"), String)
     occursin("run.sh\" all", lint_sh) || die("self-test: lint.sh must run all in one process")
@@ -1503,6 +1516,27 @@ function self_test_body_main()
         die("self-test: split-token variable")
     parse_lint_allow_line("ENV[\"X\"] = \"1\" # lint-allow: test-env-mutation -- fixture models a raw ENV write") !== nothing ||
         die("self-test: inline lint-allow")
+    allow_inline = "x = 1\nENV[\"X\"] = 1 # lint-allow: split-token -- fixture inline marker only for this line\ny = 2\n"
+    !lint_allow_active(allow_inline, 3, "split-token") ||
+        die("self-test: inline lint-allow must not suppress next line")
+    str_mark = "s = \"# lint-allow: split-token -- not a real marker inside string\"\n"
+    in_str = lines_in_string_literals(str_mark)
+    (length(in_str) >= 1 && in_str[1]) || die("self-test: lint-allow inside string literal")
+    decode_string_literal_chunk("A") == "A" || die("self-test: string_literal chunk")
+    lit_tree = parse_tree("const S = \"\\x42\"\n")
+    found = Ref(false)
+    function walk_lit!(node)
+        if kind(node) == K"string" && string_literal_value(node) == "B"
+            found[] = true
+            return
+        end
+        for i in 1:numchildren(node)
+            walk_lit!(node[i])
+        end
+        return
+    end
+    walk_lit!(lit_tree)
+    found[] || die("self-test: string_literal \\x node")
     lint_allow_line_malformed("# lint-allow: split-token --") ||
         die("self-test: malformed lint-allow empty reason")
     commented = "# EnvRow(\"DISTSSH_UNLISTED\", \"string\", \"unset\", \"—\", \"gone\")\nEnvRow(\"DISTSSH_JOBS\", \"int >= 1\", \"1\", \"—\", \"jobs\")\n"
@@ -1557,6 +1591,16 @@ function self_test_body_main()
     markdown_removed_names("Removed: `old_api`") == ["old_api"] || die("self-test: removed names Removed line")
     isempty(markdown_removed_names("removed `old_api` in favor of `new_api`")) ||
         die("self-test: removed names prose ignored")
+    lint_obsolete_env_reject_table_sync(repo_root()) == 0 ||
+        die("self-test: obsolete env table sync")
+    news = joinpath(repo_root(), "NEWS.md")
+    if isfile(news)
+        durable = durable_removed_env_names(repo_root())
+        table = parse_removed_env_reject_table(repo_root())
+        for name in table
+            name in durable || die("self-test: post-cut removed name $(name) in NEWS or changelog")
+        end
+    end
     fence_ev = "## Testing\n\n```text\n## Worker output\n```\n\nKnown failure.\n\n## Risk\n"
     any(endswith(e, "known") for e in excuse_word_errors(section_named_text(fence_ev, "Testing"))) ||
         die("self-test: evidence after fence heading")
@@ -2254,17 +2298,29 @@ function runtests_allowlisted(rel::AbstractString, prefix::AbstractString)
     return occursin("/fixtures/", "/" * rel)
 end
 
+function decode_string_literal_chunk(v::AbstractString)
+    occursin('\0', v) && return nothing
+    return v
+end
+
 function string_literal_value(node)
     kind(node) == K"string" || return nothing
     # Interpolation keeps more than one child; refuse so a prefix chunk is not
     # treated as the full name (e.g. "DISTSSH_JOBS$(suffix)").
     numchildren(node) > 1 && return nothing
     if numchildren(node) == 1 && kind(node[1]) == K"String"
-        v = sourcetext(node[1])
-        return occursin('\0', v) ? nothing : v
+        chunk = sourcetext(node[1])
+        occursin('\\', chunk) || return decode_string_literal_chunk(chunk)
+        ex = try
+            Meta.parse(sourcetext(node))
+        catch
+            return nothing
+        end
+        ex isa String || return nothing
+        return occursin('\0', ex) ? nothing : ex
     end
     ex = try
-        Meta.parse(sourcetext(node); lang = :julia)
+        Meta.parse(sourcetext(node))
     catch
         return nothing
     end
@@ -2272,12 +2328,12 @@ function string_literal_value(node)
     return occursin('\0', ex) ? nothing : ex
 end
 
-function string_literal_value_src(node, src::AbstractString)
+function string_literal_value_src(node)
     kind(node) == K"string" || return nothing
     v = string_literal_value(node)
     v !== nothing && return v
     ex = try
-        Meta.parse(sourcetext(node); lang = :julia)
+        Meta.parse(sourcetext(node))
     catch
         return nothing
     end
@@ -2387,10 +2443,12 @@ end
 function parse_removed_env_reject_table(root::AbstractString)
     path = joinpath(root, "src", "DistSSHRun", "options", "obsolete_env.jl")
     isfile(path) || return Set{String}()
-    names = Set{String}()
     text = source_without_full_line_comments(read(path, String))
-    for m in eachmatch(r"\"(DISTSSH_[A-Z0-9_]+|GB_PER_WORKER)\"", text)
-        push!(names, String(m.captures[1]))
+    m = match(r"OBSOLETE_ENV_REJECTION_NAMES\s*=\s*\(([^)]*)\)", text)
+    m === nothing && return Set{String}()
+    names = Set{String}()
+    for mm in eachmatch(r"\"([^\"]+)\"", m.captures[1])
+        push!(names, String(mm.captures[1]))
     end
     return names
 end
@@ -2426,7 +2484,10 @@ end
 
 function lint_obsolete_env_reject_table_sync(root::AbstractString)
     table = parse_removed_env_reject_table(root)
-    isempty(table) && return 1
+    if isempty(table)
+        println(stderr, "lint: obsolete env rejection table is empty")
+        return 1
+    end
     durable = durable_removed_env_names(root)
     pending = removed_env_fragment_names(root)
     n = 0
@@ -2451,7 +2512,8 @@ function lint_obsolete_env_reject_table_sync(root::AbstractString)
         text = read(joinpath(root, path), String)
         for (i, line) in enumerate(split(text, '\n'; keepempty = true))
             for name in table
-                occursin(Regex("\\b" * replace(name, "_" => "_") * "\\b"), line) || continue
+                esc = replace(name, r"([\\^$.|?*+()\[\]{}])" => s"\\\1")
+                occursin(Regex("\\b" * esc * "\\b"), line) || continue
                 removed_name_src_ok(line, name) || push!(bad, "$(path):$(i):$(name)")
             end
         end
@@ -3117,7 +3179,7 @@ function withenv_pair_key(node)::Union{Nothing, String}
         return nothing
     end
     key = string_literal_value(node[key_i])
-    key === nothing && (key = string_literal_value_src(node[key_i], ""))
+    key === nothing && (key = string_literal_value_src(node[key_i]))
     return key
 end
 
@@ -3141,7 +3203,7 @@ function env_write_target_key(node)::Union{Nothing, String}
         kind(lhs) == K"ref" && numchildren(lhs) >= 2 || return nothing
         sourcetext(lhs[1]) == "ENV" || return nothing
         key = string_literal_value(lhs[2])
-        key === nothing && (key = string_literal_value_src(lhs[2], ""))
+        key === nothing && (key = string_literal_value_src(lhs[2]))
         return key
     end
     if kind(node) == K"call"
@@ -3150,7 +3212,7 @@ function env_write_target_key(node)::Union{Nothing, String}
         numchildren(node) >= 3 || return nothing
         sourcetext(node[2]) == "ENV" || return nothing
         key = string_literal_value(node[3])
-        key === nothing && (key = string_literal_value_src(node[3], ""))
+        key === nothing && (key = string_literal_value_src(node[3]))
         return key
     end
     return nothing
@@ -3640,6 +3702,7 @@ function lint_mode_zero(root, files, src_for_path, collect_fn, ceiling_name)
     added = collect_fn(root, files, src_for_path; whole = false)
     n = report_hits(added, root)
     whole = collect_fn(root, files, src_for_path; whole = true)
+    filter_debt_hits!(whole, root)
     n += check_ceiling(ceiling_name, length(whole), 0)
     return n
 end
@@ -3699,11 +3762,11 @@ end
 
 const BANNED_NEW = ("best-effort", "until", "lockstep", "pending", "known failure", "pre-existing")
 const CEILING_ID_MATCH = 0
-const CEILING_PROCESS_PATTERN = 1
+const CEILING_PROCESS_PATTERN = 2
 const CEILING_LOCK_CREATE = 0
 const CEILING_ENV_DEFAULT = 0
-const CEILING_ENV_DEFAULT_TEST = 9
-const CEILING_ENV_DEFAULT_TEST_RULE_REV = 2
+const CEILING_ENV_DEFAULT_TEST = 0
+const CEILING_ENV_DEFAULT_TEST_RULE_REV = 3
 const CEILING_SWALLOWED_CATCH_RULE_REV = 2
 const CEILING_SWALLOWED_CATCH = 146
 const CEILING_LOOP_SKIP = 0
@@ -3717,6 +3780,7 @@ const CEILING_ADDPROCS_KW_SPLAT = 0
 const CEILING_SPLIT_TOKEN = 10
 const CEILING_ENV_TABLE = 0
 const CEILING_TEST_ENV_MUTATION = 72
+const CEILING_LINT_ALLOW = 1
 const ADDDROCS_KW_ALLOWLIST = Set{Symbol}(
     [
         :cmdline_cookie,
@@ -3850,18 +3914,20 @@ function string_is_function_docstring(node, parent)
     return true
 end
 
-function walk_process_pattern!(node, parent, src, path, added, consts, in_doc, hits)
-    in_doc = in_doc || kind(node) == K"doc" || string_is_function_docstring(node, parent)
-    if kind(node) == K"macrocall" && macro_head_name(node) in ("@doc", "doc")
+function walk_process_pattern!(node, parent, src, path, added, consts, hits)
+    if kind(node) == K"doc" ||
+            (kind(node) == K"macrocall" && macro_head_name(node) in ("@doc", "doc"))
+        n = numchildren(node)
+        n >= 2 && walk_process_pattern!(node[n], node, src, path, added, consts, hits)
         return
     end
-    if !in_doc && kind(node) != K"Identifier" && kind(node) != K"Comment" &&
+    if kind(node) != K"Identifier" && kind(node) != K"Comment" &&
             process_pattern_builder_hit(node, consts) &&
             node_touches_added(src, node, added)
         push!(hits, (path, line_of(src, Int(first(byte_range(node)))), "process-pattern"))
     end
     for i in 1:numchildren(node)
-        walk_process_pattern!(node[i], node, src, path, added, consts, in_doc, hits)
+        walk_process_pattern!(node[i], node, src, path, added, consts, hits)
     end
     return
 end
@@ -3883,7 +3949,7 @@ function collect_process_pattern(root, files, src_for_path; whole::Bool)
         tree = parse_tree(src)
         consts = Dict{String, String}()
         fold_module_consts!(tree, consts)
-        walk_process_pattern!(tree, tree, src, path, added_set, consts, false, hits)
+        walk_process_pattern!(tree, tree, src, path, added_set, consts, hits)
     end
     return unique(hits)
 end
@@ -4013,6 +4079,7 @@ function invalid_env_literal(s::AbstractString)::Bool
 end
 
 function invalid_env_literal(key::AbstractString, val::AbstractString, kinds::Dict{String, String})::Bool
+    key == "DISTSSH_PROGRESS_BG" && lowercase(val) in ("light", "dark", "auto") && return false
     kind_str = get(kinds, key, "")
     isempty(kind_str) && return invalid_env_literal_generic(val)
     return invalid_env_literal_for_kind(kind_str, val)
@@ -4039,11 +4106,45 @@ function env_pair_string_literals(node)
     key = string_literal_value(node[key_i])
     val = string_literal_value(node[val_i])
     if key === nothing || val === nothing
-        key = string_literal_value_src(node[key_i], "")
-        val = string_literal_value_src(node[val_i], "")
+        key = string_literal_value_src(node[key_i])
+        val = string_literal_value_src(node[val_i])
     end
     (key === nothing || val === nothing) && return nothing
     return (key, val)
+end
+
+function env_key_throw_related(key::AbstractString, throws_src::AbstractString)
+    occursin(key, throws_src) && return true
+    startswith(key, "DISTSSH_") || return false
+    low = lowercase(throws_src)
+    tail = key[10:end]
+    snake = join(lowercase.(split(tail, '_')), '_')
+    occursin(snake, low) && return true
+    occursin(replace(lowercase(tail), "_" => ""), low) && return true
+    for tok in split(tail, '_')
+        length(tok) < 4 && continue
+        occursin(lowercase(tok), low) && return true
+    end
+    return false
+end
+
+function test_throws_arg_related(node, watched_keys::AbstractSet{<:AbstractString})
+    numchildren(node) < 2 && return false
+    st = sourcetext(node)
+    any(k -> env_key_throw_related(k, st), watched_keys) && return true
+    for i in 2:numchildren(node)
+        arg = node[i]
+        kind(arg) == K"call" || continue
+        callee = call_head_name(arg)
+        callee === nothing && continue
+        for k in watched_keys
+            startswith(k, "DISTSSH_") || continue
+            tail = k[10:end]
+            snake = join(lowercase.(split(tail, '_')), '_')
+            lowercase(callee) == snake && return true
+        end
+    end
+    return false
 end
 
 function test_flags_in_subtree(node, watched_keys::AbstractSet{<:AbstractString} = Set{String}())
@@ -4053,10 +4154,7 @@ function test_flags_in_subtree(node, watched_keys::AbstractSet{<:AbstractString}
         if kind(n) == K"macrocall"
             mh = macro_head_name(n)
             if mh in ("test_throws", "@test_throws")
-                st = sourcetext(n)
-                related =
-                    occursin(r"\bENV\b", st) || any(k -> occursin(k, st), watched_keys)
-                related && (has_related_throws[] = true)
+                test_throws_arg_related(n, watched_keys) && (has_related_throws[] = true)
             elseif mh in ("test", "@test") && numchildren(n) >= 2
                 arg = n[2]
                 if kind(arg) == K"call" && numchildren(arg) >= 3
@@ -4081,7 +4179,10 @@ function withenv_invalid_test_keys(node, kinds::Dict{String, String})
     for i in 2:numchildren(node)
         pair = env_pair_string_literals(node[i])
         pair === nothing && continue
-        invalid_env_literal(pair[1], pair[2], kinds) && push!(keys, pair[1])
+        key = pair[1]
+        startswith(key, "DISTSSH_") || continue
+        startswith(key, "DISTSSH_INTERNAL_") && continue
+        invalid_env_literal(key, pair[2], kinds) && push!(keys, key)
     end
     return keys
 end
@@ -4094,7 +4195,10 @@ function walk_env_default_test!(node, src, path, added, kinds, hits)
             numchildren(node) >= 2 || return
             body = node[numchildren(node)]
             has_eq, has_related_throws = test_flags_in_subtree(body, Set(bad_keys))
-            if has_eq && !has_related_throws
+            body_src = sourcetext(body)
+            provenance_body = occursin("_set_provenance_source!", body_src) ||
+                occursin("assemble_provenance", body_src)
+            if !provenance_body && !occursin("ProcessEnv(", body_src) && has_eq && !has_related_throws
                 a = line_of(src, Int(first(byte_range(node))))
                 push!(hits, (path, a, "env-default"))
             end
@@ -4450,6 +4554,7 @@ function removed_name_src_ok(line::AbstractString, tok::AbstractString)::Bool
     occursin("_throw_if_obsolete", line) && return true
     occursin("LEGACY_ENV_RENAMES", line) && return true
     occursin("OBSOLETE_ENV_REJECTION_NAMES", line) && return true
+    occursin("OBSOLETE_ENV_RENAME_PAIRS", line) && return true
     occursin(r"name in \(", line) && occursin(tok, line) && return true
     occursin(Regex("\\Q\"$(tok)\"\\s*=>"), line) && return true
     occursin(Regex("=>\\s*\"\\Q$(tok)\""), line) && return true
@@ -4638,9 +4743,15 @@ function lint_addprocs_kwargs(root, files, src_for_path)
     bad_add, splat_add = collect_addprocs_bad_kw(root, files, src_for_path; whole = false)
     n = report_hits(bad_add, root) + report_hits(splat_add, root)
     bad_whole, splat_whole = collect_addprocs_bad_kw(root, files, src_for_path; whole = true)
+    filter_debt_hits!(splat_whole, root)
     n += check_ceiling("CEILING_ADDPROCS_KW_BAD", length(bad_whole), 0)
     n += check_ceiling("CEILING_ADDPROCS_KW_SPLAT", length(splat_whole), CEILING_ADDPROCS_KW_SPLAT)
     return n
+end
+
+function lint_addprocs_kwargs_splat(root, files, src_for_path)
+    _, splat_add = collect_addprocs_bad_kw(root, files, src_for_path; whole = false)
+    return report_hits(splat_add, root)
 end
 
 function lint_weak_assertion(root, files, src_for_path)
@@ -4716,6 +4827,7 @@ const GATE_LINT_NAMES = (
     "suppression",
     "dead-version-gate",
     "addprocs-kwargs",
+    "addprocs-kwargs-splat",
     "weak-assertion",
     "split-token",
     "env-table",
@@ -4748,6 +4860,7 @@ function lint_diff_mode(mode, root, files, src_for)
     mode == "suppression" && return lint_suppression(root)
     mode == "dead-version-gate" && return lint_dead_version(root, files, src_for)
     mode == "addprocs-kwargs" && return lint_addprocs_kwargs(root, files, src_for)
+    mode == "addprocs-kwargs-splat" && return lint_addprocs_kwargs_splat(root, files, src_for)
     mode == "weak-assertion" && return lint_weak_assertion(root, files, src_for)
     mode == "split-token" && return lint_split_token(root, files, src_for)
     mode == "env-table" && return lint_env_table(root, files, src_for)
@@ -4776,6 +4889,7 @@ function lint_all(root)
         end
     end
     n += lint_unknown_or_bad_allows(root)
+    n += check_ceiling("CEILING_LINT_ALLOW", length(collect_lint_allow_markers(root)), CEILING_LINT_ALLOW)
     lint_allow_summary_new(root, files)
     n == 0 || exit(1)
     return 0

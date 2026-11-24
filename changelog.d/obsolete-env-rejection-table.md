@@ -1,6 +1,6 @@
 category: changed
 
-- Runtime env rejection list is centralized in `obsolete_env.jl` and kept in sync with changelog `Removed:` lines. Behavior unchanged.
+- Runtime env rejection list is centralized in `obsolete_env.jl` and kept in sync with changelog `Removed:` lines. These entries document names already removed before 0.2.0; this change does not newly remove them in 0.2.0.
 
 Removed: `GB_PER_WORKER`
 Removed: `DISTSSH_SIZE_PROBE`

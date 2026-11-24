@@ -13,16 +13,7 @@ using DistSSHRun
         root = pkgdir(DistSSHRun)
         allowed = DistSSHRun.user_env_names()
         legacy_old = Set{String}(old for (old, _) in DistSSHRun.DistSSHBase.LEGACY_ENV_RENAMES)
-        obsolete_reject = Set{String}(
-            [
-                "DISTSSH_SIZE_PROBE",
-                "GB_PER_WORKER",
-                "DISTSSH_SOURCE_COMMIT",
-                "DISTSSH_SOURCE_DIRTY",
-                "DISTSSH_SOURCE_CAPTURED",
-                "DISTSSH_SOURCE_UNTRACKED",
-            ]
-        )
+        obsolete_reject = Set{String}(DistSSHRun.OBSOLETE_ENV_REJECTION_NAMES)
         # Quoted complete env names only (not Julia identifiers like
         # DISTSSH_RUN_DIR_ENV). Trailing "_" prefixes must not match.
         pat = r"\"((?:DISTSSH_|DISTRIBUTED_)[A-Z0-9_]*[A-Z0-9])\"(?![A-Z0-9_])"

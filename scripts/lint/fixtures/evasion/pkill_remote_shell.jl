@@ -1,0 +1,1 @@
+run(pipeline(_host_sync_remote_shell_cmd("h", "pkill -9 -f julia; true")))

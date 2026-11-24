@@ -69,7 +69,19 @@ has_exact_label() {
   return 1
 }
 
+lint_paths_need_label() {
+  local path="$1"
+  case "${path}" in
+    scripts/lint/* | scripts/check.sh | AGENTS.md | .github/workflows/* | .github/runic/*) return 0 ;;
+    scripts/gate/lint_change_guard.sh | scripts/gate/judge.sh | scripts/gate/workflow_gate_wiring_verify.sh) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 lint_infra_touched() {
+  if [[ "${_LINT_CHANGE_GUARD_TEST_DIFF_FAIL:-}" == 1 ]]; then
+    die "could not compare changed paths (mock diff failure)"
+  fi
   if [[ "${_LINT_CHANGE_GUARD_SELF_TEST_PATHS:-}" == 1 ]]; then
     return 0
   fi
@@ -80,12 +92,11 @@ lint_infra_touched() {
   if ! paths="$(git diff --name-only "${range}")"; then
     die "could not compare changed paths (${range})"
   fi
-  if printf '%s\n' "${paths}" | grep -qE '^(scripts/lint/|scripts/check\.sh|AGENTS\.md|\.github/workflows/)'; then
-    return 0
-  fi
-  if printf '%s\n' "${paths}" | grep -q 'scripts/lint/diff_lint\.jl'; then
-    return 0
-  fi
+  local p
+  while IFS= read -r p || [[ -n "${p}" ]]; do
+    [[ -z "${p}" ]] && continue
+    lint_paths_need_label "${p}" && return 0
+  done <<< "${paths}"
   return 1
 }
 
@@ -95,6 +106,12 @@ self_test() {
   trap 'rm -rf "${tmp}"' RETURN
   script="${ROOT}/scripts/gate/lint_change_guard.sh"
   fixture="${ROOT}/scripts/gate/fixtures/lint_change_guard"
+
+  lint_paths_need_label "scripts/lint/diff_lint.jl" || die "self-test: protected lint path"
+  lint_paths_need_label "scripts/gate/judge.sh" || die "self-test: protected judge"
+  lint_paths_need_label ".github/runic/Project.toml" || die "self-test: protected runic"
+  lint_paths_need_label "README.md" && die "self-test: README unprotected"
+  lint_paths_need_label "src/DistSSHRun.jl" && die "self-test: src unprotected"
 
   GITHUB_EVENT_NAME=pull_request GITHUB_EVENT_PATH="${fixture}/event_unlabeled.json" \
     _LINT_CHANGE_GUARD_SELF_TEST_PATHS=1 "${script}" 2>/dev/null && {
@@ -120,6 +137,11 @@ self_test() {
     die "self-test: expected exit 1 for bad json"
   }
   grep -q 'could not parse event payload' "${tmp}/err2" || die "self-test: parse error message"
+
+  GITHUB_EVENT_NAME=pull_request _LINT_CHANGE_GUARD_TEST_DIFF_FAIL=1 \
+    GITHUB_EVENT_PATH="${fixture}/event_labeled.json" \
+    "${script}" 2>"${tmp}/err3" && die "self-test: expected exit 1 for diff fail"
+  grep -q 'could not compare changed paths' "${tmp}/err3" || die "self-test: diff fail message"
 
   echo "ok  lint_change_guard self-test"
 }

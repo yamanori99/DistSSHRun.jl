@@ -1373,18 +1373,30 @@ jobs:
         run: |
           set -euo pipefail
           BASE="$(git merge-base HEAD origin/main)"
-          tmp="$(mktemp -d)"
-          mkdir -p "${tmp}/scripts/lint"
-          git show "${BASE}:scripts/lint/diff_lint.jl" >"${tmp}/scripts/lint/diff_lint.jl"
-          for extra in fold.jl shell_cmd.jl lint_allow.jl; do
-            git show "${BASE}:scripts/lint/${extra}" >"${tmp}/scripts/lint/${extra}" 2>/dev/null || true
+          git fetch --no-tags origin main
+          lint_backup="$(mktemp -d)"
+          restore_trusted_lint() {
+            for f in diff_lint.jl fold.jl shell_cmd.jl lint_allow.jl; do
+              if [[ -f "${lint_backup}/${f}" ]]; then
+                cp "${lint_backup}/${f}" "scripts/lint/${f}"
+              fi
+            done
+          }
+          trap restore_trusted_lint EXIT
+          for f in diff_lint.jl fold.jl shell_cmd.jl lint_allow.jl; do
+            cp "scripts/lint/${f}" "${lint_backup}/${f}"
+            if git cat-file -e "${BASE}:scripts/lint/${f}" 2>/dev/null; then
+              git show "${BASE}:scripts/lint/${f}" >"scripts/lint/${f}"
+            fi
           done
-          cp scripts/lint/diff_lint.jl scripts/lint/diff_lint.jl.head
-          cp "${tmp}/scripts/lint/diff_lint.jl" scripts/lint/diff_lint.jl
           set +e
           julia --project=.github/runic --startup-file=no scripts/lint/diff_lint.jl all 2>trusted-lint.err
           trusted_rc=$?
           set -e
+          if grep -qE '^(ERROR:|LoadError:|Stacktrace:|syntax:)' trusted-lint.err; then
+            cat trusted-lint.err >&2
+            exit 1
+          fi
           if grep -vE '^lint: CEILING_|^lint: [^:]+: could not read the ceiling' trusted-lint.err | grep -qE '^lint:'; then
             cat trusted-lint.err >&2
             exit 1
@@ -1395,7 +1407,6 @@ jobs:
               exit "${trusted_rc}"
             }
           fi
-          mv scripts/lint/diff_lint.jl.head scripts/lint/diff_lint.jl
 
   lint-change-guard:
     name: lint change guard
@@ -1414,7 +1425,16 @@ jobs:
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_PATH: ${{ github.event_path }}
-        run: ./scripts/gate/lint_change_guard.sh
+        run: |
+          set -euo pipefail
+          BASE="$(git merge-base HEAD origin/main)"
+          guard="${{ github.workspace }}/scripts/gate/lint_change_guard.sh"
+          if git cat-file -e "${BASE}:scripts/gate/lint_change_guard.sh" 2>/dev/null; then
+            git show "${BASE}:scripts/gate/lint_change_guard.sh" >"${guard}.base"
+            chmod +x "${guard}.base"
+            guard="${guard}.base"
+          fi
+          exec "${guard}"
 
   fix-tests-on-base:
     name: fix tests fail on merge-base src

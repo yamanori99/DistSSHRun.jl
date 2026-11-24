@@ -50,19 +50,73 @@ function lint_allow_reason_valid(reason::AbstractString)
     return true
 end
 
+function lint_allow_line_style(line::AbstractString)
+    parsed = parse_lint_allow_line(line)
+    parsed === nothing && return nothing
+    s = strip(line)
+    startswith(s, "#") && return (:full, parsed)
+    return (:inline, parsed)
+end
+
+function lint_allow_marker_valid(parsed)
+    rid, reason = parsed
+    lint_rule_id_known(rid) || return false
+    return lint_allow_reason_valid(reason)
+end
+
 function lint_allow_active(src::AbstractString, line::Int, rule::AbstractString)
     lines = split(src, '\n'; keepempty = true)
-    for L in (line, line - 1)
-        (L < 1 || L > length(lines)) && continue
-        parsed = parse_lint_allow_line(lines[L])
-        parsed === nothing && continue
-        rid, reason = parsed
-        rid != rule && continue
-        lint_rule_id_known(rid) || return false
-        lint_allow_reason_valid(reason) || return false
-        return true
+    if 1 <= line <= length(lines)
+        style = lint_allow_line_style(lines[line])
+        if style !== nothing && style[1] == :inline
+            rid, _ = style[2]
+            rid == rule && lint_allow_marker_valid(style[2]) && return true
+        end
+    end
+    prev = line - 1
+    if 1 <= prev <= length(lines)
+        style = lint_allow_line_style(lines[prev])
+        if style !== nothing && style[1] == :full
+            rid, _ = style[2]
+            rid == rule && lint_allow_marker_valid(style[2]) && return true
+        end
     end
     return false
+end
+
+function lint_allow_line_is_marker(line::AbstractString, rule::AbstractString)::Bool
+    style = lint_allow_line_style(line)
+    style === nothing && return false
+    rid, _ = style[2]
+    rid == rule || return false
+    return lint_allow_marker_valid(style[2])
+end
+
+function comment_line_is_lint_allow(line::AbstractString)::Bool
+    style = lint_allow_line_style(line)
+    return style !== nothing
+end
+
+function lines_in_string_literals(src::AbstractString)
+    in_str = falses(length(src) == 0 ? 1 : count(==('\n'), src) + 1)
+    tree = parse_tree(src)
+    function walk(node)
+        k = kind(node)
+        if k == K"string" || k == K"cmdstring"
+            r = byte_range(node)
+            a = line_of(src, Int(first(r)))
+            b = line_of(src, Int(last(r)))
+            for i in a:b
+                1 <= i <= length(in_str) && (in_str[i] = true)
+            end
+        end
+        for i in 1:numchildren(node)
+            walk(node[i])
+        end
+        return
+    end
+    walk(tree)
+    return in_str
 end
 
 function filter_lint_allows!(hits, root::AbstractString)
@@ -87,7 +141,11 @@ function collect_lint_allow_markers(root::AbstractString)
         full = joinpath(root, path)
         isfile(full) || continue
         src = read(full, String)
+        in_str = endswith(path, ".jl") ? lines_in_string_literals(src) : falses(0)
         for (i, line) in enumerate(split(src, '\n'; keepempty = true))
+            if endswith(path, ".jl") && i <= length(in_str) && in_str[i]
+                continue
+            end
             parsed = parse_lint_allow_line(line)
             parsed === nothing && continue
             rule, reason = parsed
@@ -104,8 +162,13 @@ function lint_unknown_or_bad_allows(root::AbstractString)
         endswith(path, ".jl") || endswith(path, ".sh") || continue
         full = joinpath(root, path)
         isfile(full) || continue
-        lines = split(read(full, String), '\n'; keepempty = true)
+        src = read(full, String)
+        in_str = endswith(path, ".jl") ? lines_in_string_literals(src) : falses(0)
+        lines = split(src, '\n'; keepempty = true)
         for (i, line) in enumerate(lines)
+            if endswith(path, ".jl") && i <= length(in_str) && in_str[i]
+                continue
+            end
             lint_allow_line_malformed(line) || continue
             println(
                 stderr,
