@@ -1591,6 +1591,36 @@ function self_test_body_main()
         die("self-test: commented EnvRow stripped")
     occursin("DISTSSH_JOBS", source_without_full_line_comments(commented)) ||
         die("self-test: live EnvRow kept")
+    job_bad = "withenv(\"DISTSSH_JOB_ID\" => \"bad!\") do\n    @test x == 1\nend\n"
+    length(collect_env_default_test(repo_root(), Dict("test/runtests.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> job_bad; whole = false)) >= 1 ||
+        die("self-test: env-default job id grammar")
+    job_ok = "withenv(\"DISTSSH_JOB_ID\" => \"job-1\") do\n    @test x == 1\nend\n"
+    isempty(collect_env_default_test(repo_root(), Dict("test/runtests.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> job_ok; whole = false)) ||
+        die("self-test: env-default job id charset")
+    seti = "setindex!(ENV, \"1\", \"DISTSSH_YES\")\n"
+    length(collect_test_env_mutation("", Dict("test/t.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> seti; whole = false)) >= 1 ||
+        die("self-test: setindex! ENV")
+    dupw = "withenv(\"DISTSSH_YES\" => \"1\", \"DISTSSH_YES\" => \"0\") do\n    ENV[\"DISTSSH_YES\"] = \"9\"\nend\n"
+    length(collect_test_env_mutation("", Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> dupw; whole = false)) >= 1 ||
+        die("self-test: duplicate withenv key still mutates")
+    blockrow = "#= EnvRow(\"DISTSSH_UNLISTED\", \"string\", \"unset\", \"—\", \"gone\") =#\n"
+    !occursin("DISTSSH_UNLISTED", source_without_full_line_comments(blockrow)) ||
+        die("self-test: block comment EnvRow")
+    bad_allow = "x = \"hello\" # lint-allow split-token\n"
+    malformed_allow_comment_lines(bad_allow) == [1] || die("self-test: malformed allow beside string")
+    read_name = "read(\"pgrep report.txt\", String)\n"
+    isempty(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> read_name; whole = false)) ||
+        die("self-test: read filename is not a command")
+    shifted = "Cmd([exe, \"pkill\"])\n"
+    isempty(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> shifted; whole = false)) ||
+        die("self-test: unresolved argv must not shift pkill")
+    quoted = "echo '/opt/tools;archive/pgrep' -f x"
+    length(shell_segments(quoted)) == 1 || die("self-test: quoted semicolon stays one segment")
+    command_position_kill(quoted) && die("self-test: quoted semicolon path")
+    command_position_kill("true; pkill -f x") || die("self-test: later segment pkill")
+    leak = "function a()\n    tool = Sys.which(\"pgrep\")\nend\nfunction b()\n    Cmd([tool])\nend\n"
+    isempty(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 6, String[])]), _ -> leak; whole = false)) ||
+        die("self-test: const binding does not leak across functions")
     malformed_num = "withenv(\"DISTSSH_JOBS\" => \"12oops\") do\n    @test kit_host_jobs() == 1\nend\n"
     length(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> malformed_num; whole = false)) >= 1 ||
         die("self-test: env-default malformed numeric")
@@ -2408,7 +2438,7 @@ function walk_split_token!(node, src, path, added, consts, rule, hits)
         n >= 2 && walk_split_token!(node[n], src, path, added, consts, rule, hits)
         return
     end
-    if kind(node) in (K"function", K"->", K"let")
+    if kind(node) in (K"function", K"->", K"let", K"do", K"for", K"while", K"try", K"macro")
         inner = copy(consts)
         for i in 1:numchildren(node)
             walk_split_token!(node[i], src, path, added, inner, rule, hits)
@@ -2462,12 +2492,18 @@ end
 # Drop full-line `#` comments so commented-out EnvRow / rename rows do not
 # count as declarations. Trailing comments on code lines stay (rare for rows).
 function source_without_full_line_comments(text::AbstractString)::String
-    parts = String[]
-    for line in eachsplit(text, '\n'; keepempty = true)
-        startswith(lstrip(line), "#") && continue
-        push!(parts, line)
+    bytes = Vector{UInt8}(codeunits(text))
+    for tok in tokenize(text)
+        kind(tok) == K"Comment" || continue
+        a = Int(first(tok.range))
+        b = Int(last(tok.range))
+        for i in a:b
+            1 <= i <= length(bytes) || continue
+            bytes[i] == UInt8('\n') && continue
+            bytes[i] = UInt8(' ')
+        end
     end
-    return join(parts, '\n')
+    return String(bytes)
 end
 
 function parse_user_env_table_names(root::AbstractString)
@@ -3209,6 +3245,10 @@ function is_env_write_node(node)
     end
     if kind(node) == K"call"
         name = call_head_name(node)
+        if name == "setindex!"
+            numchildren(node) >= 4 || return false
+            return sourcetext(node[2]) == "ENV"
+        end
         name in ("delete!", "pop!") || return false
         numchildren(node) >= 2 || return false
         return sourcetext(node[2]) == "ENV"
@@ -3246,15 +3286,16 @@ end
 
 # nothing → pair keys are not all literals; body gets an empty restore set.
 function withenv_restored_keys(node)::Union{Nothing, Set{String}}
-    keys = Set{String}()
+    keys = String[]
     n = numchildren(node)
-    n < 2 && return keys
+    n < 2 && return Set{String}()
     for i in 2:(n - 1)
         key = withenv_pair_key(node[i])
         key === nothing && return nothing
         push!(keys, key)
     end
-    return keys
+    dup = Set(k for k in keys if count(==(k), keys) > 1)
+    return setdiff(Set(keys), dup)
 end
 
 function env_write_target_key(node)::Union{Nothing, String}
@@ -3269,6 +3310,13 @@ function env_write_target_key(node)::Union{Nothing, String}
     end
     if kind(node) == K"call"
         name = call_head_name(node)
+        if name == "setindex!"
+            numchildren(node) >= 4 || return nothing
+            sourcetext(node[2]) == "ENV" || return nothing
+            key = string_literal_value(node[4])
+            key === nothing && (key = string_literal_value_src(node[4]))
+            return key
+        end
         name in ("delete!", "pop!") || return nothing
         numchildren(node) >= 3 || return nothing
         sourcetext(node[2]) == "ENV" || return nothing
@@ -3982,7 +4030,7 @@ function walk_process_pattern!(node, parent, src, path, added, consts, hits)
         n >= 2 && walk_process_pattern!(node[n], node, src, path, added, consts, hits)
         return
     end
-    if kind(node) in (K"function", K"->", K"let")
+    if kind(node) in (K"function", K"->", K"let", K"do", K"for", K"while", K"try", K"macro")
         inner = copy(consts)
         for i in 1:numchildren(node)
             walk_process_pattern!(node[i], node, src, path, added, inner, hits)
@@ -3995,7 +4043,8 @@ function walk_process_pattern!(node, parent, src, path, added, consts, hits)
         kind(parent) == K"macrocall" &&
             macro_head_name(parent) in ("@warn", "@error", "@info", "warn", "error", "info")
     )
-    if !diagnostic && kind(node) == K"string" && node_touches_added(src, node, added)
+    filename_arg = kind(parent) == K"call" && call_head_name(parent) in ("read", "open")
+    if !diagnostic && !filename_arg && kind(node) == K"string" && node_touches_added(src, node, added)
         lit = string_literal_value(node)
         lit === nothing && (lit = literal_command_text(node))
         scriptish = lit !== nothing && occursin(r"[;&|]|\s", lit) && command_position_kill(lit)
@@ -4189,12 +4238,37 @@ function documented_choice_values(root::AbstractString, key::AbstractString)
     return vals
 end
 
+function documented_string_patterns(root::AbstractString)
+    pats = Dict{String, Regex}()
+    dir = joinpath(root, "src")
+    isdir(dir) || return pats
+    for (d, _, files) in walkdir(dir)
+        for f in files
+            endswith(f, ".jl") || continue
+            text = read(joinpath(d, f), String)
+            for line in eachsplit(text, '\n')
+                m = match(r"(DISTSSH_[A-Z0-9_]+).{0,120}\[([A-Za-z0-9._:@+\-]+)\]\+", line)
+                m === nothing && continue
+                class = String(m.captures[2])
+                pats[String(m.captures[1])] = Regex("^(?:[" * class * "]+)\$")
+            end
+        end
+    end
+    return pats
+end
+
 function invalid_env_literal(
         key::AbstractString,
         val::AbstractString,
         kinds::Dict{String, String};
         choices::Dict{String, Set{String}} = Dict{String, Set{String}}(),
+        patterns::Dict{String, Regex} = Dict{String, Regex}(),
     )::Bool
+    isempty(val) && return false
+    pat = get(patterns, key, nothing)
+    if pat !== nothing
+        return !occursin(pat, val)
+    end
     known = get(choices, key, Set{String}())
     lowercase(val) in known && return false
     kind_str = get(kinds, key, "")
@@ -4286,7 +4360,7 @@ function test_flags_in_subtree(node, watched_keys::AbstractSet{<:AbstractString}
     return has_eq[], key_hit || shared || covered
 end
 
-function withenv_invalid_test_keys(node, kinds::Dict{String, String}, root, choices)
+function withenv_invalid_test_keys(node, kinds::Dict{String, String}, root, choices, patterns)
     kind(node) == K"call" || return String[]
     call_head_name(node) == "withenv" || return String[]
     keys = String[]
@@ -4299,15 +4373,15 @@ function withenv_invalid_test_keys(node, kinds::Dict{String, String}, root, choi
         get!(choices, key) do
             documented_choice_values(root, key)
         end
-        invalid_env_literal(key, pair[2], kinds; choices = choices) && push!(keys, key)
+        invalid_env_literal(key, pair[2], kinds; choices = choices, patterns = patterns) && push!(keys, key)
     end
     return keys
 end
 
-function walk_env_default_test!(node, src, path, added, kinds, root, choices, hits)
+function walk_env_default_test!(node, src, path, added, kinds, root, choices, patterns, hits)
     if kind(node) == K"call" && call_head_name(node) == "withenv" &&
             node_touches_added(src, node, added)
-        bad_keys = withenv_invalid_test_keys(node, kinds, root, choices)
+        bad_keys = withenv_invalid_test_keys(node, kinds, root, choices, patterns)
         if !isempty(bad_keys)
             numchildren(node) >= 2 || return
             body = node[numchildren(node)]
@@ -4319,7 +4393,7 @@ function walk_env_default_test!(node, src, path, added, kinds, root, choices, hi
         end
     end
     for i in 1:numchildren(node)
-        walk_env_default_test!(node[i], src, path, added, kinds, root, choices, hits)
+        walk_env_default_test!(node[i], src, path, added, kinds, root, choices, patterns, hits)
     end
     return
 end
@@ -4340,6 +4414,7 @@ function collect_env_default_test(root, files, src_for_path; whole::Bool)
     hits = Tuple{String, Int, String}[]
     kinds = parse_user_env_kinds(root)
     choices = Dict{String, Set{String}}()
+    patterns = documented_string_patterns(root)
     pick = whole ? env_default_test_ratchet_path : env_default_test_path
     paths = whole ? filter(env_default_test_ratchet_path, tracked_jl(root)) : collect(keys(files))
     for path in paths
@@ -4350,7 +4425,7 @@ function collect_env_default_test(root, files, src_for_path; whole::Bool)
         src === nothing && continue
         added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
         whole || (isempty(added) && continue)
-        walk_env_default_test!(parse_tree(src), src, path, added, kinds, root, choices, hits)
+        walk_env_default_test!(parse_tree(src), src, path, added, kinds, root, choices, patterns, hits)
     end
     return unique(hits)
 end

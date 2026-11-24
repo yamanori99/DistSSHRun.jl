@@ -23,7 +23,12 @@ pull_request_labels_from_event() {
         if (.pull_request | type) != "object" then
           "pull_request missing\n" | halt_error(1)
         else
-          (.pull_request.labels // []) | map(.name) | .[]
+          (.pull_request.labels // []) as $labels
+          | if any($labels[]; (type != "object") or ((.name | type) != "string")) then
+              "pull_request.labels entry invalid\n" | halt_error(1)
+            else
+              $labels[].name
+            end
         end
       ' "${event_path}" 2>&1
     )"; then
@@ -46,9 +51,10 @@ if labels is None:
 if not isinstance(labels, list):
     sys.exit("pull_request.labels invalid")
 for item in labels:
-    if not isinstance(item, dict) or "name" not in item:
+    name = item.get("name") if isinstance(item, dict) else None
+    if not isinstance(name, str):
         sys.exit("pull_request.labels entry invalid")
-    print(str(item["name"]))
+    print(name)
 PY
     )"; then
       die "could not parse event payload: ${labels}"
@@ -88,15 +94,25 @@ lint_infra_touched() {
   local base="${GITHUB_BASE_REF:-main}"
   git fetch --no-tags origin "${base}" 2>/dev/null || true
   local range="origin/${base}...HEAD"
-  local paths
-  if ! paths="$(git diff --name-only "${range}")"; then
+  local zlist
+  zlist="$(mktemp)"
+  if ! git diff --no-renames -z --name-only "${range}" >"${zlist}"; then
+    rm -f "${zlist}"
     die "could not compare changed paths (${range})"
   fi
+  local need=0
+  lint_paths_need_label_zlist "${zlist}" || need=$?
+  rm -f "${zlist}"
+  return "${need}"
+}
+
+lint_paths_need_label_zlist() {
+  local zlist="$1"
   local p
-  while IFS= read -r p || [[ -n "${p}" ]]; do
+  while IFS= read -r -d '' p || [[ -n "${p}" ]]; do
     [[ -z "${p}" ]] && continue
     lint_paths_need_label "${p}" && return 0
-  done <<< "${paths}"
+  done <"${zlist}"
   return 1
 }
 
@@ -142,6 +158,22 @@ self_test() {
     GITHUB_EVENT_PATH="${fixture}/event_labeled.json" \
     "${script}" 2>"${tmp}/err3" && die "self-test: expected exit 1 for diff fail"
   grep -q 'could not compare changed paths' "${tmp}/err3" || die "self-test: diff fail message"
+
+  printf 'README.md\0' >"${tmp}/plain"
+  lint_paths_need_label_zlist "${tmp}/plain" && die "self-test: unprotected path in zlist"
+
+  printf 'scripts/lint/é.jl\0' >"${tmp}/accent"
+  lint_paths_need_label_zlist "${tmp}/accent" || die "self-test: non-ascii protected path"
+
+  printf 'scripts/lint/old.jl\0src/renamed.jl\0' >"${tmp}/rename"
+  lint_paths_need_label_zlist "${tmp}/rename" || die "self-test: rename out of protected path"
+
+  printf '%s\n' '{"pull_request":{"labels":[{"name":"lint-change-approved"},{}]}}' >"${tmp}/malformed.json"
+  GITHUB_EVENT_NAME=pull_request GITHUB_EVENT_PATH="${tmp}/malformed.json" \
+    _LINT_CHANGE_GUARD_SELF_TEST_PATHS=1 "${script}" 2>"${tmp}/err4" && {
+    die "self-test: expected exit 1 for malformed label entry"
+  }
+  grep -q 'could not parse event payload' "${tmp}/err4" || die "self-test: malformed label message"
 
   echo "ok  lint_change_guard self-test"
 }

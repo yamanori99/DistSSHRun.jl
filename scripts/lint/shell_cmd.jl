@@ -17,9 +17,56 @@ function process_kill_word(s::AbstractString)
 end
 
 function shell_segments(script::AbstractString)
-    s = replace(script, "&&" => "\n", "||" => "\n")
-    s = replace(s, ';' => '\n', '|' => '\n')
-    return split(s, '\n'; keepempty = false)
+    parts = String[]
+    buf = IOBuffer()
+    quote_ch = Char(0)
+    escaped = false
+    i = firstindex(script)
+    while i <= lastindex(script)
+        c = script[i]
+        nxt = nextind(script, i)
+        if escaped
+            write(buf, c)
+            escaped = false
+            i = nxt
+            continue
+        end
+        if c == '\\' && quote_ch != '\''
+            write(buf, c)
+            escaped = true
+            i = nxt
+            continue
+        end
+        if quote_ch == Char(0) && (c == '\'' || c == '"')
+            quote_ch = c
+            write(buf, c)
+            i = nxt
+            continue
+        end
+        if quote_ch != Char(0) && c == quote_ch
+            quote_ch = Char(0)
+            write(buf, c)
+            i = nxt
+            continue
+        end
+        if quote_ch == Char(0)
+            two = nxt <= lastindex(script) ? string(c, script[nxt]) : ""
+            if two in ("&&", "||")
+                push!(parts, String(take!(buf)))
+                i = nextind(script, nxt)
+                continue
+            end
+            if c == ';' || c == '|'
+                push!(parts, String(take!(buf)))
+                i = nxt
+                continue
+            end
+        end
+        write(buf, c)
+        i = nxt
+    end
+    push!(parts, String(take!(buf)))
+    return filter(!isempty, strip.(parts))
 end
 
 function literal_command_text(node)::Union{Nothing, String}
@@ -58,9 +105,11 @@ function command_position_kill(script::AbstractString; second::Bool = false)::Bo
                 break
             end
             nxt = i < length(toks) ? basename(replace(String(toks[i + 1]), r"^['\"]|['\"]$" => "")) : ""
-            return process_kill_word(base) !== nothing ||
+            hit = process_kill_word(base) !== nothing ||
                 (second && process_kill_word(nxt) !== nothing) ||
                 occursin(BRACKET_TRICK_RE, raw)
+            hit && return true
+            break
         end
     end
     return false
@@ -101,6 +150,54 @@ function cmd_argv_vector(node)
     return nothing
 end
 
+function cmd_slot_word(node, consts::Dict{String, String})
+    w = fold_string_expr(node, consts)
+    w === nothing && (w = string_literal_value(node))
+    if w === nothing && kind(node) == K"Identifier"
+        w = get(consts, sourcetext(node), nothing)
+    end
+    if w === nothing
+        w = which_kill_tool(node, consts)
+    end
+    return w
+end
+
+function cmd_argv_slots(vect, consts::Dict{String, String})
+    start = kind(vect) == K"ref" ? 2 : 1
+    slots = Union{Nothing, String}[]
+    for i in start:numchildren(vect)
+        push!(slots, cmd_slot_word(vect[i], consts))
+    end
+    return slots
+end
+
+function cmd_slots_kill(slots::Vector{Union{Nothing, String}})
+    i = 1
+    n = length(slots)
+    while i <= n
+        w = slots[i]
+        w === nothing && return nothing
+        base = basename(replace(w, r"^['\"]|['\"]$" => ""))
+        low = lowercase(base)
+        if low in SHELL_WRAPPERS
+            i += 1
+            continue
+        end
+        if low == "timeout"
+            i += 1
+            i <= n && (i += 1)
+            continue
+        end
+        if low in ("sh", "bash") && i < n && slots[i + 1] == "-c"
+            script = i + 2 <= n ? slots[i + 2] : nothing
+            script === nothing && return nothing
+            return command_position_kill(script; second = true) ? "pkill" : nothing
+        end
+        return process_kill_word(base) !== nothing ? "pkill" : nothing
+    end
+    return nothing
+end
+
 function cmd_array_first_kill(node, consts::Dict{String, String})
     kind(node) == K"call" || return nothing
     call_head_name(node) == "Cmd" || return nothing
@@ -108,20 +205,7 @@ function cmd_array_first_kill(node, consts::Dict{String, String})
     arg = node[2]
     vect = cmd_argv_vector(arg)
     if vect !== nothing
-        numchildren(vect) < 1 && return nothing
-        words = String[]
-        for i in 1:numchildren(vect)
-            w = fold_string_expr(vect[i], consts)
-            w === nothing && (w = string_literal_value(vect[i]))
-            if w === nothing && kind(vect[i]) == K"Identifier"
-                w = get(consts, sourcetext(vect[i]), nothing)
-            end
-            w === nothing && which_kill_tool(vect[i], consts) !== nothing && (w = which_kill_tool(vect[i], consts))
-            push!(words, something(w, ""))
-        end
-        any(isempty, words) && (words = filter(!isempty, words))
-        isempty(words) && return nothing
-        return command_position_kill(join(words, " ")) ? "pkill" : nothing
+        return cmd_slots_kill(cmd_argv_slots(vect, consts))
     end
     return folded_cmd_first_word(arg, consts)
 end
@@ -218,7 +302,12 @@ function run_family_shell_arg_hit(node, consts::Dict{String, String})
         arg = node[i]
         # open/read take a filename string; only Cmd/backtick builders count.
         if name in ("open", "read")
-            run_family_shell_arg_deep_hit(arg, consts) && return true
+            run_family_cmd_builder_hit(arg, consts) && return true
+            if kind(arg) == K"call" && call_head_name(arg) in ("pipeline", "ignorestatus")
+                for j in 2:numchildren(arg)
+                    run_family_cmd_builder_hit(arg[j], consts) && return true
+                end
+            end
             continue
         end
         run_family_shell_arg_deep_hit(arg, consts) && return true

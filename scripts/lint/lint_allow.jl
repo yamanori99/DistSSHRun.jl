@@ -175,6 +175,18 @@ function collect_lint_allow_markers(root::AbstractString)
     return out
 end
 
+function malformed_allow_comment_lines(src::AbstractString)
+    lines = Int[]
+    for tok in tokenize(src)
+        kind(tok) == K"Comment" || continue
+        text = untokenize(tok, src)
+        (startswith(text, "#=") || occursin("=#", text)) && continue
+        lint_allow_line_malformed(text) || continue
+        push!(lines, line_of(src, Int(first(tok.range))))
+    end
+    return lines
+end
+
 function lint_unknown_or_bad_allows(root::AbstractString)
     n = 0
     for path in readlines(Cmd(`git -C $root ls-files`; ignorestatus = true))
@@ -183,12 +195,18 @@ function lint_unknown_or_bad_allows(root::AbstractString)
         full = joinpath(root, path)
         isfile(full) || continue
         src = read(full, String)
-        in_str = endswith(path, ".jl") ? lines_in_string_literals(src) : falses(0)
+        if endswith(path, ".jl")
+            for i in malformed_allow_comment_lines(src)
+                println(
+                    stderr,
+                    "lint: $(path):$(i): lint-allow must be `# lint-allow: <rule> -- <reason>`",
+                )
+                n += 1
+            end
+            continue
+        end
         lines = split(src, '\n'; keepempty = true)
         for (i, line) in enumerate(lines)
-            if endswith(path, ".jl") && i <= length(in_str) && in_str[i]
-                continue
-            end
             lint_allow_line_malformed(line) || continue
             println(
                 stderr,
