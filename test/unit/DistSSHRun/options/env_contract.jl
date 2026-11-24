@@ -14,8 +14,9 @@ using DistSSHRun
         allowed = DistSSHRun.user_env_names()
         legacy_old = Set{String}(old for (old, _) in DistSSHRun.DistSSHBase.LEGACY_ENV_RENAMES)
         obsolete_reject = Set{String}(DistSSHRun.OBSOLETE_ENV_REJECTION_NAMES)
-        # Quoted complete env names only (not Julia identifiers like
-        # DISTSSH_RUN_DIR_ENV). Trailing "_" prefixes must not match.
+        # Word-boundary names in source, including unquoted help and errors.
+        # Trailing "_" prefixes must not match. Binding names below are Julia
+        # identifiers that hold a different env string.
         pat = r"(?<![A-Z0-9_])((?:DISTSSH_|DISTRIBUTED_)[A-Z0-9_]*[A-Z0-9])(?![A-Z0-9_])"
         binding_names = Set(
             (
@@ -64,8 +65,11 @@ using DistSSHRun
         @test isempty(bad)
         help = read(joinpath(root, "src", "DistSSHRun", "argv", "session.jl"), String)
         ssh = read(joinpath(root, "lib", "DistSSHBase", "src", "ssh", "ssh.jl"), String)
-        @test any(m -> occursin("DISTSSH_", m.captures[1]), eachmatch(pat, help))
-        @test any(m -> occursin("DISTSSH_", m.captures[1]), eachmatch(pat, ssh))
+        help_names = Set(String(m.captures[1]) for m in eachmatch(pat, help))
+        ssh_names = Set(String(m.captures[1]) for m in eachmatch(pat, ssh))
+        @test "DISTSSH_SKIP_GLOBAL_WORKER_PKILL" in help_names
+        @test "DISTSSH_SSH_OPTS" in ssh_names
+        @test "DISTSSH_WAIT_SSH_AUTH" in ssh_names
     end
 
     @testset "legacy DISTRIBUTED_ name errors" begin

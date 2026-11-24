@@ -33,7 +33,7 @@ function literal_command_text(node)::Union{Nothing, String}
     return join(parts, " ")
 end
 
-function command_position_kill(script::AbstractString)::Bool
+function command_position_kill(script::AbstractString; second::Bool = false)::Bool
     for seg in shell_segments(script)
         toks = split(strip(seg))
         isempty(toks) && continue
@@ -51,7 +51,16 @@ function command_position_kill(script::AbstractString)::Bool
                 i <= length(toks) && (i += 1)
                 continue
             end
-            return process_kill_word(base) !== nothing || occursin(BRACKET_TRICK_RE, raw)
+            if low in ("sh", "bash") && i < length(toks) && String(toks[i + 1]) == "-c"
+                payload = join(String.(toks[(i + 2):end]), " ")
+                payload = strip(payload, ['"', '\''])
+                command_position_kill(payload; second = true) && return true
+                break
+            end
+            nxt = i < length(toks) ? basename(replace(String(toks[i + 1]), r"^['\"]|['\"]$" => "")) : ""
+            return process_kill_word(base) !== nothing ||
+                (second && process_kill_word(nxt) !== nothing) ||
+                occursin(BRACKET_TRICK_RE, raw)
         end
     end
     return false
@@ -82,7 +91,10 @@ end
 
 function cmd_argv_vector(node)
     kind(node) == K"vect" && return node
-    # Typed argv: String["pgrep"] parses as (::)(vect, Type) in JuliaSyntax.
+    # Typed argv String["pgrep"] is a ref whose later children are the elements.
+    if kind(node) == K"ref" && numchildren(node) >= 2
+        return node
+    end
     if kind(node) == K"::" && numchildren(node) >= 1 && kind(node[1]) == K"vect"
         return node[1]
     end
@@ -134,17 +146,15 @@ function shell_sh_c_string(node, consts::Dict{String, String})
         inner = fold_string_expr(vect[i + 1], consts)
         inner === nothing && (inner = string_literal_value(vect[i + 1]))
         inner === nothing && return nothing
-        return command_position_kill(inner) ? "pkill" : nothing
+        return command_position_kill(inner; second = true) ? "pkill" : nothing
     end
     return nothing
 end
 
 function cmdstring_first_kill(node)
     kind(node) == K"cmdstring" || return nothing
-    if numchildren(node) >= 1
-        return process_kill_word(sourcetext(node[1]))
-    end
-    return process_kill_word(replace(sourcetext(node), r"^`+|`+$" => ""))
+    inner = replace(sourcetext(node), r"^`+|`+$" => "")
+    return command_position_kill(inner) ? "pkill" : nothing
 end
 
 function which_kill_tool(node, consts::Dict{String, String})

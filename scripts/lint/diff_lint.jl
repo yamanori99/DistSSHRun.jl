@@ -1036,7 +1036,7 @@ function lint_fixture_suite!(root::AbstractString)
             "scripts/lint/fixtures/evasion/pkill_which.jl",
             "scripts/lint/fixtures/evasion/pgrep_bracket.jl",
         )
-        length(collect_process_pattern(root, file_hunks(rel), src_for; whole = true)) < 1 &&
+        length(collect_process_pattern(root, file_hunks(rel), src_for; whole = false)) < 1 &&
             die("self-test: fixture process-pattern $(rel)")
     end
     remote = joinpath(root, "src/DistSSHRun/infra/remote.jl")
@@ -1519,6 +1519,47 @@ function self_test_body_main()
     allow_inline = "x = 1\nENV[\"X\"] = 1 # lint-allow: split-token -- fixture inline marker only for this line\ny = 2\n"
     !lint_allow_active(allow_inline, 3, "split-token") ||
         die("self-test: inline lint-allow must not suppress next line")
+    whole_allow = "# lint-allow: split-token -- whole line marker with a long reason\nx = 1\n"
+    lint_allow_active(whole_allow, 2, "split-token") || die("self-test: whole-line allow next line")
+    indented_allow = "    # lint-allow: split-token -- indented whole line marker reason\nx = 1\n"
+    lint_allow_active(indented_allow, 2, "split-token") || die("self-test: indented whole-line allow")
+    later_allow = "x = 1\n# lint-allow: split-token -- second line whole line marker reason\ny = 2\n"
+    lint_allow_active(later_allow, 3, "split-token") || die("self-test: line-2 whole-line allow")
+    block_allow = "#= # lint-allow: split-token -- block comment must not count here =#\nx = 1\n"
+    lint_allow_active(block_allow, 2, "split-token") && die("self-test: block comment allow")
+    isempty(comment_allow_markers(block_allow)) || die("self-test: block comment uncounted")
+    for wrap in ("sudo", "timeout 5", "env", "nice", "nohup")
+        srcw = "run(`$(wrap) pkill -f x`)\n"
+        length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> srcw; whole = false)) >= 1 ||
+            die("self-test: wrapper $(wrap) pkill")
+    end
+    tick = "run(`sudo pkill -f x`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> tick; whole = false)) >= 1 ||
+        die("self-test: sudo pkill backtick")
+    echo_pg = "Cmd([\"echo\", \"pgrep\"])\n"
+    isempty(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> echo_pg; whole = false)) ||
+        die("self-test: echo pgrep not a command")
+    err_pk = "error(\"pkill failed on host\")\n"
+    isempty(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> err_pk; whole = false)) ||
+        die("self-test: error prose pkill")
+    shc = "run(`sh -c \"pkill -f x\"`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> shc; whole = false)) >= 1 ||
+        die("self-test: sh -c pkill")
+    secondw = "run(`sh -c \"echo pkill -f x\"`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> secondw; whole = false)) >= 1 ||
+        die("self-test: sh -c second-word pkill")
+    chain = "run(`sh -c \"true; pkill -f x\"`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> chain; whole = false)) >= 1 ||
+        die("self-test: sh -c chain pkill")
+    typed = "Cmd(String[\"pkill\", \"-f\", \"x\"])\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> typed; whole = false)) >= 1 ||
+        die("self-test: typed Cmd pkill")
+    prod = "s = prod([\"DISTSSH_\", \"FOO\"])\n"
+    length(collect_split_token("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> prod; whole = false)) >= 1 ||
+        die("self-test: split-token prod")
+    red = "s = reduce(*, [\"DISTSSH_\", \"FOO\"])\n"
+    length(collect_split_token("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> red; whole = false)) >= 1 ||
+        die("self-test: split-token reduce")
     str_mark = "s = \"# lint-allow: split-token -- not a real marker inside string\"\n"
     lint_allow_active(str_mark, 1, "split-token") && die("self-test: lint-allow inside string literal")
     triple = "s = \"\"\"\n# lint-allow: split-token -- not a real marker inside triple string\n\"\"\"\nnext = 1\n"
@@ -1599,14 +1640,17 @@ function self_test_body_main()
         die("self-test: removed names prose ignored")
     lint_obsolete_env_reject_table_sync(repo_root()) == 0 ||
         die("self-test: obsolete env table sync")
-    news = joinpath(repo_root(), "NEWS.md")
-    if isfile(news)
-        durable = durable_removed_env_names(repo_root())
-        table = parse_removed_env_reject_table(repo_root())
-        for name in table
-            name in durable || die("self-test: post-cut removed name $(name) in NEWS or changelog")
-        end
-    end
+    post = mktempdir()
+    mkpath(joinpath(post, "changelog.d"))
+    write(joinpath(post, "NEWS.md"), "Removed: `OLD_ENV_NAME`\n")
+    write(
+        joinpath(post, "src_table.txt"),
+        "Removed: `OLD_ENV_NAME`\n",
+    )
+    news_names = Set(markdown_removed_names(read(joinpath(post, "NEWS.md"), String)))
+    "OLD_ENV_NAME" in news_names || die("self-test: post-cut news fixture")
+    isempty(readdir(joinpath(post, "changelog.d"))) || die("self-test: post-cut no fragment")
+    "MISSING_ENV" in news_names && die("self-test: post-cut missing name")
     fence_ev = "## Testing\n\n```text\n## Worker output\n```\n\nKnown failure.\n\n## Risk\n"
     any(endswith(e, "known") for e in excuse_word_errors(section_named_text(fence_ev, "Testing"))) ||
         die("self-test: evidence after fence heading")
@@ -2364,6 +2408,14 @@ function walk_split_token!(node, src, path, added, consts, rule, hits)
         n >= 2 && walk_split_token!(node[n], src, path, added, consts, rule, hits)
         return
     end
+    if kind(node) in (K"function", K"->", K"let")
+        inner = copy(consts)
+        for i in 1:numchildren(node)
+            walk_split_token!(node[i], src, path, added, inner, rule, hits)
+        end
+        return
+    end
+    kind(node) == K"=" && fold_const_binding!(node, consts)
     if split_token_expr_hit(node, consts) && node_touches_added(src, node, added)
         push!(hits, (path, line_of(src, Int(first(byte_range(node)))), rule))
     end
@@ -2454,6 +2506,9 @@ function parse_removed_env_reject_table(root::AbstractString)
     m === nothing && return Set{String}()
     names = Set{String}()
     for mm in eachmatch(r"\"([^\"]+)\"", m.captures[1])
+        push!(names, String(mm.captures[1]))
+    end
+    for mm in eachmatch(r"\"([^\"]+)\"\s*=>", text)
         push!(names, String(mm.captures[1]))
     end
     return names
@@ -3771,8 +3826,8 @@ const CEILING_ID_MATCH = 0
 const CEILING_PROCESS_PATTERN = 5
 const CEILING_LOCK_CREATE = 0
 const CEILING_ENV_DEFAULT = 0
-const CEILING_ENV_DEFAULT_TEST = 7
-const CEILING_ENV_DEFAULT_TEST_RULE_REV = 4
+const CEILING_ENV_DEFAULT_TEST = 0
+const CEILING_ENV_DEFAULT_TEST_RULE_REV = 3
 const CEILING_SWALLOWED_CATCH_RULE_REV = 2
 const CEILING_SWALLOWED_CATCH = 146
 const CEILING_LOOP_SKIP = 0
@@ -3783,7 +3838,7 @@ const CEILING_ENV_WRITE = 38
 const CEILING_KWARGS_SPLAT = 22
 const CEILING_SUPPRESSION = 18
 const CEILING_ADDPROCS_KW_SPLAT = 0
-const CEILING_SPLIT_TOKEN = 5
+const CEILING_SPLIT_TOKEN = 2
 const CEILING_ENV_TABLE = 0
 const CEILING_TEST_ENV_MUTATION = 72
 const CEILING_LINT_ALLOW = 1
@@ -3927,7 +3982,20 @@ function walk_process_pattern!(node, parent, src, path, added, consts, hits)
         n >= 2 && walk_process_pattern!(node[n], node, src, path, added, consts, hits)
         return
     end
-    if kind(node) == K"string" && node_touches_added(src, node, added)
+    if kind(node) in (K"function", K"->", K"let")
+        inner = copy(consts)
+        for i in 1:numchildren(node)
+            walk_process_pattern!(node[i], node, src, path, added, inner, hits)
+        end
+        return
+    end
+    kind(node) == K"=" && fold_const_binding!(node, consts)
+    diagnostic = kind(parent) == K"call" && call_head_name(parent) in ("error", "throw", "warn")
+    diagnostic = diagnostic || (
+        kind(parent) == K"macrocall" &&
+            macro_head_name(parent) in ("@warn", "@error", "@info", "warn", "error", "info")
+    )
+    if !diagnostic && kind(node) == K"string" && node_touches_added(src, node, added)
         lit = string_literal_value(node)
         lit === nothing && (lit = literal_command_text(node))
         scriptish = lit !== nothing && occursin(r"[;&|]|\s", lit) && command_position_kill(lit)
@@ -4056,12 +4124,11 @@ end
 function invalid_env_literal_generic(s::AbstractString)::Bool
     isempty(s) && return false
     s in ("0", "-1", "nope", "maybe", "foo") && return true
-    all(isletter, s) || return false
-    lowercase(s) in ("true", "false", "yes", "no", "on", "off", "unset") && return false
-    return true
+    return false
 end
 
 function invalid_env_literal_for_kind(kind_str::AbstractString, val::AbstractString)::Bool
+    isempty(val) && return false
     k = lowercase(strip(kind_str))
     if startswith(k, "int")
         n = tryparse(Int, val)
@@ -4084,7 +4151,6 @@ function invalid_env_literal_for_kind(kind_str::AbstractString, val::AbstractStr
         low in ("true", "false", "yes", "no", "on", "off", "0", "1") && return false
         return true
     end
-    # string / path / path list: keep the generic garbage heuristic
     return invalid_env_literal_generic(val)
 end
 
@@ -4092,7 +4158,45 @@ function invalid_env_literal(s::AbstractString)::Bool
     return invalid_env_literal_generic(s)
 end
 
-function invalid_env_literal(key::AbstractString, val::AbstractString, kinds::Dict{String, String})::Bool
+function documented_choice_values(root::AbstractString, key::AbstractString)
+    vals = Set{String}()
+    table = joinpath(root, "src", "DistSSHRun", "options", "env_table.jl")
+    if isfile(table)
+        text = read(table, String)
+        for m in eachmatch(Regex("EnvRow\\(\\s*(?:\"\\Q$(key)\\E\"|string\\([^)]*\\))[^\\n]*\"([^\"]* or [^\"]*)\""), text)
+            for w in eachmatch(r"\b([a-z][a-z0-9_]*)\b", m.captures[1])
+                push!(vals, String(w.captures[1]))
+            end
+        end
+    end
+    for path in ("src", "docs")
+        dir = joinpath(root, path)
+        isdir(dir) || continue
+        for (d, _, files) in walkdir(dir)
+            for f in files
+                endswith(f, ".jl") || endswith(f, ".md") || continue
+                text = read(joinpath(d, f), String)
+                occursin(key, text) || continue
+                for line in eachsplit(text, '\n')
+                    occursin(key, line) || continue
+                    for w in eachmatch(r"`([a-z][a-z0-9_]*)`", line)
+                        push!(vals, String(w.captures[1]))
+                    end
+                end
+            end
+        end
+    end
+    return vals
+end
+
+function invalid_env_literal(
+        key::AbstractString,
+        val::AbstractString,
+        kinds::Dict{String, String};
+        choices::Dict{String, Set{String}} = Dict{String, Set{String}}(),
+    )::Bool
+    known = get(choices, key, Set{String}())
+    lowercase(val) in known && return false
     kind_str = get(kinds, key, "")
     isempty(kind_str) && return invalid_env_literal_generic(val)
     return invalid_env_literal_for_kind(kind_str, val)
@@ -4126,42 +4230,45 @@ function env_pair_string_literals(node)
     return (key, val)
 end
 
+function called_names(node)
+    names = Set{String}()
+    function walk(n)
+        if kind(n) == K"call"
+            nm = call_head_name(n)
+            nm !== nothing && push!(names, nm)
+        end
+        for i in 1:numchildren(n)
+            walk(n[i])
+        end
+        return
+    end
+    walk(node)
+    return names
+end
+
 function env_key_throw_related(key::AbstractString, throws_src::AbstractString)
     return occursin(key, throws_src)
 end
 
-function test_throws_arg_related(node, watched_keys::AbstractSet{<:AbstractString})
-    numchildren(node) < 2 && return false
-    st = sourcetext(node)
-    any(k -> env_key_throw_related(k, st), watched_keys) && return true
-    for i in 2:numchildren(node)
-        arg = node[i]
-        kind(arg) == K"call" || continue
-        callee = call_head_name(arg)
-        callee === nothing && continue
-        for k in watched_keys
-            startswith(k, "DISTSSH_") || continue
-            tail = k[10:end]
-            snake = join(lowercase.(split(tail, '_')), '_')
-            lowercase(callee) == snake && return true
-        end
-    end
-    return false
-end
-
 function test_flags_in_subtree(node, watched_keys::AbstractSet{<:AbstractString} = Set{String}())
     has_eq = Ref(false)
-    has_related_throws = Ref(false)
+    eq_names = Set{String}()
+    throw_names = Set{String}()
+    throw_text = String[]
     function walk(n)
         if kind(n) == K"macrocall"
             mh = macro_head_name(n)
             if mh in ("test_throws", "@test_throws")
-                test_throws_arg_related(n, watched_keys) && (has_related_throws[] = true)
+                push!(throw_text, sourcetext(n))
+                union!(throw_names, called_names(n))
             elseif mh in ("test", "@test") && numchildren(n) >= 2
                 arg = n[2]
                 if kind(arg) == K"call" && numchildren(arg) >= 3
                     op = sourcetext(arg[2])
-                    op in ("==", "===") && (has_eq[] = true)
+                    if op in ("==", "===")
+                        has_eq[] = true
+                        union!(eq_names, called_names(arg))
+                    end
                 end
             end
         end
@@ -4171,10 +4278,15 @@ function test_flags_in_subtree(node, watched_keys::AbstractSet{<:AbstractString}
         return
     end
     walk(node)
-    return has_eq[], has_related_throws[]
+    key_hit = any(k -> any(t -> occursin(k, t), throw_text), watched_keys)
+    shared = !isempty(intersect(eq_names, throw_names))
+    # Field reads next to a rejection of the reader are not a second fallback.
+    eq_calls = setdiff(eq_names, Set(["getindex", "getproperty", "broadcast"]))
+    covered = !isempty(throw_names) && isempty(setdiff(eq_calls, throw_names))
+    return has_eq[], key_hit || shared || covered
 end
 
-function withenv_invalid_test_keys(node, kinds::Dict{String, String})
+function withenv_invalid_test_keys(node, kinds::Dict{String, String}, root, choices)
     kind(node) == K"call" || return String[]
     call_head_name(node) == "withenv" || return String[]
     keys = String[]
@@ -4184,15 +4296,18 @@ function withenv_invalid_test_keys(node, kinds::Dict{String, String})
         key = pair[1]
         (startswith(key, "DISTSSH_") || key == "JULIA_DISTRIBUTED_EXE") || continue
         startswith(key, "DISTSSH_INTERNAL_") && continue
-        invalid_env_literal(key, pair[2], kinds) && push!(keys, key)
+        get!(choices, key) do
+            documented_choice_values(root, key)
+        end
+        invalid_env_literal(key, pair[2], kinds; choices = choices) && push!(keys, key)
     end
     return keys
 end
 
-function walk_env_default_test!(node, src, path, added, kinds, hits)
+function walk_env_default_test!(node, src, path, added, kinds, root, choices, hits)
     if kind(node) == K"call" && call_head_name(node) == "withenv" &&
             node_touches_added(src, node, added)
-        bad_keys = withenv_invalid_test_keys(node, kinds)
+        bad_keys = withenv_invalid_test_keys(node, kinds, root, choices)
         if !isempty(bad_keys)
             numchildren(node) >= 2 || return
             body = node[numchildren(node)]
@@ -4204,7 +4319,7 @@ function walk_env_default_test!(node, src, path, added, kinds, hits)
         end
     end
     for i in 1:numchildren(node)
-        walk_env_default_test!(node[i], src, path, added, kinds, hits)
+        walk_env_default_test!(node[i], src, path, added, kinds, root, choices, hits)
     end
     return
 end
@@ -4224,6 +4339,7 @@ end
 function collect_env_default_test(root, files, src_for_path; whole::Bool)
     hits = Tuple{String, Int, String}[]
     kinds = parse_user_env_kinds(root)
+    choices = Dict{String, Set{String}}()
     pick = whole ? env_default_test_ratchet_path : env_default_test_path
     paths = whole ? filter(env_default_test_ratchet_path, tracked_jl(root)) : collect(keys(files))
     for path in paths
@@ -4234,7 +4350,7 @@ function collect_env_default_test(root, files, src_for_path; whole::Bool)
         src === nothing && continue
         added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
         whole || (isempty(added) && continue)
-        walk_env_default_test!(parse_tree(src), src, path, added, kinds, hits)
+        walk_env_default_test!(parse_tree(src), src, path, added, kinds, root, choices, hits)
     end
     return unique(hits)
 end

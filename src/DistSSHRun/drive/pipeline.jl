@@ -2,7 +2,6 @@
 
 function _reject_obsolete_pipeline_size_env(env::ProcessEnv)
     for name in OBSOLETE_ENV_REJECTION_NAMES
-        name in first.(OBSOLETE_ENV_RENAME_PAIRS) && continue
         haskey(env, name) || continue
         throw(
             ArgumentError(

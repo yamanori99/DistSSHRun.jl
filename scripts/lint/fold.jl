@@ -20,7 +20,6 @@ end
 
 function fold_module_consts!(tree, consts::Dict{String, String})
     function walk(node)
-        fold_const_binding!(node, consts)
         if kind(node) == K"const"
             # JuliaSyntax nests the assignment under const.
             for i in 1:numchildren(node)
@@ -101,6 +100,7 @@ end
 
 function is_star_call(node)
     kind(node) == K"call" || return false
+    call_head_name(node) in ("reduce", "prod", "join", "string", "Symbol") && return false
     return sourcetext(node[1]) == "*" || (numchildren(node) >= 3 && sourcetext(node[2]) == "*")
 end
 
@@ -243,7 +243,29 @@ function folded_string_parts(node, consts::Dict{String, String})::Union{Vector{S
     end
     if call_head_name(node) == "join"
         numchildren(node) < 2 && return nothing
-        return fold_string_vector(node[2], consts)
+        parts = fold_string_vector(node[2], consts)
+        parts === nothing && return nothing
+        if numchildren(node) >= 3
+            sep = fold_string_expr(node[3], consts)
+            sep === nothing && return nothing
+            isempty(sep) && return parts
+            out = String[]
+            for (i, p) in enumerate(parts)
+                i > 1 && push!(out, sep)
+                push!(out, p)
+            end
+            return out
+        end
+        return parts
+    end
+    if call_head_name(node) in ("reduce", "prod")
+        call_head_name(node) == "reduce" && !occursin("*", sourcetext(node)) && return nothing
+        vect = nothing
+        for i in 2:numchildren(node)
+            kind(node[i]) == K"vect" && (vect = node[i])
+        end
+        vect === nothing && return nothing
+        return fold_string_vector(vect, consts)
     end
     if call_head_name(node) == "Symbol"
         # Keep argument boundaries so Symbol("A", "B") stays a split.
