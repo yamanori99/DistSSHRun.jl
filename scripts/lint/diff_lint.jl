@@ -1722,6 +1722,30 @@ function self_test_body_main()
     helper_throws = "withenv(\"DISTSSH_JOBS\" => \"nope\") do\n    @test kit_host_jobs() == 1\n    @test_throws ArgumentError first([1])\nend\n"
     length(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 4, String[])]), _ -> helper_throws; whole = false)) >= 1 ||
         die("self-test: env-default helper throws unrelated")
+    stem_noise = "withenv(\"DISTSSH_JOBS\" => \"nope\") do\n    @test x == 1\n    @test_throws ArgumentError parse_jobs_list()\nend\n"
+    length(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 4, String[])]), _ -> stem_noise; whole = false)) >= 1 ||
+        die("self-test: env-default substring reader does not suppress")
+    !throw_covers_key(Set(["parse_jobs_list"]), "DISTSSH_JOBS", repo_root()) ||
+        die("self-test: env-default throw stem exact")
+    multi_bad = "withenv(\"DISTSSH_JOBS\" => \"nope\", \"DISTSSH_YES\" => \"maybe\") do\n    @test x == 1\n    @test_throws ArgumentError job_seed()\nend\n"
+    length(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 4, String[])]), _ -> multi_bad; whole = false)) >= 1 ||
+        die("self-test: env-default multi key partial suppress")
+    seed_ok = "withenv(\"DISTSSH_JOB_SEED\" => \"nope\") do\n    @test_throws ArgumentError job_seed()\n    @test _JOB_SEED[] === nothing\nend\n"
+    isempty(collect_env_default_test(repo_root(), Dict("test/t.jl" => [Hunk(1, 0, 1, 4, String[])]), _ -> seed_ok; whole = false)) ||
+        die("self-test: env-default job_seed throw exact")
+    outer_g = "withenv(\"DISTSSH_JOBS\" => \"nope\") do\n    @test g(host()) == 1\n    @test_throws ArgumentError g(other())\nend\n"
+    length(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 4, String[])]), _ -> outer_g; whole = false)) >= 1 ||
+        die("self-test: env-default outer helper throws unrelated")
+    invalid_env_literal_for_kind("uint64", "-1", Set{String}()) ||
+        die("self-test: env-default uint64 negative")
+    invalid_env_literal_for_kind("uint64", "18446744073709551615", Set{String}()) &&
+        die("self-test: env-default uint64 max invalid")
+    !invalid_env_literal_for_kind("uint64", "1", Set{String}()) ||
+        die("self-test: env-default uint64 one")
+    invalid_env_literal_for_kind("int >= 1", "", Set{String}()) &&
+        die("self-test: env-default int empty valid")
+    invalid_env_literal_for_kind("bool", "", Set{String}()) &&
+        die("self-test: env-default bool empty valid")
     outer_pe = "withenv(\"DISTSSH_JOBS\" => \"nope\") do\n    @test only(ProcessEnv(Dict())) == 1\n    @test_throws ArgumentError only(ProcessEnv(Dict()))\nend\n"
     length(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 4, String[])]), _ -> outer_pe; whole = false)) >= 1 ||
         die("self-test: env-default ProcessEnv throws unrelated")
@@ -1776,6 +1800,18 @@ function self_test_body_main()
     env_u = "run(`env -u FOO pkill -f x`)\n"
     length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> env_u; whole = false)) >= 1 ||
         die("self-test: process-pattern env -u")
+    sh_dollar = "run(`sh -c \$(\"pkill -f x\")`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> sh_dollar; whole = false)) >= 1 ||
+        die("self-test: process-pattern sh dollar string")
+    bash_str = "run(`bash -c \$(string(\"pkill -f x\"))`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> bash_str; whole = false)) >= 1 ||
+        die("self-test: process-pattern bash dollar string call")
+    ssh_end = "run(`ssh h -- pkill -f x`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> ssh_end; whole = false)) >= 1 ||
+        die("self-test: process-pattern ssh double dash")
+    bracket_sh = "run(`sh -c \"ps aux | grep [j]ulia\"`)\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> bracket_sh; whole = false)) >= 1 ||
+        die("self-test: process-pattern sh bracket trick")
     allow_mal = "x = 1 # lint-allow: split-token =# not documented\n"
     malformed_allow_comment_lines(allow_mal) == [1] || die("self-test: malformed allow equals-hash")
     red_str = "s = reduce(string, [\"DISTSSH_\", \"FOO\"])\n"
@@ -4324,7 +4360,14 @@ function invalid_env_literal_for_kind(
         choices::Set{String},
     )::Bool
     k = lowercase(strip(kind_str))
-    if startswith(k, "int") || startswith(k, "uint")
+    if startswith(k, "uint")
+        isempty(val) && return false
+        startswith(val, "-") && return true
+        n = tryparse(UInt64, val)
+        return n === nothing
+    end
+    if startswith(k, "int")
+        isempty(val) && return false
         n = tryparse(Int, val)
         n === nothing && return true
         occursin(">= 1", k) && return n < 1
@@ -4618,28 +4661,68 @@ function env_test_throw_reader_names(node)
     return names
 end
 
-function throw_covers_bad_env_keys(throw::Set{String}, bad_keys::AbstractSet{<:AbstractString})
-    isempty(throw) && return false
-    for key in bad_keys
-        stem = lowercase(replace(String(key), r"^DISTSSH_" => ""))
-        for name in throw
-            low = lowercase(name)
-            low == stem && return true
-            occursin(stem, low) && return true
+function env_key_reader_stem(key::AbstractString)
+    return lowercase(replace(String(key), r"^DISTSSH_" => ""))
+end
+
+const ENV_READER_CACHE = Ref{Union{Nothing, Dict{String, Set{String}}}}(nothing)
+const ENV_READER_CACHE_ROOT = Ref("")
+
+function documented_env_reader_functions(root::AbstractString)
+    cache = ENV_READER_CACHE[]
+    if cache !== nothing && ENV_READER_CACHE_ROOT[] == String(root)
+        return cache
+    end
+    readers = Dict{String, Set{String}}()
+    for path in tracked_jl(root)
+        p = replace(String(path), '\\' => '/')
+        startswith(p, "src/") || continue
+        text = read(joinpath(root, path), String)
+        aliases = Dict{String, String}()
+        for m in eachmatch(r"const\s+(\w+)\s*=\s*\"(DISTSSH_[A-Z0-9_]+)\"", text)
+            aliases[String(m.captures[1])] = String(m.captures[2])
         end
+        fun_re = Regex("function\\s+([A-Za-z_][\\w]*)([\\s\\S]*?)(?=\\nfunction\\s+|\\z)")
+        for m in eachmatch(fun_re, text)
+            fname = String(m.captures[1])
+            body = String(m.captures[2])
+            for (sym, env_key) in aliases
+                occursin(sym, body) || continue
+                push!(get!(readers, env_key) do
+                    Set{String}()
+                end, fname)
+            end
+            for km in eachmatch(r"\"(DISTSSH_[A-Z0-9_]+)\"", body)
+                env_key = String(km.captures[1])
+                push!(get!(readers, env_key) do
+                    Set{String}()
+                end, fname)
+            end
+        end
+    end
+    ENV_READER_CACHE[] = readers
+    ENV_READER_CACHE_ROOT[] = String(root)
+    return readers
+end
+
+function throw_covers_key(throw::Set{String}, key::AbstractString, root::AbstractString)
+    isempty(throw) && return false
+    stem = env_key_reader_stem(key)
+    known = get(documented_env_reader_functions(root), String(key), Set{String}())
+    for name in throw
+        low = lowercase(name)
+        low == stem && return true
+        low in Set(lowercase.(collect(known))) && return true
     end
     return false
 end
 
-function test_flags_in_subtree(node, watched_keys::AbstractSet{<:AbstractString} = Set{String}())
-    has_eq = env_test_equality_macro(node)
-    eq = env_test_reader_names(node)
-    throw = env_test_throw_reader_names(node)
-    shared = !isempty(intersect(eq, throw))
-    throws_only_reader = !has_eq && !isempty(throw)
-    throw_covers = throw_covers_bad_env_keys(throw, watched_keys)
-    suppress = shared || throws_only_reader || throw_covers
-    return has_eq, suppress
+function env_default_uncovered_keys(
+        bad_keys::AbstractVector{<:AbstractString},
+        throw::Set{String},
+        root::AbstractString,
+    )
+    return [key for key in bad_keys if !throw_covers_key(throw, key, root)]
 end
 
 function withenv_invalid_test_keys(node, kinds::Dict{String, String}, root, choices, patterns)
@@ -4667,8 +4750,9 @@ function walk_env_default_test!(node, src, path, added, kinds, root, choices, pa
         if !isempty(bad_keys)
             numchildren(node) >= 2 || return
             body = node[numchildren(node)]
-            has_eq, suppress = test_flags_in_subtree(body, Set(bad_keys))
-            if has_eq && !suppress
+            throw = env_test_throw_reader_names(body)
+            uncovered = env_default_uncovered_keys(bad_keys, throw, root)
+            if env_test_equality_macro(body) && !isempty(uncovered)
                 a = line_of(src, Int(first(byte_range(node))))
                 push!(hits, (path, a, "env-default"))
             end

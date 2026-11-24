@@ -1,6 +1,6 @@
 category: changed
 
-- Removed obsolete environment variable names are listed in one table and must match changelog `Removed:` entries. Renamed variables keep working under their new internal names; setting a removed name fails at runtime.
+- Removed environment variable names are listed in one table and must match changelog `Removed:` entries. Setting a removed or renamed old name fails at runtime; use the current name from the env table instead.
 
 Removed: `GB_PER_WORKER`
 Removed: `DISTSSH_SIZE_PROBE`

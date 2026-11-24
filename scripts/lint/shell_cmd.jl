@@ -146,6 +146,9 @@ function shell_advance_past_wrapper(i::Int, toks::AbstractVector)
             i += 1
         end
         i <= n && (i += 1)
+        if i <= n && String(toks[i]) == "--"
+            i += 1
+        end
         return i
     end
     if low == "xargs"
@@ -260,7 +263,9 @@ end
 
 function command_position_kill(script::AbstractString; second::Bool = false)::Bool
     for seg in shell_segments(script)
-        toks = split(strip(seg))
+        stripped = strip(seg)
+        occursin(BRACKET_TRICK_RE, stripped) && return true
+        toks = split(stripped)
         isempty(toks) && continue
         i = 1
         while i <= length(toks)
@@ -401,6 +406,12 @@ end
 
 function expand_cmdstring_vars(inner::AbstractString, consts::Dict{String, String})
     out = String(inner)
+    for m in eachmatch(r"\$\(\s*string\s*\(\s*\"([^\"]+)\"\s*\)\s*\)", out)
+        out = replace(out, m.match => String(m.captures[1]))
+    end
+    for m in eachmatch(r"\$\(\s*\"([^\"]+)\"\s*\)", out)
+        out = replace(out, m.match => String(m.captures[1]))
+    end
     for pattern in (r"\$\((\w+)\)", r"\$(\w+)")
         for m in eachmatch(pattern, out)
             v = get(consts, String(m.captures[1]), nothing)
