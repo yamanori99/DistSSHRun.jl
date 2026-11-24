@@ -242,6 +242,7 @@ function folded_string_parts(node, consts::Dict{String, String})::Union{Vector{S
         return out
     end
     if call_head_name(node) == "join"
+        numchildren(node) < 2 && return nothing
         return fold_string_vector(node[2], consts)
     end
     if call_head_name(node) == "Symbol"
